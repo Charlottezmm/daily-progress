@@ -1,0 +1,769 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>5月 30 天冲刺 · Umaru</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #fafaf9;
+  --card: #ffffff;
+  --text: #1f1f1f;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --accent: #2563eb;
+  --accent-soft: #dbeafe;
+  --success: #16a34a;
+  --warn: #d97706;
+  --rest: #9333ea;
+  --rest-soft: #f3e8ff;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+  background: var(--bg);
+}
+.wrap { max-width: 880px; margin: 0 auto; padding: 18px 20px 80px; }
+
+header.top {
+  position: sticky; top: 0; z-index: 10;
+  background: rgba(250, 250, 249, 0.92);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--border);
+  margin: -18px -20px 16px;
+  padding: 12px 20px;
+}
+.top-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.top-title { font-size: 15px; font-weight: 600; }
+.top-title .muted { color: var(--muted); font-weight: 400; margin-left: 6px; }
+.progress-wrap {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--muted);
+}
+.progress-bar {
+  width: 140px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden;
+}
+.progress-bar > div {
+  height: 100%; background: var(--accent); transition: width .3s ease;
+}
+.nav { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.nav a {
+  padding: 4px 10px; border-radius: 999px; background: var(--card);
+  border: 1px solid var(--border); color: var(--text); text-decoration: none;
+  font-size: 12px;
+}
+.nav a:hover { border-color: var(--accent); color: var(--accent); }
+
+h2.section {
+  margin: 28px 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+  display: flex; align-items: baseline; gap: 8px;
+}
+h2.section .sub { font-size: 12px; color: var(--muted); font-weight: 400; }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin-bottom: 12px;
+}
+.card.today {
+  border: 1.5px solid var(--accent);
+  background: linear-gradient(180deg, var(--accent-soft) 0%, var(--card) 60%);
+}
+.card.rest {
+  border: 1.5px solid var(--rest);
+  background: linear-gradient(180deg, var(--rest-soft) 0%, var(--card) 60%);
+}
+
+.day-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  margin-bottom: 6px;
+}
+.day-head .num { font-weight: 600; font-size: 15px; }
+.day-head .meta { color: var(--muted); font-size: 12px; }
+.day-title { font-size: 14px; color: var(--muted); margin-bottom: 10px; }
+
+ul.tasks { list-style: none; padding: 0; margin: 0 0 10px; }
+ul.tasks li {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 6px 0;
+  border-top: 1px dashed var(--border);
+}
+ul.tasks li:first-child { border-top: 0; }
+ul.tasks input[type=checkbox] {
+  margin-top: 5px; flex: 0 0 auto;
+  width: 14px; height: 14px;
+  accent-color: var(--accent);
+}
+.tasks-content { flex: 1; }
+.kind {
+  display: inline-block; min-width: 44px;
+  font-size: 11px; padding: 1px 6px; border-radius: 4px;
+  margin-right: 4px; text-align: center;
+  background: var(--border); color: var(--text);
+}
+.kind.学 { background: #dcfce7; color: #15803d; }
+.kind.项 { background: #dbeafe; color: #1d4ed8; }
+.kind.媒 { background: #fef3c7; color: #b45309; }
+.time { color: var(--muted); font-size: 12px; margin-right: 6px; }
+li.done .tasks-content { color: var(--muted); text-decoration: line-through; }
+
+.selfcheck {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: #fefce8;
+  border-left: 3px solid var(--warn);
+  border-radius: 6px;
+  font-size: 13px;
+}
+.selfcheck strong { color: var(--warn); }
+
+.week-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  padding: 14px 18px; margin-bottom: 16px;
+}
+.week-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  cursor: pointer;
+}
+.week-head h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.week-head .muted { color: var(--muted); font-size: 12px; }
+.week-theme { color: var(--muted); font-size: 13px; margin: 4px 0 12px; }
+.milestones { margin: 8px 0 0; padding: 0; list-style: none; }
+.milestones li {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 5px 0;
+  font-size: 13px;
+}
+.milestones input[type=checkbox] {
+  margin-top: 4px; width: 14px; height: 14px; accent-color: var(--success);
+}
+.milestones li.done span { color: var(--muted); text-decoration: line-through; }
+
+details.day-acc {
+  border-top: 1px solid var(--border);
+  padding: 8px 0;
+}
+details.day-acc[open] { padding-bottom: 14px; }
+details.day-acc summary {
+  cursor: pointer; list-style: none;
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 4px 0;
+}
+details.day-acc summary::-webkit-details-marker { display: none; }
+details.day-acc summary .badge {
+  font-size: 11px; padding: 1px 8px; border-radius: 999px;
+  background: var(--border); color: var(--muted);
+}
+details.day-acc summary .badge.work { background: var(--accent-soft); color: var(--accent); }
+details.day-acc summary .badge.rest { background: var(--rest-soft); color: var(--rest); }
+details.day-acc summary .badge.today { background: var(--accent); color: white; }
+
+.template {
+  background: #f5f5f4; border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px 14px; margin: 8px 0;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 12.5px; line-height: 1.7; color: #404040;
+  white-space: pre-wrap;
+}
+.copy-btn {
+  font-size: 11px; padding: 3px 10px; border: 1px solid var(--border);
+  background: var(--card); color: var(--text); border-radius: 6px;
+  cursor: pointer;
+}
+.copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+.template-head { display: flex; align-items: center; justify-content: space-between; margin: 12px 0 4px; }
+
+footer.foot {
+  margin-top: 32px; padding-top: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 12px; color: var(--muted); text-align: center;
+}
+footer.foot p { margin: 4px 0; }
+
+.reset-row {
+  margin-top: 14px; font-size: 11px; color: var(--muted);
+  display: flex; gap: 8px; align-items: center;
+}
+.reset-row button {
+  font-size: 11px; padding: 2px 8px; border: 1px solid var(--border);
+  background: transparent; color: var(--muted); border-radius: 4px; cursor: pointer;
+}
+.reset-row button:hover { color: var(--warn); border-color: var(--warn); }
+
+.empty {
+  padding: 40px 20px; text-align: center; color: var(--muted);
+  border: 1px dashed var(--border); border-radius: 12px;
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div class="top-row">
+    <div class="top-title">5 月 30 天冲刺<span class="muted">· LLM 内功 + Agent 工程</span></div>
+    <div class="progress-wrap">
+      <span id="dayCounter">—</span>
+      <div class="progress-bar"><div id="progressFill" style="width:0%"></div></div>
+    </div>
+  </div>
+  <div class="nav">
+    <a href="#today">今天</a>
+    <a href="#thisweek">本周 milestone</a>
+    <a href="#all-days">全部 30 天</a>
+    <a href="#templates">复盘模板</a>
+  </div>
+</header>
+
+<section id="today">
+  <h2 class="section">今天 <span class="sub" id="todaySub"></span></h2>
+  <div id="todayCard"></div>
+</section>
+
+<section id="thisweek">
+  <h2 class="section">本周 milestone <span class="sub" id="thisweekSub"></span></h2>
+  <div id="thisweekCard"></div>
+</section>
+
+<section id="all-days">
+  <h2 class="section">全部 30 天 <span class="sub">点击展开任意一天</span></h2>
+  <div id="allWeeks"></div>
+</section>
+
+<section id="templates">
+  <h2 class="section">复盘模板 <span class="sub">每周日 / 每月 31 号用</span></h2>
+
+  <div class="template-head">
+    <strong style="font-size:13px;">周日 weekly review</strong>
+    <button class="copy-btn" data-target="weeklyTpl">复制</button>
+  </div>
+  <pre class="template" id="weeklyTpl">本周：第 ___ 周（5/__ - 5/__）
+
+本周做完的 3 件最重要的事：
+1.
+2.
+3.
+
+本周没做完的 1 件最重要的事 + 原因：
+
+本周最大的卡点（学习 / 项目 / 心态 各 1 个）：
+- 学习：
+- 项目：
+- 心态：
+
+下周要调整的 1 件事：
+
+数字：
+- GitHub commits：
+- 自媒体发布数：
+- 自媒体新增 followers：
+- 灵感本新增条数：
+
+一句话：本周我从「___」变成了「___」</pre>
+
+  <div class="template-head">
+    <strong style="font-size:13px;">5/31 月度复盘</strong>
+    <button class="copy-btn" data-target="monthlyTpl">复制</button>
+  </div>
+  <pre class="template" id="monthlyTpl">本月：5 月
+
+学到的最重要 3 件事：
+1.
+2.
+3.
+
+最大的卡点：
+
+下月调整：
+
+产出：
+- 代码：
+- 内容：
+- 笔记：
+
+数字：
+- followers：
+- GitHub stars：
+- 公司流水：
+
+下月主题（6 月）：Agent 深化 + 具身智能初步认知
+下月开局第一周（Week 5）每天的承诺清单：
+- Day 26（6/1 周一）：
+- Day 27（6/2 周二）：
+- Day 28（6/3 周三）：
+- Day 29（6/4 周四）：
+- Day 30（6/5 周五）：
+- Day 31（6/6 周六）：
+- Day 32（6/7 周日）：休</pre>
+</section>
+
+<div class="reset-row">
+  <span>本看板的勾选状态保存在你本地浏览器（localStorage）。</span>
+  <button id="resetBtn">清空所有勾选</button>
+</div>
+
+<footer class="foot">
+  <p>今天的目标不是变成专家，是比昨天多懂一点、多写一行。</p>
+  <p>30 天后回头看，是 25 个"今天"堆出来的。</p>
+</footer>
+
+</div>
+
+<script>
+const START_DATE = new Date('2026-05-07T00:00:00');
+const END_DATE = new Date('2026-05-31T23:59:59');
+
+const weeks = [
+  {
+    num: 1, dateRange: '5/7 - 5/10',
+    theme: '项目方向决策 + 反向传播起步',
+    note: '本周只 3 个学习日，节奏轻一点。重点是启动而不是冲刺。',
+    milestones: [
+      '工具方向已 1 选 1（写在文档第一行）',
+      '设计文档 v1 已发出（X / 即刻），收到至少 3 条反馈',
+      '反馈池 .md 已建，反馈已分类',
+      'micrograd 视频完整看完，demo 在本地跑通',
+      '自媒体发了 3 条（启程贴 + 文档贴 + micrograd 心得）',
+      '灵感本里有至少 5 条本周读到的有趣东西',
+    ]
+  },
+  {
+    num: 2, dateRange: '5/11 - 5/17',
+    theme: 'micrograd 手写 + makemore Part 1-2 + 建仓',
+    note: '从「看懂」到「能自己写」。项目从设计到代码。',
+    milestones: [
+      'micrograd 自己手写版能跑通一个 toy MLP',
+      'makemore Part 1 复现完成，理解 NLL',
+      'makemore Part 2（MLP）复现完成',
+      'makemore Part 3 看了一遍（不要求复现）',
+      'GitHub repo 公开，README v1 + ARCHITECTURE.md 在',
+      '第一个核心功能开工，目标 Week 3 周二前跑通',
+      '自媒体发了 3 条以上',
+    ]
+  },
+  {
+    num: 3, dateRange: '5/18 - 5/24',
+    theme: 'makemore Part 3-4 + Let\'s build GPT 第一遍 + 第一个 demo',
+    note: 'Part 3 不能跳，是后面看 GPT 的地基。',
+    milestones: [
+      'makemore Part 3 复现完成（自己写过 batchnorm）',
+      'makemore Part 4 看完且手动推过一次反向传播',
+      'Let\'s build GPT 第一遍看完',
+      '项目第一个 demo 跑通 + 第二个 example 在 repo',
+      '「10 个关键洞察」草稿在',
+      '自媒体发了 3 条以上',
+    ]
+  },
+  {
+    num: 4, dateRange: '5/25 - 5/31',
+    theme: 'Let\'s build GPT 第二遍 + nanoGPT + agent demo + v0.1 发布',
+    note: '5 月最重的一周，但你已经吃过 3 周苦了，这一周是收成。',
+    milestones: [
+      'Let\'s build GPT 看了 2 遍，self-attention 数学和代码都懂',
+      'nanoGPT clone 后跑通 + 改成自己数据集训过',
+      '一个有工具调用 + 多轮对话的 agent demo 在 GitHub',
+      '工具 v0.1.0 已发 release（GitHub tag + README + 2 个 example）',
+      '长帖发出（X / 即刻 / 小红书 / 知乎至少 2 个平台）',
+      '5 月月度复盘已写',
+    ]
+  },
+];
+
+const days = [
+  { num:1, date:'5/7', wd:'周四', wk:1, type:'work', title:'项目方向决策日',
+    tasks:[
+      {k:'学',t:'5:00-7:00',c:'3Blue1Brown 神经网络系列 第 1 集（What is a Neural Network），建立直觉，不写代码'},
+      {k:'项',t:'9:00-11:00 + 20:00-21:00',c:'写「开源工具方向决策矩阵」.md。列 3-5 候选方向（agent 工作流编排 / agent 内存层 / 给独立开发者的 LLM 监控 / RAG 工具箱 / 别的），每个方向写 What/Why/谁会用/独特优势/12 个月后能做成什么样'},
+      {k:'媒',t:'19:00-20:00',c:'发「启程贴」 — 数学本科生 gap 中，今天开始 4 个月系统学 AI / Agent，每天发学习足迹'},
+    ],
+    sc:'我能不能用 1 句话说清这个工具是给谁解决什么问题？' },
+
+  { num:2, date:'5/8', wd:'周五', wk:1, type:'work', title:'定方向 + 设计文档 v1',
+    tasks:[
+      {k:'学',t:'5:00-7:00',c:'3Blue1Brown 第 2 集（Gradient Descent）+ 开始看 Karpathy micrograd 视频前 30 分钟'},
+      {k:'项',t:'9:00-11:00',c:'从昨天矩阵 1 选 1，写设计文档 v1（1 页）：标题 / 一句话定义 / 解决谁的什么痛 / 用法草图 / 不做什么 / 12 周路线'},
+      {k:'媒',t:'19:00-20:00',c:'发「我准备做 X 工具，这是设计文档草稿，求懂行的人 review」'},
+    ],
+    sc:'12 个月后这个工具最差也能成为我的什么？（如果答不上来说明方向太空）' },
+
+  { num:3, date:'5/9', wd:'周六', wk:1, type:'work', title:'micrograd 沉浸日',
+    tasks:[
+      {k:'学',t:'5:00-7:00 + 9:00-11:00（4h）',c:'完整看一遍 Karpathy micrograd 视频（约 2.5h），边看边在 Jupyter 跟着敲，跑通 demo'},
+      {k:'项',t:'20:00-21:00',c:'扫昨天反馈（评论 / DM），整理「反馈池」.md，分类「采纳 / 保留 / 不采纳」'},
+      {k:'媒',t:'19:00-20:00',c:'发「今天看完 micrograd，反向传播终于看懂了，最颠覆我直觉的是 X」（写一条具体的洞察）'},
+    ],
+    sc:'我能不画图，光用嘴说清楚反向传播是怎么算梯度的吗？' },
+
+  { num:4, date:'5/10', wd:'周日', wk:1, type:'rest', title:'复盘日（强制休息）',
+    tasks:[
+      {k:'休',t:'',c:'上午散步 / 看本闲书 / 跟朋友吃饭，不碰电脑'},
+      {k:'休',t:'下午 30 分钟',c:'用本周复盘模板做 review'},
+      {k:'休',t:'晚上',c:'写下周（Week 2）每天的「我承诺今天会做完的 1 件事」清单，贴显示器上'},
+    ],
+    sc:'本周我从「___」变成了「___」？' },
+
+  { num:5, date:'5/11', wd:'周一', wk:2, type:'work', title:'micrograd 自己手写',
+    tasks:[
+      {k:'学',t:'5:00-7:00 + 9:00-11:00',c:'关掉 Karpathy 的代码，自己从空白文件写 Value 类（重点：__add__、__mul__、backward），最后跟他对比找差异'},
+      {k:'项',t:'20:00-21:00',c:'设计文档 v1 → v2（根据反馈）'},
+      {k:'媒',t:'19:00-20:00',c:'发「自己手写 micrograd 踩的 3 个坑」（具体技术细节）'},
+    ],
+    sc:'我手写的 Value 类能跑通 Karpathy 视频里那个简单的 MLP demo 吗？' },
+
+  { num:6, date:'5/12', wd:'周二', wk:2, type:'work', title:'micrograd 收尾 + makemore Part 1 启动',
+    tasks:[
+      {k:'学',t:'5:00-7:00',c:'用自己写的 micrograd 训 toy 神经网络（XOR 或 2D 分类玩具问题），手画 loss 曲线'},
+      {k:'学',t:'9:00-11:00',c:'看 Karpathy makemore Part 1（bigram），约 2h'},
+      {k:'项',t:'20:00-21:00',c:'本地建项目骨架（pyproject.toml / src / tests / README / .gitignore），暂不 push'},
+    ],
+    sc:'bigram 模型本质上跟一个 lookup table 有什么区别？' },
+
+  { num:7, date:'5/13', wd:'周三', wk:2, type:'work', title:'makemore Part 1 复现 + 建 GitHub repo',
+    tasks:[
+      {k:'学',t:'5:00-7:00 + 9:00-11:00',c:'跟着 Part 1 一行行复现 bigram，理解 NLL 怎么从概率推过来'},
+      {k:'项',t:'20:00-21:00',c:'建 GitHub repo（公开），写 README v1（项目名 / 一句话介绍 / 状态 badge / 路线图），首次 push'},
+      {k:'媒',t:'19:00-20:00',c:'发「我的开源工具 X 今天建仓了，这是 README，欢迎关注 / 提 issue / Star」'},
+    ],
+    sc:'我能解释为什么 bigram 模型用 NLL 而不用准确率作为 loss 吗？' },
+
+  { num:8, date:'5/14', wd:'周四', wk:2, type:'work', title:'makemore Part 2 启动（MLP）',
+    tasks:[
+      {k:'学',t:'5:00-7:00 + 9:00-11:00',c:'看 makemore Part 2（约 1.5h），先不复现，画一张「输入→embedding→hidden→logits」流程图'},
+      {k:'项',t:'20:00-21:00',c:'repo 里建 docs/ARCHITECTURE.md，画清楚工具的核心抽象（step / workflow / tool）'},
+    ],
+    sc:'MLP 比 bigram 多了什么能力？少了什么？' },
+
+  { num:9, date:'5/15', wd:'周五', wk:2, type:'work', title:'makemore Part 2 复现',
+    tasks:[
+      {k:'学',t:'5:00-7:00 + 9:00-11:00',c:'自己从空白文件写 makemore MLP（不照抄），跑通；bug 自己 debug 至少 30 分钟再看答案'},
+      {k:'项',t:'20:00-21:00',c:'写第一个测试用例（test 框架先搭起来）'},
+      {k:'媒',t:'19:00-20:00',c:'发「自己写 MLP 时卡住的 1 个 bug — 终于懂了 broadcasting」'},
+    ],
+    sc:'我训出来的 MLP 在 names.txt 上 loss 收敛到多少？跟 Karpathy 视频里差多少？' },
+
+  { num:10, date:'5/16', wd:'周六', wk:2, type:'work', title:'makemore Part 3 启动 + 项目第一个核心功能开工',
+    tasks:[
+      {k:'学',t:'5:00-7:00 + 9:00-11:00',c:'看 makemore Part 3（激活、梯度、batchnorm），约 2h；硬，看一遍即可，下周二再复现'},
+      {k:'项',t:'20:00-21:00',c:'开始写工具的第一个核心功能（最小版：定义 step、链式调用、跑 hello world workflow），目标周二跑通'},
+    ],
+    sc:'今天我最不懂的一个概念是什么？（写下来，不要藏）' },
+
+  { num:11, date:'5/17', wd:'周日', wk:2, type:'rest', title:'复盘日（强制休息）',
+    tasks:[
+      {k:'休',t:'',c:'不碰电脑，用复盘模板做 review'},
+    ],
+    sc:'本周哪一天我最满意自己？为什么？' },
+
+  { num:12, date:'5/18', wd:'周一', wk:3, type:'work', title:'makemore Part 3 复现（重点）',
+    tasks:[
+      {k:'学',t:'5:00-7:00 + 9:00-11:00',c:'自己写一遍 Part 3 里的 batchnorm、Kaiming init、gradient diagnostic 工具；不写下周看 GPT 一定会懵'},
+      {k:'项',t:'20:00-21:00',c:'第一个核心功能继续，目标明天跑通 hello world'},
+    ],
+    sc:'为什么训练初期 loss 突然爆炸通常是初始化问题而不是学习率问题？' },
+
+  { num:13, date:'5/19', wd:'周二', wk:3, type:'work', title:'项目第一个 demo 跑通日',
+    tasks:[
+      {k:'学',t:'5:00-7:00',c:'复习昨天 Part 3 的笔记，把不懂的标注出来；不看新视频'},
+      {k:'项',t:'9:00-11:00 + 20:00-21:00（3h+）',c:'hello world workflow 在 repo 跑通（python examples/hello.py 输出预期结果）+ tests/test_hello_workflow.py 通过'},
+      {k:'媒',t:'19:00-20:00',c:'发短视频/截图「我的开源工具今天第一次跑通 demo，代码 X 行」'},
+    ],
+    sc:'陌生人 clone 我 repo 后能在 5 分钟内跑通 hello world 吗？' },
+
+  { num:14, date:'5/20', wd:'周三', wk:3, type:'work', title:'makemore Part 4（手动反向传播）',
+    tasks:[
+      {k:'学',t:'5:00-7:00 + 9:00-11:00',c:'看 Part 4 + 手动算一次 batchnorm 的反向传播；应数本科背景在这里会很爽'},
+      {k:'项',t:'20:00-21:00',c:'根据 demo 跑通后的体感，给 ARCHITECTURE.md 第一次修订'},
+    ],
+    sc:'手动算 batchnorm backward 时，dL/dx 那一项里有几个累加项？分别代表什么？' },
+
+  { num:15, date:'5/21', wd:'周四', wk:3, type:'work', title:'Let\'s build GPT 第一遍前半',
+    tasks:[
+      {k:'学',t:'5:00-7:00 + 9:00-11:00',c:'看 Karpathy "Let\'s build GPT" 前半段（到 self-attention 推导前），每 10 分钟暂停一次写「我刚才看到了什么 / 不懂什么」；不要求复现'},
+      {k:'项',t:'20:00-21:00',c:'写第二个 example（一个稍微有点用的 workflow，比如「读 X，调一个 LLM，写到 Y」）'},
+      {k:'媒',t:'19:00-20:00',c:'发「Karpathy 是怎么用 200 行讲清楚 transformer 的 — 我今天看了前半」'},
+    ],
+    sc:'在看 self-attention 之前，我能用人话说清「为什么需要 attention」吗？' },
+
+  { num:16, date:'5/22', wd:'周五', wk:3, type:'work', title:'Let\'s build GPT 第一遍后半',
+    tasks:[
+      {k:'学',t:'5:00-7:00 + 9:00-11:00',c:'看完整段视频，重点 self-attention，看不懂回看 3 遍；目标知道每个张量形状'},
+      {k:'项',t:'20:00-21:00',c:'第二个 example 写完，提交 PR（自己 review 自己）'},
+    ],
+    sc:'query / key / value 三个矩阵分别管什么事？为什么需要除以 √d_k？' },
+
+  { num:17, date:'5/23', wd:'周六', wk:3, type:'work', title:'消化 + 自媒体长帖准备',
+    tasks:[
+      {k:'学',t:'5:00-7:00 + 9:00-11:00',c:'消化日，不看新内容；整理「我学完 Karpathy makemore + GPT 的 10 个关键洞察」草稿'},
+      {k:'项',t:'20:00-21:00',c:'repo 里新建 docs/CHANGELOG.md，写 v0.0.1 进度'},
+      {k:'媒',t:'19:00-20:00',c:'发笔记草稿的 1-2 条洞察预告，「下周末发完整长帖」'},
+    ],
+    sc:'本周我学的东西，3 个月后我还能记住的是哪 3 件？' },
+
+  { num:18, date:'5/24', wd:'周日', wk:3, type:'rest', title:'复盘日（强制休息）',
+    tasks:[
+      {k:'休',t:'',c:'不碰电脑，用复盘模板做 review'},
+    ],
+    sc:'本周做完 demo 那天的成就感我要怎么记下来，下个低谷期翻出来看？' },
+
+  { num:19, date:'5/25', wd:'周一', wk:4, type:'work', title:'Let\'s build GPT 第二遍（带问题看）',
+    tasks:[
+      {k:'学',t:'5:00-7:00 + 9:00-11:00',c:'第二遍带上周「不懂什么」清单去看，目标 80% 不懂今天能消掉'},
+      {k:'项',t:'20:00-21:00',c:'开工 v0.1 收尾计划：列从今天到周六需要做什么（功能 / 文档 / 测试）'},
+    ],
+    sc:'第二遍看跟第一遍比，我新理解了什么？（如果答「都一样」说明没专注看）' },
+
+  { num:20, date:'5/26', wd:'周二', wk:4, type:'work', title:'nanoGPT 仓库走读（第一天）',
+    tasks:[
+      {k:'学',t:'5:00-7:00 + 9:00-11:00',c:'clone karpathy/nanoGPT，跑通 train.py（shakespeare 小数据集），读 model.py 每一行，不懂的标注出来（不超过 10 处）'},
+      {k:'项',t:'20:00-21:00',c:'把 v0.1「必须有」功能确认清单贴 issue'},
+      {k:'媒',t:'19:00-20:00',c:'发「我跑通了 nanoGPT，loss 收敛曲线 + 学到的一个细节」'},
+    ],
+    sc:'nanoGPT 的 GPT class forward 函数从输入到输出走了哪些 step？' },
+
+  { num:21, date:'5/27', wd:'周三', wk:4, type:'work', title:'nanoGPT 修改 + Claude API tool use',
+    tasks:[
+      {k:'学',t:'5:00-7:00',c:'把 nanoGPT 改成在自己小数据集训练（中文古诗 / 自己微博 / 任何小语料），跑一个 epoch'},
+      {k:'学',t:'9:00-11:00',c:'看 Anthropic 文档 Tool Use 章节 + 跑通官方 tool use cookbook 第一个例子'},
+      {k:'项',t:'20:00-21:00',c:'v0.1 功能开发：把第一个核心功能完善（错误处理 + happy path 例子）'},
+    ],
+    sc:'tool use 的「模型决定调哪个工具+参数」这一步，模型实际看到的 prompt 长什么样？' },
+
+  { num:22, date:'5/28', wd:'周四', wk:4, type:'work', title:'第一个 agent demo',
+    tasks:[
+      {k:'学',t:'5:00-7:00 + 9:00-11:00',c:'写有 ≥2 个工具 + ≥3 轮对话的 Claude agent demo（如「查天气+查日历」或「搜文件+读文件」），单独 repo（agent-demo），能给陌生人演示'},
+      {k:'项',t:'20:00-21:00',c:'v0.1 收尾：把 agent demo 核心逻辑抽象成工具的一个 example'},
+      {k:'媒',t:'19:00-20:00',c:'发 agent demo 的 30 秒视频或 GIF'},
+    ],
+    sc:'我的 agent 在「该不该调工具」这一步上，错误率大概是多少？什么情况下错？' },
+
+  { num:23, date:'5/29', wd:'周五', wk:4, type:'work', title:'v0.1 收尾日',
+    tasks:[
+      {k:'学',t:'5:00-7:00',c:'休一下大脑，看 3Blue1Brown 神经网络系列剩下几集（直觉补全）'},
+      {k:'项',t:'9:00-11:00 + 20:00-21:00（3h+）',c:'v0.1 release 收尾：README 完整版（What/Install/Quickstart/Examples/Roadmap）+ ≥2 个跑通的 example + 一个 short demo gif'},
+    ],
+    sc:'陌生人看到我的 README 后，能在 10 分钟内做出一个对他有用的东西吗？' },
+
+  { num:24, date:'5/30', wd:'周六', wk:4, type:'work', title:'⭐ v0.1 发布 + 长帖',
+    tasks:[
+      {k:'项',t:'5:00-7:00 + 9:00-11:00（4h+）',c:'打 v0.1.0 tag，发 GitHub release；同步 Show HN / 即刻 / X / 小红书'},
+      {k:'媒',t:'19:00-20:00',c:'发月度长帖「数学本科生用 30 天理解 transformer + 开源了第一个 Agent 工具 v0.1」（3000-5000 字）'},
+    ],
+    sc:'今天我同时完成了「学懂 GPT」和「发出第一个开源工具」— 我对自己说什么？' },
+
+  { num:25, date:'5/31', wd:'周日', wk:4, type:'rest', title:'5 月月度复盘日',
+    tasks:[
+      {k:'休',t:'上午',c:'彻底休息'},
+      {k:'休',t:'下午',c:'用月度复盘模板做完整 review + 列 6 月（Week 5）每天承诺清单'},
+      {k:'休',t:'晚',c:'跟 Claude 说「请生成 6 月 schedule」，把过去 30 天真实数据带进去'},
+    ],
+    sc:'我准备好把过去 30 天的具体数据告诉 Claude 重新规划 6 月了吗？' },
+];
+
+// ----- helpers -----
+const KIND_FULL = { '学': '学习', '项': '项目', '媒': '自媒体', '休': '休息' };
+const LS_PREFIX = 'umaru-may-30day-';
+
+function lsGet(key, dflt) {
+  try { const v = localStorage.getItem(LS_PREFIX + key); return v == null ? dflt : JSON.parse(v); }
+  catch(e) { return dflt; }
+}
+function lsSet(key, val) {
+  try { localStorage.setItem(LS_PREFIX + key, JSON.stringify(val)); } catch(e) {}
+}
+
+function todayDayNum() {
+  const now = new Date();
+  if (now < START_DATE) return 0;
+  if (now > END_DATE) return 99;
+  const ms = now - START_DATE;
+  const idx = Math.floor(ms / (1000*60*60*24));
+  return idx + 1;
+}
+
+function findDay(num) { return days.find(d => d.num === num); }
+function findWeek(num) { return weeks.find(w => w.num === num); }
+
+function escHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function dayHtml(d, opts = {}) {
+  const isToday = !!opts.today;
+  const cls = ['card', 'day'];
+  if (isToday) cls.push(d.type === 'rest' ? 'rest' : 'today');
+  const tasksHtml = d.tasks.map((t, i) => {
+    const ckKey = `task-${d.num}-${i}`;
+    const checked = lsGet(ckKey, false) ? 'checked' : '';
+    const liCls = checked ? 'done' : '';
+    return `<li class="${liCls}" data-key="${ckKey}">
+      <input type="checkbox" ${checked} data-key="${ckKey}" />
+      <div class="tasks-content">
+        <span class="kind ${t.k}">${escHtml(KIND_FULL[t.k] || t.k)}</span>
+        ${t.t ? `<span class="time">${escHtml(t.t)}</span>` : ''}
+        <span>${escHtml(t.c)}</span>
+      </div>
+    </li>`;
+  }).join('');
+  return `<div class="${cls.join(' ')}">
+    <div class="day-head">
+      <div>
+        <span class="num">Day ${d.num}</span>
+        <span class="meta">· ${d.wd} ${d.date} · Week ${d.wk}${d.type === 'rest' ? ' · 休' : ''}</span>
+      </div>
+    </div>
+    <div class="day-title">${escHtml(d.title)}</div>
+    <ul class="tasks">${tasksHtml}</ul>
+    <div class="selfcheck"><strong>🌙 今天自检：</strong>${escHtml(d.sc)}</div>
+  </div>`;
+}
+
+function weekCardHtml(w) {
+  const milesHtml = w.milestones.map((m, i) => {
+    const ckKey = `mile-${w.num}-${i}`;
+    const checked = lsGet(ckKey, false) ? 'checked' : '';
+    const liCls = checked ? 'done' : '';
+    return `<li class="${liCls}" data-key="${ckKey}">
+      <input type="checkbox" ${checked} data-key="${ckKey}" />
+      <span>${escHtml(m)}</span>
+    </li>`;
+  }).join('');
+  return `<div class="week-card">
+    <div class="week-head">
+      <h3>Week ${w.num} · ${w.dateRange}</h3>
+      <span class="muted">${escHtml(w.theme)}</span>
+    </div>
+    <div class="week-theme">${escHtml(w.note)}</div>
+    <strong style="font-size:13px;">本周 milestone</strong>
+    <ul class="milestones">${milesHtml}</ul>
+  </div>`;
+}
+
+function weekFullHtml(w, todayNum) {
+  const milesHtml = w.milestones.map((m, i) => {
+    const ckKey = `mile-${w.num}-${i}`;
+    const checked = lsGet(ckKey, false) ? 'checked' : '';
+    const liCls = checked ? 'done' : '';
+    return `<li class="${liCls}" data-key="${ckKey}">
+      <input type="checkbox" ${checked} data-key="${ckKey}" />
+      <span>${escHtml(m)}</span>
+    </li>`;
+  }).join('');
+  const weekDays = days.filter(d => d.wk === w.num);
+  const daysHtml = weekDays.map(d => {
+    const isToday = d.num === todayNum;
+    const badgeCls = isToday ? 'today' : (d.type === 'rest' ? 'rest' : 'work');
+    const badgeText = isToday ? '今天' : (d.type === 'rest' ? '休' : '');
+    return `<details class="day-acc" ${isToday ? 'open' : ''}>
+      <summary>
+        <span><strong>Day ${d.num}</strong> <span class="muted">· ${d.wd} ${d.date} · ${escHtml(d.title)}</span></span>
+        ${badgeText ? `<span class="badge ${badgeCls}">${badgeText}</span>` : ''}
+      </summary>
+      <div style="padding-top:10px;">${dayHtml(d).replace(/^<div class="card[^"]*">/, '<div>').replace(/<\/div>$/, '</div>')}</div>
+    </details>`;
+  }).join('');
+  return `<div class="week-card">
+    <div class="week-head">
+      <h3>Week ${w.num} · ${w.dateRange}</h3>
+      <span class="muted">${escHtml(w.theme)}</span>
+    </div>
+    <div class="week-theme">${escHtml(w.note)}</div>
+    <details>
+      <summary style="cursor:pointer; padding: 6px 0; font-size:13px;"><strong>本周 milestone（${w.milestones.length} 项）</strong></summary>
+      <ul class="milestones">${milesHtml}</ul>
+    </details>
+    <div style="margin-top: 8px;">${daysHtml}</div>
+  </div>`;
+}
+
+function render() {
+  const todayNum = todayDayNum();
+  const today = findDay(todayNum);
+
+  // top counter & progress
+  const counter = document.getElementById('dayCounter');
+  const fill = document.getElementById('progressFill');
+  if (todayNum === 0) {
+    counter.textContent = '尚未开始（5/7 启动）';
+    fill.style.width = '0%';
+  } else if (todayNum === 99) {
+    counter.textContent = '5 月已结束';
+    fill.style.width = '100%';
+  } else {
+    counter.textContent = `Day ${todayNum} / 25 · Week ${today ? today.wk : ''}`;
+    fill.style.width = `${(todayNum / 25) * 100}%`;
+  }
+
+  // today section
+  const todayCard = document.getElementById('todayCard');
+  const todaySub = document.getElementById('todaySub');
+  if (todayNum === 0) {
+    todayCard.innerHTML = `<div class="empty">明天 5/7 周四是 Day 1。</div>`;
+    todaySub.textContent = '';
+  } else if (todayNum === 99 || !today) {
+    todayCard.innerHTML = `<div class="empty">5 月计划已完成。跟 Claude 说「请生成 6 月 schedule」。</div>`;
+    todaySub.textContent = '';
+  } else {
+    todaySub.textContent = `${today.wd} ${today.date}`;
+    todayCard.innerHTML = dayHtml(today, { today: true });
+  }
+
+  // this week
+  const thisweekCard = document.getElementById('thisweekCard');
+  const thisweekSub = document.getElementById('thisweekSub');
+  const thisWeek = today ? findWeek(today.wk) : findWeek(1);
+  if (thisWeek) {
+    thisweekSub.textContent = `Week ${thisWeek.num} · ${thisWeek.dateRange}`;
+    thisweekCard.innerHTML = weekCardHtml(thisWeek);
+  }
+
+  // all days
+  const allWeeks = document.getElementById('allWeeks');
+  allWeeks.innerHTML = weeks.map(w => weekFullHtml(w, todayNum)).join('');
+
+  // bind checkboxes
+  document.querySelectorAll('input[type=checkbox][data-key]').forEach(cb => {
+    cb.addEventListener('change', e => {
+      const key = e.target.getAttribute('data-key');
+      lsSet(key, e.target.checked);
+      // toggle line-through visually on all matching elements
+      document.querySelectorAll(`[data-key="${key}"]`).forEach(el => {
+        if (el.tagName === 'LI') el.classList.toggle('done', e.target.checked);
+        if (el.tagName === 'INPUT') el.checked = e.target.checked;
+      });
+    });
+  });
+}
+
+// copy buttons
+document.addEventListener('click', e => {
+  if (e.target.classList.contains('copy-btn')) {
+    const id = e.target.getAttribute('data-target');
+    const text = document.getElementById(id).textContent;
+    navigator.clipboard.writeText(text).then(() => {
+      const orig = e.target.textContent;
+      e.target.textContent = '已复制 ✓';
+      setTimeout(() => { e.target.textContent = orig; }, 1500);
+    });
+  }
+});
+
+// reset
+document.getElementById('resetBtn').addEventListener('click', () => {
+  if (!confirm('清空所有勾选状态（任务 + milestone）？')) return;
+  Object.keys(localStorage).filter(k => k.startsWith(LS_PREFIX)).forEach(k => localStorage.removeItem(k));
+  render();
+});
+
+render();
+</script>
+</body>
+</html>

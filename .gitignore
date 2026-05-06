@@ -1,0 +1,17 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# editors
+.vscode/
+.idea/
+*.swp
+
+# Vercel
+.vercel
+
+# secrets (just in case)
+.env
+.env.*
+!.env.example
