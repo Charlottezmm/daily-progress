@@ -6,8 +6,8 @@
 
 ### Step 1: 把这个文件夹推到 GitHub
 
-1. 在 [github.com/new](https://github.com/new) 创建新 repo，名字建议 `umaru-30day-progress`（或你想要的名字），**Public**
-2. 终端 cd 到本文件夹（`umaru-30day-public/`），跑：
+1. 在 [github.com/new](https://github.com/new) 创建新 repo，名字建议 `charlottezmm-30day-progress`（或你想要的名字），**Public**
+2. 终端 cd 到本文件夹（`daily-progress/`），跑：
 
 ```bash
 git init
@@ -24,14 +24,14 @@ git push -u origin main
 2. Dashboard 右上角 → **Add New** → **Project**
 3. 找到刚推的 repo，点 **Import**
 4. 全部默认值，直接点 **Deploy**
-5. 等约 30 秒，拿到 URL，例：`umaru-30day-progress.vercel.app`
+5. 等约 30 秒，拿到 URL，例：`charlottezmm-30day-progress.vercel.app`
 
 ### Step 3（可选）：自定义域名
 
-如果你有自己的域（如 `umaru.dev`）：
+如果你有自己的域（如 `charlottezmm.dev`）：
 
 1. Vercel 项目页 → **Settings** → **Domains**
-2. 加 `30days.umaru.dev`（或你想要的子域）
+2. 加 `30days.charlottezmm.dev`（或你想要的子域）
 3. 跟着提示去你的 DNS 服务商加 CNAME 记录
 4. 等 DNS 生效（几分钟到几小时）
 

@@ -2,251 +2,638 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8" />
-<title>5月 30 天冲刺 · Umaru</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>5月 30 天冲刺 · Charlottezmm</title>
 <style>
 :root {
   color-scheme: light;
-  --bg: #fafaf9;
+  --bg: #ffffff;
+  --bg-soft: #fafafa;
+  --bg-sidebar: #fafafa;
+  --bg-hover: #f4f4f5;
+  --bg-active: #eeeef0;
   --card: #ffffff;
-  --text: #1f1f1f;
-  --muted: #6b7280;
-  --border: #e5e7eb;
-  --accent: #2563eb;
-  --accent-soft: #dbeafe;
-  --success: #16a34a;
-  --warn: #d97706;
-  --rest: #9333ea;
-  --rest-soft: #f3e8ff;
+  --text: #0a0a0a;
+  --text-2: #404040;
+  --muted: #6e6e73;
+  --muted-2: #9b9b9f;
+  --border: #ececef;
+  --border-strong: #d4d4d8;
+  --accent: #5e6ad2;
+  --accent-soft: #eef0fc;
+  --accent-text: #4750c4;
+  --tag-学-bg: #eef2ff; --tag-学-fg: #4338ca;
+  --tag-项-bg: #ecfdf5; --tag-项-fg: #047857;
+  --tag-媒-bg: #fff7ed; --tag-媒-fg: #c2410c;
+  --tag-休-bg: #faf5ff; --tag-休-fg: #7e22ce;
+  --warn: #b45309;
+  --warn-soft: #fffbeb;
+  --danger: #dc2626;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --radius: 6px;
+  --sidebar-w: 232px;
 }
 * { box-sizing: border-box; }
+html, body { height: 100%; }
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
-  font-size: 14px;
-  line-height: 1.6;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 13.5px;
+  line-height: 1.55;
   color: var(--text);
   background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "cv11", "ss01";
 }
-.wrap { max-width: 880px; margin: 0 auto; padding: 18px 20px 80px; }
 
-header.top {
-  position: sticky; top: 0; z-index: 10;
-  background: rgba(250, 250, 249, 0.92);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  border-bottom: 1px solid var(--border);
-  margin: -18px -20px 16px;
-  padding: 12px 20px;
+/* ===== Layout ===== */
+.app {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  min-height: 100vh;
 }
-.top-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.top-title { font-size: 15px; font-weight: 600; }
-.top-title .muted { color: var(--muted); font-weight: 400; margin-left: 6px; }
-.progress-wrap {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 12px; color: var(--muted);
+
+/* ===== Sidebar ===== */
+aside.sidebar {
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  padding: 14px 10px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--text);
+}
+.brand .dot {
+  width: 18px; height: 18px;
+  border-radius: 5px;
+  background: linear-gradient(135deg, var(--accent), #7b85e6);
+  display: inline-grid; place-items: center;
+  color: white; font-size: 11px; font-weight: 700;
+  flex: 0 0 auto;
+}
+.sidebar-section-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted-2);
+  padding: 12px 8px 4px;
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: var(--radius);
+  color: var(--text-2);
+  text-decoration: none;
+  font-size: 13px;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  transition: background 0.08s;
+}
+.nav-item:hover { background: var(--bg-hover); color: var(--text); }
+.nav-item.active {
+  background: var(--bg-active);
+  color: var(--text);
+  font-weight: 500;
+}
+.nav-item .ico {
+  width: 14px; height: 14px;
+  flex: 0 0 auto;
+  color: var(--muted);
+  display: inline-grid; place-items: center;
+}
+.nav-item.active .ico { color: var(--accent); }
+.nav-item .count {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted-2);
+  font-variant-numeric: tabular-nums;
+}
+.sidebar-footer {
+  margin-top: auto;
+  padding: 10px 8px 4px;
+  font-size: 11px;
+  color: var(--muted-2);
+  border-top: 1px solid var(--border);
+}
+
+/* ===== Main ===== */
+main.main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.topbar {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center;
+  gap: 12px;
+  height: 46px;
+  padding: 0 22px;
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+}
+.topbar-burger {
+  display: none;
+  width: 28px; height: 28px;
+  align-items: center; justify-content: center;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.topbar-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+.topbar-title .sep { color: var(--muted-2); margin: 0 6px; }
+.topbar-title .muted { color: var(--muted); font-weight: 400; }
+.topbar-progress {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 .progress-bar {
-  width: 140px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden;
+  width: 120px; height: 4px;
+  background: var(--bg-active);
+  border-radius: 2px;
+  overflow: hidden;
 }
 .progress-bar > div {
-  height: 100%; background: var(--accent); transition: width .3s ease;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s ease;
 }
-.nav { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
-.nav a {
-  padding: 4px 10px; border-radius: 999px; background: var(--card);
-  border: 1px solid var(--border); color: var(--text); text-decoration: none;
-  font-size: 12px;
-}
-.nav a:hover { border-color: var(--accent); color: var(--accent); }
 
+.content {
+  padding: 28px 32px 80px;
+  max-width: 920px;
+  width: 100%;
+}
+@media (max-width: 1100px) { .content { padding: 24px 24px 80px; } }
+
+/* ===== Sections ===== */
+section { margin-bottom: 36px; }
+section:last-of-type { margin-bottom: 0; }
 h2.section {
-  margin: 28px 0 12px;
-  font-size: 16px;
+  margin: 0 0 14px;
+  font-size: 13px;
   font-weight: 600;
-  display: flex; align-items: baseline; gap: 8px;
+  color: var(--text);
+  letter-spacing: -0.005em;
+  display: flex; align-items: baseline; gap: 10px;
 }
-h2.section .sub { font-size: 12px; color: var(--muted); font-weight: 400; }
+h2.section .sub {
+  font-size: 12px; color: var(--muted); font-weight: 400;
+}
 
+/* ===== Cards ===== */
 .card {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 16px 18px;
-  margin-bottom: 12px;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  transition: border-color 0.1s;
 }
 .card.today {
-  border: 1.5px solid var(--accent);
-  background: linear-gradient(180deg, var(--accent-soft) 0%, var(--card) 60%);
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 .card.rest {
-  border: 1.5px solid var(--rest);
-  background: linear-gradient(180deg, var(--rest-soft) 0%, var(--card) 60%);
+  border-color: var(--border);
+  background: var(--bg-soft);
 }
 
 .day-head {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
-  margin-bottom: 6px;
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
 }
-.day-head .num { font-weight: 600; font-size: 15px; }
-.day-head .meta { color: var(--muted); font-size: 12px; }
-.day-title { font-size: 14px; color: var(--muted); margin-bottom: 10px; }
+.day-head .num {
+  font-weight: 600; font-size: 13px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.day-head .meta {
+  color: var(--muted); font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+.day-head .badge {
+  font-size: 10.5px;
+  padding: 1px 7px;
+  border-radius: 4px;
+  background: var(--bg-active);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 500;
+}
+.day-head .badge.today {
+  background: var(--accent); color: white;
+}
+.day-head .badge.rest {
+  background: var(--tag-休-bg); color: var(--tag-休-fg);
+}
+.day-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 10px;
+  letter-spacing: -0.005em;
+}
 
-ul.tasks { list-style: none; padding: 0; margin: 0 0 10px; }
+/* ===== Tasks ===== */
+ul.tasks { list-style: none; padding: 0; margin: 0 0 8px; }
 ul.tasks li {
   display: flex; align-items: flex-start; gap: 8px;
   padding: 6px 0;
-  border-top: 1px dashed var(--border);
+  border-top: 1px solid var(--border);
+  position: relative;
 }
 ul.tasks li:first-child { border-top: 0; }
 ul.tasks input[type=checkbox] {
-  margin-top: 5px; flex: 0 0 auto;
+  margin: 4px 0 0 0; flex: 0 0 auto;
   width: 14px; height: 14px;
   accent-color: var(--accent);
+  cursor: pointer;
 }
-.tasks-content { flex: 1; }
+.tasks-content { flex: 1; min-width: 0; }
 .kind {
-  display: inline-block; min-width: 44px;
-  font-size: 11px; padding: 1px 6px; border-radius: 4px;
-  margin-right: 4px; text-align: center;
-  background: var(--border); color: var(--text);
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 36px;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-right: 6px;
+  background: var(--bg-active);
+  color: var(--muted);
+  font-weight: 500;
+  vertical-align: 1px;
 }
-.kind.学 { background: #dcfce7; color: #15803d; }
-.kind.项 { background: #dbeafe; color: #1d4ed8; }
-.kind.媒 { background: #fef3c7; color: #b45309; }
-.time { color: var(--muted); font-size: 12px; margin-right: 6px; }
-li.done .tasks-content { color: var(--muted); text-decoration: line-through; }
+.kind.学 { background: var(--tag-学-bg); color: var(--tag-学-fg); }
+.kind.项 { background: var(--tag-项-bg); color: var(--tag-项-fg); }
+.kind.媒 { background: var(--tag-媒-bg); color: var(--tag-媒-fg); }
+.kind.休 { background: var(--tag-休-bg); color: var(--tag-休-fg); }
+.time {
+  color: var(--muted);
+  font-size: 11.5px;
+  margin-right: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.task-text { color: var(--text-2); font-size: 13px; }
+li.done .task-text {
+  color: var(--muted-2);
+  text-decoration: line-through;
+}
 
 .selfcheck {
   margin-top: 10px;
-  padding: 10px 12px;
-  background: #fefce8;
-  border-left: 3px solid var(--warn);
-  border-radius: 6px;
-  font-size: 13px;
+  padding: 9px 12px;
+  background: var(--warn-soft);
+  border-left: 2px solid var(--warn);
+  border-radius: 0 4px 4px 0;
+  font-size: 12.5px;
+  color: var(--text-2);
 }
-.selfcheck strong { color: var(--warn); }
+.selfcheck strong { color: var(--warn); margin-right: 4px; }
 
+/* ===== Week card ===== */
 .week-card {
-  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
-  padding: 14px 18px; margin-bottom: 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
 }
 .week-head {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
-  cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; flex-wrap: wrap;
 }
-.week-head h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.week-head h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
 .week-head .muted { color: var(--muted); font-size: 12px; }
-.week-theme { color: var(--muted); font-size: 13px; margin: 4px 0 12px; }
-.milestones { margin: 8px 0 0; padding: 0; list-style: none; }
+.week-theme {
+  color: var(--muted);
+  font-size: 12.5px;
+  margin: 4px 0 12px;
+}
+.milestones { margin: 6px 0 0; padding: 0; list-style: none; }
 .milestones li {
   display: flex; align-items: flex-start; gap: 8px;
-  padding: 5px 0;
-  font-size: 13px;
+  padding: 4px 0;
+  font-size: 12.5px;
+  color: var(--text-2);
 }
 .milestones input[type=checkbox] {
-  margin-top: 4px; width: 14px; height: 14px; accent-color: var(--success);
-}
-.milestones li.done span { color: var(--muted); text-decoration: line-through; }
-
-details.day-acc {
-  border-top: 1px solid var(--border);
-  padding: 8px 0;
-}
-details.day-acc[open] { padding-bottom: 14px; }
-details.day-acc summary {
-  cursor: pointer; list-style: none;
-  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
-  padding: 4px 0;
-}
-details.day-acc summary::-webkit-details-marker { display: none; }
-details.day-acc summary .badge {
-  font-size: 11px; padding: 1px 8px; border-radius: 999px;
-  background: var(--border); color: var(--muted);
-}
-details.day-acc summary .badge.work { background: var(--accent-soft); color: var(--accent); }
-details.day-acc summary .badge.rest { background: var(--rest-soft); color: var(--rest); }
-details.day-acc summary .badge.today { background: var(--accent); color: white; }
-
-.template {
-  background: #f5f5f4; border: 1px solid var(--border); border-radius: 8px;
-  padding: 12px 14px; margin: 8px 0;
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
-  font-size: 12.5px; line-height: 1.7; color: #404040;
-  white-space: pre-wrap;
-}
-.copy-btn {
-  font-size: 11px; padding: 3px 10px; border: 1px solid var(--border);
-  background: var(--card); color: var(--text); border-radius: 6px;
+  margin: 4px 0 0; width: 14px; height: 14px;
+  accent-color: var(--accent);
   cursor: pointer;
 }
-.copy-btn:hover { border-color: var(--accent); color: var(--accent); }
-.template-head { display: flex; align-items: center; justify-content: space-between; margin: 12px 0 4px; }
+.milestones li.done span.mile-text {
+  color: var(--muted-2);
+  text-decoration: line-through;
+}
+.mile-text { flex: 1; min-width: 0; }
+
+/* ===== Accordion days inside week ===== */
+details.day-acc {
+  border-top: 1px solid var(--border);
+  padding: 4px 0;
+}
+details.day-acc:first-of-type { border-top: 1px solid var(--border); margin-top: 12px; }
+details.day-acc[open] { padding-bottom: 12px; }
+details.day-acc summary {
+  cursor: pointer; list-style: none;
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 4px;
+  border-radius: 4px;
+}
+details.day-acc summary:hover { background: var(--bg-hover); }
+details.day-acc summary::-webkit-details-marker { display: none; }
+details.day-acc summary .chevron {
+  width: 12px; height: 12px;
+  color: var(--muted-2);
+  transition: transform 0.15s;
+  flex: 0 0 auto;
+}
+details.day-acc[open] summary .chevron { transform: rotate(90deg); }
+details.day-acc summary .summary-text {
+  flex: 1; min-width: 0;
+  font-size: 13px;
+  display: flex; align-items: center; gap: 8px;
+  flex-wrap: wrap;
+}
+details.day-acc summary .summary-text strong {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+details.day-acc summary .summary-text .muted {
+  color: var(--muted); font-weight: 400;
+  overflow: hidden; text-overflow: ellipsis;
+}
+details.day-acc summary .badge {
+  font-size: 10.5px;
+  padding: 1px 7px;
+  border-radius: 4px;
+  background: var(--bg-active);
+  color: var(--muted);
+  font-weight: 500;
+  flex: 0 0 auto;
+}
+details.day-acc summary .badge.work { background: var(--accent-soft); color: var(--accent-text); }
+details.day-acc summary .badge.rest { background: var(--tag-休-bg); color: var(--tag-休-fg); }
+details.day-acc summary .badge.today { background: var(--accent); color: white; }
+.day-inner {
+  padding: 10px 4px 0 22px;
+}
+
+/* ===== Templates ===== */
+.template {
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin: 6px 0 14px;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-2);
+  white-space: pre-wrap;
+}
+.template-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 14px 0 4px;
+}
+.template-head strong { font-size: 12.5px; }
+button.btn {
+  font-size: 11.5px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text-2);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.08s;
+}
+button.btn:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+  background: var(--bg-hover);
+}
+button.btn.danger:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+button.btn.primary {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+button.btn.primary:hover { background: #4d59c4; border-color: #4d59c4; }
+
+/* ===== Editable affordance ===== */
+.editable {
+  position: relative;
+  border-radius: 3px;
+  padding: 1px 3px;
+  margin: -1px -3px;
+  cursor: text;
+  transition: background 0.08s, box-shadow 0.08s;
+}
+.editable:hover {
+  background: var(--bg-hover);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.editable:focus {
+  outline: none;
+  background: white;
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+  cursor: text;
+}
+.editable[contenteditable="true"]:empty::before {
+  content: attr(data-placeholder);
+  color: var(--muted-2);
+}
+
+.empty {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--muted);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+}
 
 footer.foot {
-  margin-top: 32px; padding-top: 16px;
+  margin-top: 36px;
+  padding-top: 16px;
   border-top: 1px solid var(--border);
-  font-size: 12px; color: var(--muted); text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
 }
 footer.foot p { margin: 4px 0; }
 
-.reset-row {
-  margin-top: 14px; font-size: 11px; color: var(--muted);
-  display: flex; gap: 8px; align-items: center;
+/* ===== Mobile drawer ===== */
+.backdrop {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.3);
+  z-index: 30;
 }
-.reset-row button {
-  font-size: 11px; padding: 2px 8px; border: 1px solid var(--border);
-  background: transparent; color: var(--muted); border-radius: 4px; cursor: pointer;
-}
-.reset-row button:hover { color: var(--warn); border-color: var(--warn); }
+.backdrop.open { display: block; }
 
-.empty {
-  padding: 40px 20px; text-align: center; color: var(--muted);
-  border: 1px dashed var(--border); border-radius: 12px;
+@media (max-width: 768px) {
+  .app { grid-template-columns: 1fr; }
+  aside.sidebar {
+    position: fixed;
+    top: 0; left: 0;
+    width: 260px;
+    height: 100vh;
+    z-index: 40;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    box-shadow: 2px 0 12px rgba(0,0,0,0.06);
+  }
+  aside.sidebar.open { transform: translateX(0); }
+  .topbar-burger { display: inline-flex; }
+  .content { padding: 18px 16px 60px; }
+  .topbar { padding: 0 14px; }
+  .progress-bar { width: 80px; }
 }
+
+/* utility */
+.icon { width: 14px; height: 14px; flex: 0 0 auto; }
+.spacer { flex: 1; }
+.row { display: flex; align-items: center; gap: 8px; }
+input[type="file"] { display: none; }
 </style>
 </head>
 <body>
-<div class="wrap">
 
-<header class="top">
-  <div class="top-row">
-    <div class="top-title">5 月 30 天冲刺<span class="muted">· LLM 内功 + Agent 工程</span></div>
-    <div class="progress-wrap">
-      <span id="dayCounter">—</span>
-      <div class="progress-bar"><div id="progressFill" style="width:0%"></div></div>
+<div class="app">
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <span class="dot">C</span>
+      <span>Charlottezmm</span>
     </div>
-  </div>
-  <div class="nav">
-    <a href="#today">今天</a>
-    <a href="#thisweek">本周 milestone</a>
-    <a href="#all-days">全部 30 天</a>
-    <a href="#templates">复盘模板</a>
-  </div>
-</header>
 
-<section id="today">
-  <h2 class="section">今天 <span class="sub" id="todaySub"></span></h2>
-  <div id="todayCard"></div>
-</section>
+    <div class="sidebar-section-label">Workspace</div>
+    <button class="nav-item active" data-target="today">
+      <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="3"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2"/></svg>
+      <span>今天</span>
+    </button>
+    <button class="nav-item" data-target="thisweek">
+      <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="11" rx="1.5"/><path d="M2 6h12M5 1v3M11 1v3"/></svg>
+      <span>本周 milestone</span>
+    </button>
+    <button class="nav-item" data-target="all-days">
+      <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h10M3 8h10M3 12h10"/></svg>
+      <span>全部 30 天</span>
+      <span class="count" id="navAllCount">25</span>
+    </button>
+    <button class="nav-item" data-target="templates">
+      <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="2" width="10" height="12" rx="1.5"/><path d="M5 5h6M5 8h6M5 11h4"/></svg>
+      <span>复盘模板</span>
+    </button>
 
-<section id="thisweek">
-  <h2 class="section">本周 milestone <span class="sub" id="thisweekSub"></span></h2>
-  <div id="thisweekCard"></div>
-</section>
+    <div class="sidebar-section-label">Actions</div>
+    <button class="nav-item" id="exportBtn">
+      <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2v9M4.5 7.5L8 11l3.5-3.5M3 14h10"/></svg>
+      <span>导出 JSON</span>
+    </button>
+    <button class="nav-item" id="importBtn">
+      <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 11V2M4.5 5.5L8 2l3.5 3.5M3 14h10"/></svg>
+      <span>导入 JSON</span>
+    </button>
+    <input type="file" id="importFile" accept=".json,application/json" />
+    <button class="nav-item" id="resetBtn">
+      <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8a5 5 0 1 0 1.5-3.5M3 3v3h3"/></svg>
+      <span>清空勾选</span>
+    </button>
 
-<section id="all-days">
-  <h2 class="section">全部 30 天 <span class="sub">点击展开任意一天</span></h2>
-  <div id="allWeeks"></div>
-</section>
+    <div class="sidebar-footer">
+      点击文字可直接编辑 · 数据存本机
+    </div>
+  </aside>
 
-<section id="templates">
-  <h2 class="section">复盘模板 <span class="sub">每周日 / 每月 31 号用</span></h2>
+  <!-- ===== Main ===== -->
+  <main class="main">
+    <div class="topbar">
+      <button class="topbar-burger" id="burger" aria-label="菜单">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12M2 8h12M2 12h12"/></svg>
+      </button>
+      <div class="topbar-title">
+        <span>5 月 30 天冲刺</span>
+        <span class="sep">·</span>
+        <span class="muted">LLM 内功 + Agent 工程</span>
+      </div>
+      <div class="topbar-progress">
+        <span id="dayCounter">—</span>
+        <div class="progress-bar"><div id="progressFill" style="width:0%"></div></div>
+      </div>
+    </div>
 
-  <div class="template-head">
-    <strong style="font-size:13px;">周日 weekly review</strong>
-    <button class="copy-btn" data-target="weeklyTpl">复制</button>
-  </div>
-  <pre class="template" id="weeklyTpl">本周：第 ___ 周（5/__ - 5/__）
+    <div class="content">
+
+      <section id="today">
+        <h2 class="section">今天 <span class="sub" id="todaySub"></span></h2>
+        <div id="todayCard"></div>
+      </section>
+
+      <section id="thisweek">
+        <h2 class="section">本周 milestone <span class="sub" id="thisweekSub"></span></h2>
+        <div id="thisweekCard"></div>
+      </section>
+
+      <section id="all-days">
+        <h2 class="section">全部 30 天 <span class="sub">点击任意一天展开</span></h2>
+        <div id="allWeeks"></div>
+      </section>
+
+      <section id="templates">
+        <h2 class="section">复盘模板 <span class="sub">每周日 / 每月 31 号用</span></h2>
+
+        <div class="template-head">
+          <strong>周日 weekly review</strong>
+          <button class="btn copy-btn" data-target="weeklyTpl">复制</button>
+        </div>
+        <pre class="template" id="weeklyTpl">本周：第 ___ 周（5/__ - 5/__）
 
 本周做完的 3 件最重要的事：
 1.
@@ -270,11 +657,11 @@ footer.foot p { margin: 4px 0; }
 
 一句话：本周我从「___」变成了「___」</pre>
 
-  <div class="template-head">
-    <strong style="font-size:13px;">5/31 月度复盘</strong>
-    <button class="copy-btn" data-target="monthlyTpl">复制</button>
-  </div>
-  <pre class="template" id="monthlyTpl">本月：5 月
+        <div class="template-head">
+          <strong>5/31 月度复盘</strong>
+          <button class="btn copy-btn" data-target="monthlyTpl">复制</button>
+        </div>
+        <pre class="template" id="monthlyTpl">本月：5 月
 
 学到的最重要 3 件事：
 1.
@@ -304,23 +691,24 @@ footer.foot p { margin: 4px 0; }
 - Day 30（6/5 周五）：
 - Day 31（6/6 周六）：
 - Day 32（6/7 周日）：休</pre>
-</section>
+      </section>
 
-<div class="reset-row">
-  <span>本看板的勾选状态保存在你本地浏览器（localStorage）。</span>
-  <button id="resetBtn">清空所有勾选</button>
+      <footer class="foot">
+        <p>今天的目标不是变成专家，是比昨天多懂一点、多写一行。</p>
+        <p>30 天后回头看，是 25 个"今天"堆出来的。</p>
+      </footer>
+    </div>
+  </main>
 </div>
 
-<footer class="foot">
-  <p>今天的目标不是变成专家，是比昨天多懂一点、多写一行。</p>
-  <p>30 天后回头看，是 25 个"今天"堆出来的。</p>
-</footer>
-
-</div>
+<div class="backdrop" id="backdrop"></div>
 
 <script>
+// ============================================================
+// 数据（默认值；用户编辑后会覆盖到 localStorage）
+// ============================================================
 const START_DATE = new Date('2026-05-07T00:00:00');
-const END_DATE = new Date('2026-05-31T23:59:59');
+const END_DATE   = new Date('2026-05-31T23:59:59');
 
 const weeks = [
   {
@@ -568,93 +956,156 @@ const days = [
     sc:'我准备好把过去 30 天的具体数据告诉 Claude 重新规划 6 月了吗？' },
 ];
 
-// ----- helpers -----
+// ============================================================
+// LocalStorage 层 + 从 umaru-* 一次性迁移
+// ============================================================
+const LS_PREFIX = 'charlottezmm-may-30day-';
+const LEGACY_PREFIX = 'umaru-may-30day-';
+const MIGRATION_FLAG = LS_PREFIX + '__migrated_v1';
+
+(function migrateFromLegacy() {
+  try {
+    if (localStorage.getItem(MIGRATION_FLAG)) return;
+    let migrated = 0;
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k || !k.startsWith(LEGACY_PREFIX)) continue;
+      const newKey = LS_PREFIX + k.slice(LEGACY_PREFIX.length);
+      if (localStorage.getItem(newKey) == null) {
+        localStorage.setItem(newKey, localStorage.getItem(k));
+        migrated++;
+      }
+    }
+    localStorage.setItem(MIGRATION_FLAG, '1');
+    if (migrated > 0) console.log(`[migration] 迁移了 ${migrated} 条旧勾选 / 编辑数据`);
+  } catch (e) { console.warn('migration failed', e); }
+})();
+
 const KIND_FULL = { '学': '学习', '项': '项目', '媒': '自媒体', '休': '休息' };
-const LS_PREFIX = 'umaru-may-30day-';
 
 function lsGet(key, dflt) {
   try { const v = localStorage.getItem(LS_PREFIX + key); return v == null ? dflt : JSON.parse(v); }
-  catch(e) { return dflt; }
+  catch (e) { return dflt; }
 }
 function lsSet(key, val) {
-  try { localStorage.setItem(LS_PREFIX + key, JSON.stringify(val)); } catch(e) {}
+  try { localStorage.setItem(LS_PREFIX + key, JSON.stringify(val)); } catch (e) {}
+}
+function lsHas(key) { return localStorage.getItem(LS_PREFIX + key) != null; }
+function lsDel(key) { try { localStorage.removeItem(LS_PREFIX + key); } catch (e) {} }
+
+// 编辑覆盖：内容字段 helpers
+//   edit-day-{num}-title / edit-day-{num}-sc / edit-day-{num}-task-{i}-c / edit-day-{num}-task-{i}-t
+//   edit-week-{num}-theme / edit-week-{num}-note / edit-week-{num}-mile-{i}
+function getDayField(d, field) {
+  const k = `edit-day-${d.num}-${field}`;
+  return lsHas(k) ? lsGet(k) : d[field];
+}
+function getTaskField(dayNum, taskIdx, field, dflt) {
+  const k = `edit-day-${dayNum}-task-${taskIdx}-${field}`;
+  return lsHas(k) ? lsGet(k) : dflt;
+}
+function getWeekField(w, field) {
+  const k = `edit-week-${w.num}-${field}`;
+  return lsHas(k) ? lsGet(k) : w[field];
+}
+function getMilestone(weekNum, idx, dflt) {
+  const k = `edit-week-${weekNum}-mile-${idx}`;
+  return lsHas(k) ? lsGet(k) : dflt;
 }
 
+// ============================================================
+// 渲染辅助
+// ============================================================
 function todayDayNum() {
   const now = new Date();
   if (now < START_DATE) return 0;
   if (now > END_DATE) return 99;
   const ms = now - START_DATE;
-  const idx = Math.floor(ms / (1000*60*60*24));
+  const idx = Math.floor(ms / (1000 * 60 * 60 * 24));
   return idx + 1;
 }
-
 function findDay(num) { return days.find(d => d.num === num); }
 function findWeek(num) { return weeks.find(w => w.num === num); }
-
 function escHtml(s) {
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
-function dayHtml(d, opts = {}) {
+function dayCardHtml(d, opts = {}) {
   const isToday = !!opts.today;
   const cls = ['card', 'day'];
   if (isToday) cls.push(d.type === 'rest' ? 'rest' : 'today');
+  else if (d.type === 'rest') cls.push('rest');
+
   const tasksHtml = d.tasks.map((t, i) => {
     const ckKey = `task-${d.num}-${i}`;
     const checked = lsGet(ckKey, false) ? 'checked' : '';
     const liCls = checked ? 'done' : '';
+    const tVal = getTaskField(d.num, i, 't', t.t);
+    const cVal = getTaskField(d.num, i, 'c', t.c);
     return `<li class="${liCls}" data-key="${ckKey}">
       <input type="checkbox" ${checked} data-key="${ckKey}" />
       <div class="tasks-content">
         <span class="kind ${t.k}">${escHtml(KIND_FULL[t.k] || t.k)}</span>
-        ${t.t ? `<span class="time">${escHtml(t.t)}</span>` : ''}
-        <span>${escHtml(t.c)}</span>
+        ${tVal ? `<span class="time editable" data-edit="day-${d.num}-task-${i}-t" data-placeholder="时间">${escHtml(tVal)}</span>` : `<span class="time editable" data-edit="day-${d.num}-task-${i}-t" data-placeholder="加时间"></span>`}
+        <span class="task-text editable" data-edit="day-${d.num}-task-${i}-c" data-placeholder="任务内容">${escHtml(cVal)}</span>
       </div>
     </li>`;
   }).join('');
+
+  const titleVal = getDayField(d, 'title');
+  const scVal = getDayField(d, 'sc');
+  const badgeHtml = isToday
+    ? `<span class="badge today">今天</span>`
+    : (d.type === 'rest' ? `<span class="badge rest">休</span>` : '');
+
   return `<div class="${cls.join(' ')}">
     <div class="day-head">
-      <div>
-        <span class="num">Day ${d.num}</span>
-        <span class="meta">· ${d.wd} ${d.date} · Week ${d.wk}${d.type === 'rest' ? ' · 休' : ''}</span>
-      </div>
+      <span class="num">Day ${d.num}</span>
+      <span class="meta">${d.wd} · ${d.date} · Week ${d.wk}</span>
+      ${badgeHtml}
     </div>
-    <div class="day-title">${escHtml(d.title)}</div>
+    <div class="day-title editable" data-edit="day-${d.num}-title" data-placeholder="今天的主题">${escHtml(titleVal)}</div>
     <ul class="tasks">${tasksHtml}</ul>
-    <div class="selfcheck"><strong>🌙 今天自检：</strong>${escHtml(d.sc)}</div>
+    <div class="selfcheck"><strong>🌙 今天自检：</strong><span class="editable" data-edit="day-${d.num}-sc" data-placeholder="今天的自检问题">${escHtml(scVal)}</span></div>
   </div>`;
 }
 
 function weekCardHtml(w) {
+  const themeVal = getWeekField(w, 'theme');
+  const noteVal = getWeekField(w, 'note');
   const milesHtml = w.milestones.map((m, i) => {
     const ckKey = `mile-${w.num}-${i}`;
     const checked = lsGet(ckKey, false) ? 'checked' : '';
     const liCls = checked ? 'done' : '';
+    const mVal = getMilestone(w.num, i, m);
     return `<li class="${liCls}" data-key="${ckKey}">
       <input type="checkbox" ${checked} data-key="${ckKey}" />
-      <span>${escHtml(m)}</span>
+      <span class="mile-text editable" data-edit="week-${w.num}-mile-${i}" data-placeholder="milestone">${escHtml(mVal)}</span>
     </li>`;
   }).join('');
   return `<div class="week-card">
     <div class="week-head">
       <h3>Week ${w.num} · ${w.dateRange}</h3>
-      <span class="muted">${escHtml(w.theme)}</span>
+      <span class="muted editable" data-edit="week-${w.num}-theme" data-placeholder="本周主题">${escHtml(themeVal)}</span>
     </div>
-    <div class="week-theme">${escHtml(w.note)}</div>
-    <strong style="font-size:13px;">本周 milestone</strong>
+    <div class="week-theme editable" data-edit="week-${w.num}-note" data-placeholder="本周备注">${escHtml(noteVal)}</div>
+    <strong style="font-size:12px; color: var(--muted);">本周 milestone</strong>
     <ul class="milestones">${milesHtml}</ul>
   </div>`;
 }
 
 function weekFullHtml(w, todayNum) {
+  const themeVal = getWeekField(w, 'theme');
+  const noteVal = getWeekField(w, 'note');
   const milesHtml = w.milestones.map((m, i) => {
     const ckKey = `mile-${w.num}-${i}`;
     const checked = lsGet(ckKey, false) ? 'checked' : '';
     const liCls = checked ? 'done' : '';
+    const mVal = getMilestone(w.num, i, m);
     return `<li class="${liCls}" data-key="${ckKey}">
       <input type="checkbox" ${checked} data-key="${ckKey}" />
-      <span>${escHtml(m)}</span>
+      <span class="mile-text editable" data-edit="week-${w.num}-mile-${i}" data-placeholder="milestone">${escHtml(mVal)}</span>
     </li>`;
   }).join('');
   const weekDays = days.filter(d => d.wk === w.num);
@@ -662,43 +1113,54 @@ function weekFullHtml(w, todayNum) {
     const isToday = d.num === todayNum;
     const badgeCls = isToday ? 'today' : (d.type === 'rest' ? 'rest' : 'work');
     const badgeText = isToday ? '今天' : (d.type === 'rest' ? '休' : '');
+    const titleVal = getDayField(d, 'title');
+    const tasksInner = dayCardHtml(d).replace(/^<div class="card[^"]*">/, '').replace(/<\/div>\s*$/, '');
     return `<details class="day-acc" ${isToday ? 'open' : ''}>
       <summary>
-        <span><strong>Day ${d.num}</strong> <span class="muted">· ${d.wd} ${d.date} · ${escHtml(d.title)}</span></span>
+        <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 4l4 4-4 4"/></svg>
+        <span class="summary-text">
+          <strong>Day ${d.num}</strong>
+          <span class="muted">${d.wd} · ${d.date} · ${escHtml(titleVal)}</span>
+        </span>
         ${badgeText ? `<span class="badge ${badgeCls}">${badgeText}</span>` : ''}
       </summary>
-      <div style="padding-top:10px;">${dayHtml(d).replace(/^<div class="card[^"]*">/, '<div>').replace(/<\/div>$/, '</div>')}</div>
+      <div class="day-inner">${tasksInner}</div>
     </details>`;
   }).join('');
   return `<div class="week-card">
     <div class="week-head">
       <h3>Week ${w.num} · ${w.dateRange}</h3>
-      <span class="muted">${escHtml(w.theme)}</span>
+      <span class="muted editable" data-edit="week-${w.num}-theme" data-placeholder="本周主题">${escHtml(themeVal)}</span>
     </div>
-    <div class="week-theme">${escHtml(w.note)}</div>
+    <div class="week-theme editable" data-edit="week-${w.num}-note" data-placeholder="本周备注">${escHtml(noteVal)}</div>
     <details>
-      <summary style="cursor:pointer; padding: 6px 0; font-size:13px;"><strong>本周 milestone（${w.milestones.length} 项）</strong></summary>
+      <summary style="cursor:pointer; padding: 6px 0; font-size:12.5px; color: var(--muted);">
+        本周 milestone（${w.milestones.length} 项）
+      </summary>
       <ul class="milestones">${milesHtml}</ul>
     </details>
-    <div style="margin-top: 8px;">${daysHtml}</div>
+    <div style="margin-top: 4px;">${daysHtml}</div>
   </div>`;
 }
 
+// ============================================================
+// 主渲染
+// ============================================================
 function render() {
   const todayNum = todayDayNum();
   const today = findDay(todayNum);
 
-  // top counter & progress
+  // top counter
   const counter = document.getElementById('dayCounter');
   const fill = document.getElementById('progressFill');
   if (todayNum === 0) {
-    counter.textContent = '尚未开始（5/7 启动）';
+    counter.textContent = '尚未开始';
     fill.style.width = '0%';
   } else if (todayNum === 99) {
-    counter.textContent = '5 月已结束';
+    counter.textContent = '已结束';
     fill.style.width = '100%';
   } else {
-    counter.textContent = `Day ${todayNum} / 25 · Week ${today ? today.wk : ''}`;
+    counter.textContent = `Day ${todayNum} / 25 · W${today ? today.wk : ''}`;
     fill.style.width = `${(todayNum / 25) * 100}%`;
   }
 
@@ -706,14 +1168,14 @@ function render() {
   const todayCard = document.getElementById('todayCard');
   const todaySub = document.getElementById('todaySub');
   if (todayNum === 0) {
-    todayCard.innerHTML = `<div class="empty">明天 5/7 周四是 Day 1。</div>`;
+    todayCard.innerHTML = `<div class="empty">5/7 启动 · 还没开始。</div>`;
     todaySub.textContent = '';
   } else if (todayNum === 99 || !today) {
-    todayCard.innerHTML = `<div class="empty">5 月计划已完成。跟 Claude 说「请生成 6 月 schedule」。</div>`;
+    todayCard.innerHTML = `<div class="empty">5 月计划已完成。</div>`;
     todaySub.textContent = '';
   } else {
     todaySub.textContent = `${today.wd} ${today.date}`;
-    todayCard.innerHTML = dayHtml(today, { today: true });
+    todayCard.innerHTML = dayCardHtml(today, { today: true });
   }
 
   // this week
@@ -729,23 +1191,97 @@ function render() {
   const allWeeks = document.getElementById('allWeeks');
   allWeeks.innerHTML = weeks.map(w => weekFullHtml(w, todayNum)).join('');
 
-  // bind checkboxes
+  bindCheckboxes();
+  bindEditables();
+}
+
+// 勾选
+function bindCheckboxes() {
   document.querySelectorAll('input[type=checkbox][data-key]').forEach(cb => {
-    cb.addEventListener('change', e => {
+    cb.onchange = e => {
       const key = e.target.getAttribute('data-key');
       lsSet(key, e.target.checked);
-      // toggle line-through visually on all matching elements
       document.querySelectorAll(`[data-key="${key}"]`).forEach(el => {
         if (el.tagName === 'LI') el.classList.toggle('done', e.target.checked);
         if (el.tagName === 'INPUT') el.checked = e.target.checked;
       });
-    });
+    };
   });
 }
 
-// copy buttons
+// 可编辑：click 进入 contenteditable，blur 保存，Esc 撤销，Enter 提交（自检/单行）
+function bindEditables() {
+  document.querySelectorAll('.editable').forEach(el => {
+    el.onclick = (e) => {
+      if (el.getAttribute('contenteditable') === 'true') return;
+      el.setAttribute('contenteditable', 'plaintext-only');
+      el.dataset.original = el.textContent;
+      el.focus();
+      // 选中全部
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    };
+    el.onkeydown = (e) => {
+      if (e.key === 'Escape') {
+        el.textContent = el.dataset.original ?? el.textContent;
+        el.blur();
+      } else if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        el.blur();
+      }
+    };
+    el.onblur = () => {
+      const editKey = el.getAttribute('data-edit');
+      if (!editKey) return;
+      const newVal = el.textContent.trim();
+      el.removeAttribute('contenteditable');
+      if (newVal === (el.dataset.original ?? '').trim()) return;
+      lsSet(`edit-${editKey}`, newVal);
+      // 同步同一 key 的其他副本（today + 全部 30 天里同一字段会出现两次）
+      document.querySelectorAll(`.editable[data-edit="${editKey}"]`).forEach(other => {
+        if (other !== el) other.textContent = newVal;
+      });
+    };
+  });
+}
+
+// ============================================================
+// Sidebar 导航 / 滚动同步
+// ============================================================
+const navItems = document.querySelectorAll('.nav-item[data-target]');
+const sections = ['today', 'thisweek', 'all-days', 'templates'].map(id => document.getElementById(id));
+
+navItems.forEach(item => {
+  item.addEventListener('click', () => {
+    const id = item.getAttribute('data-target');
+    const sec = document.getElementById(id);
+    if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    closeSidebar();
+  });
+});
+
+const observer = new IntersectionObserver(entries => {
+  let topMost = null;
+  entries.forEach(en => {
+    if (en.isIntersecting) {
+      if (!topMost || en.boundingClientRect.top < topMost.boundingClientRect.top) topMost = en;
+    }
+  });
+  if (topMost) {
+    const id = topMost.target.id;
+    navItems.forEach(it => it.classList.toggle('active', it.getAttribute('data-target') === id));
+  }
+}, { rootMargin: '-46px 0px -60% 0px', threshold: 0 });
+sections.forEach(s => s && observer.observe(s));
+
+// ============================================================
+// 复制按钮
+// ============================================================
 document.addEventListener('click', e => {
-  if (e.target.classList.contains('copy-btn')) {
+  if (e.target.classList && e.target.classList.contains('copy-btn')) {
     const id = e.target.getAttribute('data-target');
     const text = document.getElementById(id).textContent;
     navigator.clipboard.writeText(text).then(() => {
@@ -756,13 +1292,84 @@ document.addEventListener('click', e => {
   }
 });
 
-// reset
+// ============================================================
+// 导出 / 导入 / 重置
+// ============================================================
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const data = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith(LS_PREFIX) && k !== MIGRATION_FLAG) {
+      data[k.slice(LS_PREFIX.length)] = localStorage.getItem(k);
+    }
+  }
+  const payload = {
+    _meta: { app: 'charlottezmm-30day', exportedAt: new Date().toISOString(), version: 1 },
+    data,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `charlottezmm-30day-${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+});
+
+const importFile = document.getElementById('importFile');
+document.getElementById('importBtn').addEventListener('click', () => importFile.click());
+importFile.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const json = JSON.parse(text);
+    if (!json || typeof json !== 'object' || !json.data) throw new Error('文件格式不对');
+    if (!confirm(`导入 ${Object.keys(json.data).length} 条记录，会覆盖你当前的勾选/编辑。继续？`)) {
+      importFile.value = '';
+      return;
+    }
+    Object.entries(json.data).forEach(([k, v]) => {
+      localStorage.setItem(LS_PREFIX + k, v);
+    });
+    importFile.value = '';
+    render();
+    alert('导入成功');
+  } catch (err) {
+    alert('导入失败：' + err.message);
+    importFile.value = '';
+  }
+});
+
 document.getElementById('resetBtn').addEventListener('click', () => {
-  if (!confirm('清空所有勾选状态（任务 + milestone）？')) return;
-  Object.keys(localStorage).filter(k => k.startsWith(LS_PREFIX)).forEach(k => localStorage.removeItem(k));
+  if (!confirm('清空所有勾选状态？\n（不会清除你编辑过的文字）')) return;
+  const toDel = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith(LS_PREFIX) && !k.startsWith(LS_PREFIX + 'edit-') && k !== MIGRATION_FLAG) {
+      toDel.push(k);
+    }
+  }
+  toDel.forEach(k => localStorage.removeItem(k));
   render();
 });
 
+// ============================================================
+// Mobile 抽屉
+// ============================================================
+const sidebarEl = document.getElementById('sidebar');
+const backdropEl = document.getElementById('backdrop');
+function openSidebar() { sidebarEl.classList.add('open'); backdropEl.classList.add('open'); }
+function closeSidebar() { sidebarEl.classList.remove('open'); backdropEl.classList.remove('open'); }
+document.getElementById('burger').addEventListener('click', openSidebar);
+backdropEl.addEventListener('click', closeSidebar);
+
+// ============================================================
+// 启动
+// ============================================================
 render();
 </script>
 </body>
