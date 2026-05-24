@@ -33,6 +33,19 @@ MVP 不做：
 
 ## 3. 产品模式
 
+### 3.0 Web + PWA
+
+MVP 的主要交付形态是响应式 Web app，并支持 PWA 安装体验。
+
+目标体验：
+
+- 桌面端通过浏览器访问。
+- iPhone/Android 通过移动浏览器访问。
+- 用户可以把 hosted app 添加到手机主屏幕。
+- PWA 使用同一套 Web 代码和服务端 API。
+
+MVP 不做 App Store / TestFlight / 原生 iOS app。这里的“iOS 版”指 iPhone 上可用的移动 Web/PWA。
+
 ### 3.1 Hosted Lite
 
 Hosted Lite 面向不会自己部署的小白用户。用户打开网页就能开始用，但 AI 成本由用户自带 DeepSeek API key 承担。
@@ -485,6 +498,8 @@ Hosted Lite 安全底线：
 
 MVP 包含：
 
+- 响应式 Web app。
+- PWA manifest 和 Add to Home Screen 体验。
 - workspace 创建和密码登录。
 - 加密 DeepSeek key 设置。
 - Plan Markdown 导入。
@@ -507,7 +522,7 @@ MVP 不包含：
 - 团队共享。
 - 公开只读计划页。
 - Calendar sync。
-- 原生移动 app。
+- App Store / TestFlight / 原生 iOS app。
 - Push notification。
 - PDF/image import。
 
