@@ -1,10 +1,10 @@
-# AI Planning App v0.1 Foundation Implementation Plan
+# MCP-native Planning App v0.1 Foundation Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Rebuild `daily-progress` from a static single-file dashboard into the Next.js + Postgres foundation for an AI planning app that can become internally usable by Charlotte in the next execution plan.
+**Goal:** Rebuild `daily-progress` from a static single-file dashboard into the Next.js + Postgres foundation for an MCP-native planning app that can become internally usable by Charlotte in the next execution plan.
 
-**Architecture:** Treat the existing `index.html` as a legacy prototype, not the base to extend. Build a new Next.js App Router application with a Postgres-backed workspace model, BYOK secret storage, patch-based AI rescheduling contracts, and responsive Web/PWA delivery. Keep this foundation focused on single-user/internal use while preserving `workspace_id` boundaries for Hosted Lite.
+**Architecture:** Treat the existing `index.html` as a legacy prototype, not the base to extend. Build a new Next.js App Router application with a Postgres-backed workspace model, MCP-native data boundaries, agent patch proposal contracts, and responsive Web/PWA delivery. The app does not embed an LLM client or store model API keys. Keep this foundation focused on single-user/internal use while preserving `workspace_id` boundaries for Hosted Lite.
 
 **Tech Stack:** Next.js App Router, TypeScript, Postgres, Drizzle ORM, Zod, Tailwind CSS, shadcn/ui-compatible component structure, Vitest for unit tests, Playwright for one browser smoke test, Web App Manifest for PWA.
 
@@ -12,7 +12,7 @@
 
 ## Product and Design Workflow
 
-Codex owns product architecture, data model, API contracts, implementation, and verification. Claude Design should own visual design, layout polish, visual hierarchy, and interaction styling after Codex has fixed the information architecture and screen states.
+Codex owns product architecture, data model, route/data contracts, implementation, and verification. Claude Design should own visual design, layout polish, visual hierarchy, and interaction styling after Codex has fixed the information architecture and screen states.
 
 Recommended order:
 
@@ -29,24 +29,24 @@ This first-stage plan includes:
 
 - Responsive Web app and PWA manifest.
 - Workspace password login.
-- Encrypted workspace-level DeepSeek API key.
 - Postgres schema with `workspace_id` on all core data.
 - Today / Week / Month / Inbox / Settings / Import / Reschedule Preview routes.
-- Task, project, course, tag, track, routine, recovery, capacity, check-in, AI patch, change log.
+- Task, project, course, tag, track, routine, recovery, capacity, check-in, agent patch, change log.
 - Quick Capture to Inbox.
 - 5-second Daily Check-in card with completed/blocker/next fields.
-- Routine and Recovery blocks that occupy capacity but are not AI-movable tasks.
+- Routine and Recovery blocks that occupy capacity but are not agent-movable tasks.
 - Track balance calculations.
 - Segment energy settings.
 - `plan.md` and `timetable.csv` import preview.
-- AI patch schema, prompt rules, and protected-block validation.
-- API routes shaped for `Re-plan today` and `Re-plan week`.
+- Agent patch schema and protected-block validation.
+- Internal route shaped for patch proposal preview.
 
 This first-stage plan excludes:
 
 - Hosted public onboarding for arbitrary users.
-- Full DeepSeek baseline generation persistence.
-- Full AI patch application transaction.
+- Full MCP server implementation.
+- Full conversation/decision sediment UI.
+- Full agent patch application transaction.
 - OAuth, email login, billing, team workspaces.
 - Public read-only sharing pages.
 - Calendar sync.
@@ -83,15 +83,12 @@ daily-progress/
         auth/login/route.ts
         auth/logout/route.ts
         workspace/route.ts
-        settings/deepseek-key/route.ts
         inbox/route.ts
         tasks/route.ts
         checkins/route.ts
         imports/plan/route.ts
         imports/timetable/route.ts
-        ai/generate-plan/route.ts
-        ai/reschedule/route.ts
-        ai/apply-patch/route.ts
+        patches/propose/route.ts
       layout.tsx
       page.tsx
     components/
@@ -106,13 +103,10 @@ daily-progress/
       reschedule-preview.tsx
     lib/
       auth/session.ts
-      crypto/secrets.ts
       db/client.ts
       db/schema.ts
       db/queries.ts
-      ai/deepseek.ts
-      ai/prompts.ts
-      ai/patch-schema.ts
+      patches/patch-schema.ts
       imports/plan-markdown.ts
       imports/timetable-csv.ts
       planning/capacity.ts
@@ -121,7 +115,6 @@ daily-progress/
       validation/common.ts
     tests/
       unit/
-        crypto-secrets.test.ts
         plan-markdown.test.ts
         timetable-csv.test.ts
         capacity.test.ts
@@ -139,7 +132,6 @@ daily-progress/
 ```bash
 DATABASE_URL=postgres://user:password@host:5432/daily_progress
 APP_SECRET=replace-with-32-byte-random-secret
-KEY_ENCRYPTION_SECRET=replace-with-32-byte-random-secret
 NEXT_PUBLIC_APP_NAME=Daily Progress
 ```
 
@@ -366,7 +358,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Daily Progress",
-  description: "AI planning app with schedule-first planning.",
+  description: "MCP-native planning app with schedule-first planning.",
   manifest: "/manifest.webmanifest",
 };
 
@@ -523,7 +515,7 @@ Create `public/manifest.webmanifest`:
 {
   "name": "Daily Progress",
   "short_name": "Progress",
-  "description": "Schedule-first AI planning app.",
+  "description": "Schedule-first MCP-native planning app.",
   "start_url": "/today",
   "display": "standalone",
   "background_color": "#ffffff",
@@ -539,7 +531,7 @@ Replace the current README with:
 ```markdown
 # Daily Progress
 
-Open-source schedule-first AI planning app.
+Open-source schedule-first MCP-native planning app.
 
 The old static May dashboard prototype is preserved at `docs/legacy/index-static-dashboard.html`.
 
@@ -548,8 +540,8 @@ The old static May dashboard prototype is preserved at `docs/legacy/index-static
 - Web + PWA
 - Next.js + Postgres
 - Workspace password login
-- Bring your own DeepSeek API key
-- AI-generated plan and reschedule patch preview
+- MCP-native data boundary
+- Agent-generated patch preview, confirmed in the app
 
 ## Development
 
@@ -641,27 +633,23 @@ import {
 } from "drizzle-orm/pg-core";
 
 export const planStatus = pgEnum("plan_status", ["active", "archived"]);
-export const planVersionSource = pgEnum("plan_version_source", ["baseline", "manual_edit", "ai_patch"]);
+export const planVersionSource = pgEnum("plan_version_source", ["baseline", "manual_edit", "agent_patch"]);
 export const taskStatus = pgEnum("task_status", ["todo", "done", "skipped", "backlog"]);
 export const priority = pgEnum("priority", ["low", "normal", "high", "urgent"]);
 export const energyLevel = pgEnum("energy_level", ["low", "medium", "high"]);
 export const daySegment = pgEnum("day_segment", ["morning", "afternoon", "evening"]);
 export const trackKind = pgEnum("track_kind", ["main", "work", "side", "recovery", "custom"]);
 export const timeBlockKind = pgEnum("time_block_kind", ["course", "meeting", "unavailable", "routine", "recovery"]);
-export const aiPatchStatus = pgEnum("ai_patch_status", ["draft", "applied", "rejected"]);
+export const agentPatchStatus = pgEnum("agent_patch_status", ["draft", "applied", "rejected"]);
 export const inboxSource = pgEnum("inbox_source", ["manual", "imported"]);
+export const mcpPermission = pgEnum("mcp_permission", ["read_only", "read_write"]);
+export const conversationContextType = pgEnum("conversation_context_type", ["weekly_review", "decision", "learning_qa", "check_in_followup", "methodology", "adhoc"]);
+export const decisionStatus = pgEnum("decision_status", ["active", "superseded", "abandoned"]);
 
 export const workspaces = pgTable("workspaces", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: varchar("name", { length: 120 }).notNull(),
   passwordHash: text("password_hash").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const workspaceSecrets = pgTable("workspace_secrets", {
-  workspaceId: uuid("workspace_id").primaryKey().references(() => workspaces.id, { onDelete: "cascade" }),
-  deepseekApiKeyEncrypted: text("deepseek_api_key_encrypted").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -800,18 +788,54 @@ export const checkins = pgTable("checkins", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const aiPatches = pgTable("ai_patches", {
+export const agentPatches = pgTable("agent_patches", {
   id: uuid("id").primaryKey().defaultRandom(),
   workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
   planId: uuid("plan_id").notNull().references(() => plans.id, { onDelete: "cascade" }),
-  status: aiPatchStatus("status").notNull().default("draft"),
+  status: agentPatchStatus("status").notNull().default("draft"),
   scopeStart: timestamp("scope_start", { withTimezone: true }).notNull(),
   scopeEnd: timestamp("scope_end", { withTimezone: true }).notNull(),
   reason: text("reason").notNull(),
   patchJson: jsonb("patch_json").notNull(),
-  model: varchar("model", { length: 120 }).notNull(),
+  createdBy: varchar("created_by", { length: 40 }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   appliedAt: timestamp("applied_at", { withTimezone: true }),
+});
+
+export const mcpTokens = pgTable("mcp_tokens", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull(),
+  name: varchar("name", { length: 120 }).notNull(),
+  permission: mcpPermission("permission").notNull().default("read_only"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const conversations = pgTable("conversations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  topic: varchar("topic", { length: 240 }).notNull(),
+  contextType: conversationContextType("context_type").notNull(),
+  summary: text("summary").notNull(),
+  decisionsJson: jsonb("decisions_json").notNull(),
+  openQuestionsJson: jsonb("open_questions_json").notNull(),
+  createdBy: varchar("created_by", { length: 40 }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const decisions = pgTable("decisions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  topic: varchar("topic", { length: 240 }).notNull(),
+  context: text("context").notNull(),
+  optionsConsideredJson: jsonb("options_considered_json").notNull(),
+  chosen: text("chosen").notNull(),
+  rationale: text("rationale").notNull(),
+  tradeoffsAccepted: text("tradeoffs_accepted").notNull().default(""),
+  status: decisionStatus("status").notNull().default("active"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const workspaceRelations = relations(workspaces, ({ many }) => ({
@@ -877,102 +901,41 @@ git add drizzle.config.ts drizzle src/lib/db src/lib/validation src/tests/unit/s
 git commit -m "feat: add planning database schema"
 ```
 
-## Task 3: Workspace Auth and DeepSeek Key Encryption
+## Task 3: Workspace Auth
 
 **Files:**
-- Create: `src/lib/crypto/secrets.ts`
 - Create: `src/lib/auth/session.ts`
 - Create: `src/app/api/auth/login/route.ts`
 - Create: `src/app/api/auth/logout/route.ts`
-- Create: `src/app/api/settings/deepseek-key/route.ts`
-- Create: `src/tests/unit/crypto-secrets.test.ts`
+- Create: `src/tests/unit/session-cookie-name.test.ts`
 
-- [ ] **Step 1: Write crypto tests**
+- [ ] **Step 1: Write session constant test**
 
-Create `src/tests/unit/crypto-secrets.test.ts`:
+Create `src/tests/unit/session-cookie-name.test.ts`:
 
 ```ts
 import { describe, expect, it } from "vitest";
-import { decryptSecret, encryptSecret, maskSecret } from "@/lib/crypto/secrets";
+import { workspaceSessionCookieName } from "@/lib/auth/session";
 
-const secret = "12345678901234567890123456789012";
-
-describe("workspace secret encryption", () => {
-  it("round-trips encrypted values", () => {
-    const encrypted = encryptSecret("sk-test-abcdef", secret);
-    expect(encrypted).not.toContain("sk-test-abcdef");
-    expect(decryptSecret(encrypted, secret)).toBe("sk-test-abcdef");
-  });
-
-  it("masks secrets for display", () => {
-    expect(maskSecret("sk-1234567890")).toBe("sk-...7890");
+describe("workspace session", () => {
+  it("uses a stable cookie name", () => {
+    expect(workspaceSessionCookieName).toBe("daily_progress_workspace");
   });
 });
 ```
 
-- [ ] **Step 2: Implement secret encryption**
-
-Create `src/lib/crypto/secrets.ts`:
-
-```ts
-import crypto from "node:crypto";
-
-const algorithm = "aes-256-gcm";
-
-function normalizeKey(secret: string) {
-  return crypto.createHash("sha256").update(secret).digest();
-}
-
-export function encryptSecret(value: string, secret: string) {
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv(algorithm, normalizeKey(secret), iv);
-  const encrypted = Buffer.concat([cipher.update(value, "utf8"), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return `${iv.toString("base64")}.${tag.toString("base64")}.${encrypted.toString("base64")}`;
-}
-
-export function decryptSecret(payload: string, secret: string) {
-  const [ivRaw, tagRaw, encryptedRaw] = payload.split(".");
-  if (!ivRaw || !tagRaw || !encryptedRaw) {
-    throw new Error("Invalid encrypted secret payload");
-  }
-  const decipher = crypto.createDecipheriv(algorithm, normalizeKey(secret), Buffer.from(ivRaw, "base64"));
-  decipher.setAuthTag(Buffer.from(tagRaw, "base64"));
-  const decrypted = Buffer.concat([
-    decipher.update(Buffer.from(encryptedRaw, "base64")),
-    decipher.final(),
-  ]);
-  return decrypted.toString("utf8");
-}
-
-export function maskSecret(value: string) {
-  if (value.length <= 8) return "••••";
-  return `${value.slice(0, 3)}...${value.slice(-4)}`;
-}
-```
-
-- [ ] **Step 3: Run crypto test**
-
-Run:
-
-```bash
-npm run test -- src/tests/unit/crypto-secrets.test.ts
-```
-
-Expected: PASS.
-
-- [ ] **Step 4: Implement session helpers**
+- [ ] **Step 2: Implement session helpers**
 
 Create `src/lib/auth/session.ts`:
 
 ```ts
 import { cookies } from "next/headers";
 
-const cookieName = "daily_progress_workspace";
+export const workspaceSessionCookieName = "daily_progress_workspace";
 
 export async function setWorkspaceSession(workspaceId: string) {
   const store = await cookies();
-  store.set(cookieName, workspaceId, {
+  store.set(workspaceSessionCookieName, workspaceId, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -982,16 +945,26 @@ export async function setWorkspaceSession(workspaceId: string) {
 
 export async function clearWorkspaceSession() {
   const store = await cookies();
-  store.delete(cookieName);
+  store.delete(workspaceSessionCookieName);
 }
 
 export async function getWorkspaceIdFromSession() {
   const store = await cookies();
-  return store.get(cookieName)?.value ?? null;
+  return store.get(workspaceSessionCookieName)?.value ?? null;
 }
 ```
 
-- [ ] **Step 5: Implement auth routes**
+- [ ] **Step 3: Run session test**
+
+Run:
+
+```bash
+npm run test -- src/tests/unit/session-cookie-name.test.ts
+```
+
+Expected: PASS.
+
+- [ ] **Step 4: Implement auth routes**
 
 Create `src/app/api/auth/login/route.ts`:
 
@@ -1042,58 +1015,7 @@ export async function POST() {
 }
 ```
 
-- [ ] **Step 6: Implement DeepSeek key settings route**
-
-Create `src/app/api/settings/deepseek-key/route.ts`:
-
-```ts
-import { eq } from "drizzle-orm";
-import { NextResponse } from "next/server";
-import { z } from "zod";
-import { getWorkspaceIdFromSession } from "@/lib/auth/session";
-import { encryptSecret, maskSecret } from "@/lib/crypto/secrets";
-import { db } from "@/lib/db/client";
-import { workspaceSecrets } from "@/lib/db/schema";
-
-const keySchema = z.object({
-  apiKey: z.string().min(10),
-});
-
-function encryptionSecret() {
-  if (!process.env.KEY_ENCRYPTION_SECRET) {
-    throw new Error("KEY_ENCRYPTION_SECRET is required");
-  }
-  return process.env.KEY_ENCRYPTION_SECRET;
-}
-
-export async function GET() {
-  const workspaceId = await getWorkspaceIdFromSession();
-  if (!workspaceId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const [secret] = await db.select().from(workspaceSecrets).where(eq(workspaceSecrets.workspaceId, workspaceId)).limit(1);
-  return NextResponse.json({ configured: Boolean(secret) });
-}
-
-export async function PUT(request: Request) {
-  const workspaceId = await getWorkspaceIdFromSession();
-  if (!workspaceId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const body = keySchema.parse(await request.json());
-  const encrypted = encryptSecret(body.apiKey, encryptionSecret());
-
-  await db
-    .insert(workspaceSecrets)
-    .values({ workspaceId, deepseekApiKeyEncrypted: encrypted })
-    .onConflictDoUpdate({
-      target: workspaceSecrets.workspaceId,
-      set: { deepseekApiKeyEncrypted: encrypted, updatedAt: new Date() },
-    });
-
-  return NextResponse.json({ configured: true, masked: maskSecret(body.apiKey) });
-}
-```
-
-- [ ] **Step 7: Run tests and build**
+- [ ] **Step 5: Run tests and build**
 
 Run:
 
@@ -1104,13 +1026,13 @@ npm run build
 
 Expected: both exit with code 0.
 
-- [ ] **Step 8: Commit auth**
+- [ ] **Step 6: Commit auth**
 
 Run:
 
 ```bash
-git add src/lib/crypto src/lib/auth src/app/api/auth src/app/api/settings src/tests/unit/crypto-secrets.test.ts
-git commit -m "feat: add workspace auth and BYOK settings"
+git add src/lib/auth src/app/api/auth src/tests/unit/session-cookie-name.test.ts
+git commit -m "feat: add workspace auth"
 ```
 
 ## Task 4: Planning Domain Logic Without AI
@@ -1300,7 +1222,7 @@ git add src/lib/planning src/tests/unit/capacity.test.ts src/tests/unit/track-ba
 git commit -m "feat: add planning capacity and warning logic"
 ```
 
-## Task 5: Non-AI Product Screens and API Routes
+## Task 5: Core Product Screens and Route Handlers
 
 **Files:**
 - Create: `src/components/quick-capture.tsx`
@@ -1356,7 +1278,7 @@ export function QuickCapture() {
 }
 ```
 
-- [ ] **Step 2: Create Inbox API**
+- [ ] **Step 2: Create Inbox route handler**
 
 Create `src/app/api/inbox/route.ts`:
 
@@ -1461,7 +1383,7 @@ export function DailyCheckin() {
 }
 ```
 
-- [ ] **Step 4: Create Check-in API**
+- [ ] **Step 4: Create Check-in route handler**
 
 Create `src/app/api/checkins/route.ts`:
 
@@ -1653,7 +1575,7 @@ export function SettingsView() {
     <div className="mx-auto max-w-5xl space-y-6">
       <section>
         <h1 className="text-xl font-semibold">Settings</h1>
-        <p className="text-sm text-zinc-500">Workspace, DeepSeek key, routines, recovery target, segment energy, and track thresholds.</p>
+        <p className="text-sm text-zinc-500">Workspace, MCP token, routines, recovery target, segment energy, and track thresholds.</p>
       </section>
     </div>
   );
@@ -1683,7 +1605,7 @@ export function ReschedulePreview() {
     <div className="mx-auto max-w-5xl space-y-6">
       <section>
         <h1 className="text-xl font-semibold">Reschedule Preview</h1>
-        <p className="text-sm text-zinc-500">Review AI patch operations before applying changes.</p>
+        <p className="text-sm text-zinc-500">Review agent patch operations before applying changes.</p>
       </section>
       <section className="rounded border border-zinc-200 bg-white p-4">
         <h2 className="font-medium">Patch Groups</h2>
@@ -1801,7 +1723,7 @@ Create `docs/design/claude-design-brief-v0.1.md`:
 ```markdown
 # Claude Design Brief v0.1
 
-Design a responsive Web/PWA interface for an operational AI planning app.
+Design a responsive Web/PWA interface for an operational MCP-native planning app.
 
 Do not add new product scope. Use these screens:
 
@@ -1822,7 +1744,7 @@ Design constraints:
 - Routine and recovery are visually separate from tasks.
 - Daily Check-in is always visible at the bottom of Today with three inputs: 完成 / 卡点 / 明日接.
 - Do not design PWA push notification for v0.1; only design the Today check-in card and in-app warning state.
-- AI reschedule appears as preview patches requiring confirmation.
+- Agent/MCP reschedule appears as preview patches requiring confirmation.
 - No landing page.
 - No decorative hero.
 - Mobile PWA must be first-class.
@@ -1831,10 +1753,10 @@ Deliver:
 
 - Desktop and mobile layout for each screen.
 - Component states for empty, loading, warning, error, and populated.
-- Visual treatment for AI patch groups: moved, split, defer, backlog, priority change, rejected.
+- Visual treatment for agent patch groups: moved, split, defer, backlog, priority change, rejected.
 ```
 
-- [ ] **Step 10: Commit non-AI screens**
+- [ ] **Step 10: Commit core screens**
 
 Run:
 
@@ -1843,7 +1765,7 @@ git add src/components src/app src/tests/e2e docs/design
 git commit -m "feat: add planning app screens and design handoff"
 ```
 
-## Task 6: Import Parsers and Preview APIs
+## Task 6: Import Parsers and Preview Route Handlers
 
 **Files:**
 - Create: `src/lib/imports/plan-markdown.ts`
@@ -1865,7 +1787,7 @@ describe("plan markdown parser", () => {
   it("extracts goals, projects, and deadlines", () => {
     const result = parsePlanMarkdown(`# June Plan
 
-Goal: finish AI planning MVP
+Goal: finish planning MVP
 
 ## Projects
 - Daily Progress: ship v0.1 by 2026-06-30
@@ -1874,7 +1796,7 @@ Goal: finish AI planning MVP
 - protect morning deep work
 `);
 
-    expect(result.goal).toBe("finish AI planning MVP");
+    expect(result.goal).toBe("finish planning MVP");
     expect(result.projects[0]).toEqual({ name: "Daily Progress", deadline: "2026-06-30" });
     expect(result.constraints).toContain("protect morning deep work");
   });
@@ -1981,7 +1903,7 @@ export function parseTimetableCsv(csv: string) {
 }
 ```
 
-- [ ] **Step 5: Implement import APIs**
+- [ ] **Step 5: Implement import route handlers**
 
 Create `src/app/api/imports/plan/route.ts`:
 
@@ -2032,14 +1954,11 @@ git add src/lib/imports src/app/api/imports src/tests/unit/plan-markdown.test.ts
 git commit -m "feat: add plan and timetable import previews"
 ```
 
-## Task 7: AI Patch Schema, DeepSeek Client, and Patch Validation
+## Task 7: Agent Patch Schema and Proposal Contract
 
 **Files:**
-- Create: `src/lib/ai/patch-schema.ts`
-- Create: `src/lib/ai/deepseek.ts`
-- Create: `src/lib/ai/prompts.ts`
-- Create: `src/app/api/ai/reschedule/route.ts`
-- Create: `src/app/api/ai/apply-patch/route.ts`
+- Create: `src/lib/patches/patch-schema.ts`
+- Create: `src/app/api/patches/propose/route.ts`
 - Create: `src/tests/unit/patch-schema.test.ts`
 
 - [ ] **Step 1: Write patch schema tests**
@@ -2048,11 +1967,11 @@ Create `src/tests/unit/patch-schema.test.ts`:
 
 ```ts
 import { describe, expect, it } from "vitest";
-import { aiPatchSchema, validatePatchAgainstProtectedBlocks } from "@/lib/ai/patch-schema";
+import { agentPatchSchema, validatePatchAgainstProtectedBlocks } from "@/lib/patches/patch-schema";
 
-describe("AI patch schema", () => {
+describe("agent patch schema", () => {
   it("accepts move_task patches", () => {
-    const parsed = aiPatchSchema.parse({
+    const parsed = agentPatchSchema.parse({
       operations: [
         {
           type: "move_task",
@@ -2083,14 +2002,14 @@ describe("AI patch schema", () => {
         },
         ["recovery-1"],
       ),
-    ).toThrow("AI patch cannot modify routine or recovery blocks");
+    ).toThrow("Agent patch cannot modify routine or recovery blocks");
   });
 });
 ```
 
 - [ ] **Step 2: Implement patch schema**
 
-Create `src/lib/ai/patch-schema.ts`:
+Create `src/lib/patches/patch-schema.ts`:
 
 ```ts
 import { z } from "zod";
@@ -2152,7 +2071,7 @@ const unsupportedProtectedMove = z.object({
   reason: z.string(),
 });
 
-export const aiPatchSchema = z.object({
+export const agentPatchSchema = z.object({
   operations: z.array(z.union([
     moveTask,
     splitTask,
@@ -2163,7 +2082,7 @@ export const aiPatchSchema = z.object({
   ])),
 });
 
-export type AiPatch = z.infer<typeof aiPatchSchema>;
+export type AgentPatch = z.infer<typeof agentPatchSchema>;
 
 export function validatePatchAgainstProtectedBlocks(
   rawPatch: unknown,
@@ -2173,89 +2092,28 @@ export function validatePatchAgainstProtectedBlocks(
   for (const operation of raw.operations) {
     const parsed = unsupportedProtectedMove.safeParse(operation);
     if (parsed.success && protectedBlockIds.includes(parsed.data.block_id)) {
-      throw new Error("AI patch cannot modify routine or recovery blocks");
+      throw new Error("Agent patch cannot modify routine or recovery blocks");
     }
   }
-  return aiPatchSchema.parse(rawPatch);
+  return agentPatchSchema.parse(rawPatch);
 }
 ```
 
-- [ ] **Step 3: Implement DeepSeek client wrapper**
+- [ ] **Step 3: Implement patch proposal route**
 
-Create `src/lib/ai/deepseek.ts`:
-
-```ts
-type DeepSeekRequest = {
-  apiKey: string;
-  model: string;
-  system: string;
-  user: string;
-};
-
-export async function callDeepSeekJson(request: DeepSeekRequest) {
-  const response = await fetch("https://api.deepseek.com/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${request.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: request.model,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: request.system },
-        { role: "user", content: request.user },
-      ],
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`DeepSeek request failed with status ${response.status}`);
-  }
-
-  const json = await response.json();
-  const content = json.choices?.[0]?.message?.content;
-  if (typeof content !== "string") {
-    throw new Error("DeepSeek response missing content");
-  }
-  return JSON.parse(content);
-}
-```
-
-- [ ] **Step 4: Implement prompt builders**
-
-Create `src/lib/ai/prompts.ts`:
-
-```ts
-export function buildRescheduleSystemPrompt() {
-  return [
-    "You are a planning assistant.",
-    "Return JSON only.",
-    "You propose patch operations, never prose.",
-    "Never move routine blocks.",
-    "Never move or shrink recovery blocks.",
-    "Never place tasks inside routine or recovery time.",
-    "Default scope is the selected scope only.",
-  ].join("\\n");
-}
-
-export function buildRescheduleUserPrompt(context: unknown) {
-  return JSON.stringify(context, null, 2);
-}
-```
-
-- [ ] **Step 5: Implement reschedule contract API**
-
-Create `src/app/api/ai/reschedule/route.ts`:
+Create `src/app/api/patches/propose/route.ts`:
 
 ```ts
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getWorkspaceIdFromSession } from "@/lib/auth/session";
-import { aiPatchSchema } from "@/lib/ai/patch-schema";
+import { agentPatchSchema } from "@/lib/patches/patch-schema";
 
 const bodySchema = z.object({
   mode: z.enum(["today", "week"]),
+  reason: z.string().min(1),
+  patch: agentPatchSchema,
+  createdBy: z.enum(["claude", "codex", "user"]).default("claude"),
 });
 
 export async function POST(request: Request) {
@@ -2263,17 +2121,19 @@ export async function POST(request: Request) {
   if (!workspaceId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = bodySchema.parse(await request.json());
-  const draftPatch = aiPatchSchema.parse({ operations: [] });
 
   return NextResponse.json({
     workspaceId,
     mode: body.mode,
-    patch: draftPatch,
+    reason: body.reason,
+    patch: body.patch,
+    createdBy: body.createdBy,
+    status: "draft",
   });
 }
 ```
 
-- [ ] **Step 6: Run patch tests**
+- [ ] **Step 4: Run patch tests**
 
 Run:
 
@@ -2284,13 +2144,13 @@ npm run build
 
 Expected: both exit with code 0.
 
-- [ ] **Step 7: Commit AI patch foundation**
+- [ ] **Step 5: Commit agent patch foundation**
 
 Run:
 
 ```bash
-git add src/lib/ai src/app/api/ai src/tests/unit/patch-schema.test.ts
-git commit -m "feat: add AI patch validation foundation"
+git add src/lib/patches src/app/api/patches src/tests/unit/patch-schema.test.ts
+git commit -m "feat: add agent patch proposal contract"
 ```
 
 ## Task 8: Final Foundation Smoke Verification
@@ -2306,7 +2166,6 @@ Create `.env.example`:
 ```bash
 DATABASE_URL=postgres://user:password@host:5432/daily_progress
 APP_SECRET=replace-with-32-byte-random-secret
-KEY_ENCRYPTION_SECRET=replace-with-32-byte-random-secret
 NEXT_PUBLIC_APP_NAME=Daily Progress
 ```
 
@@ -2321,7 +2180,6 @@ Copy `.env.example` to `.env.local` and set values for:
 
 - `DATABASE_URL`
 - `APP_SECRET`
-- `KEY_ENCRYPTION_SECRET`
 
 ## Verification
 
@@ -2333,7 +2191,7 @@ npm run test:e2e
 
 ## Product Boundary
 
-This stage creates the Next.js + Postgres foundation. Hosted Lite public onboarding, template gallery, OAuth, billing, team workspaces, public sharing, full DeepSeek generation persistence, and full patch transaction application are not part of this stage.
+This stage creates the Next.js + Postgres foundation. Hosted Lite public onboarding, template gallery, OAuth, billing, team workspaces, public sharing, full MCP server implementation, conversation sediment UI, and full patch transaction application are not part of this stage.
 ```
 
 - [ ] **Step 3: Full verification**
@@ -2392,13 +2250,13 @@ git commit -m "docs: add v0.1 development runbook"
 Spec coverage:
 
 - Web/PWA covered by Task 1.
-- Workspace auth and BYOK covered by Task 3.
+- Workspace auth covered by Task 3.
 - Database schema, track, routine, recovery, inbox covered by Task 2.
-- Non-AI screens and Claude Design handoff covered by Task 5.
+- Core screens and Claude Design handoff covered by Task 5.
 - Import preview covered by Task 6.
-- AI patch schema and reschedule API foundation covered by Task 7.
+- Agent patch schema and reschedule proposal foundation covered by Task 7.
 - Final verification covered by Task 8.
 
 Known implementation boundary:
 
-- Task 7 creates the AI patch foundation and API contract. The first execution pass should validate the contracts and screens before wiring full DeepSeek persistence and transaction application. Full AI generation and apply-patch persistence should be the next implementation plan after this foundation is verified.
+- Task 7 creates the agent patch proposal contract. The first execution pass should validate the contracts and screens before wiring the full MCP server and transaction application. Full conversation/decision sediment and apply-patch persistence should be the next implementation plan after this foundation is verified.
