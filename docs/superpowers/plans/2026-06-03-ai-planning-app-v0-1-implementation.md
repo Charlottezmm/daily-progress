@@ -34,6 +34,7 @@ This first-stage plan includes:
 - Today / Week / Month / Inbox / Settings / Import / Reschedule Preview routes.
 - Task, project, course, tag, track, routine, recovery, capacity, check-in, AI patch, change log.
 - Quick Capture to Inbox.
+- 5-second Daily Check-in card with completed/blocker/next fields.
 - Routine and Recovery blocks that occupy capacity but are not AI-movable tasks.
 - Track balance calculations.
 - Segment energy settings.
@@ -787,6 +788,18 @@ export const inboxItems = pgTable("inbox_items", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const checkins = pgTable("checkins", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  planId: uuid("plan_id").notNull().references(() => plans.id, { onDelete: "cascade" }),
+  date: timestamp("date", { withTimezone: true }).notNull(),
+  completedText: text("completed_text").notNull().default(""),
+  blockerText: text("blocker_text").notNull().default(""),
+  nextText: text("next_text").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const aiPatches = pgTable("ai_patches", {
   id: uuid("id").primaryKey().defaultRandom(),
   workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
@@ -1291,6 +1304,7 @@ git commit -m "feat: add planning capacity and warning logic"
 
 **Files:**
 - Create: `src/components/quick-capture.tsx`
+- Create: `src/components/daily-checkin.tsx`
 - Create: `src/components/today-view.tsx`
 - Create: `src/components/week-view.tsx`
 - Create: `src/components/inbox-view.tsx`
@@ -1377,11 +1391,184 @@ export async function POST(request: Request) {
 }
 ```
 
-- [ ] **Step 3: Create low-style views for Claude Design handoff**
+- [ ] **Step 3: Create Daily Check-in component**
+
+Create `src/components/daily-checkin.tsx`:
+
+```tsx
+"use client";
+
+import { useState } from "react";
+
+type SaveResponse = {
+  streakDays: number;
+};
+
+export function DailyCheckin() {
+  const [completedText, setCompletedText] = useState("");
+  const [blockerText, setBlockerText] = useState("");
+  const [nextText, setNextText] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    setPending(true);
+    const response = await fetch("/api/checkins", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ completedText, blockerText, nextText }),
+    });
+    const data = (await response.json()) as SaveResponse;
+    setPending(false);
+    setMessage(`记下了。已 ${data.streakDays} 天连续打卡`);
+  }
+
+  return (
+    <form onSubmit={submit} className="sticky bottom-4 space-y-3 rounded border border-zinc-200 bg-white p-4 shadow-sm">
+      <div>
+        <h2 className="font-medium">Daily Check-in</h2>
+        <p className="text-xs text-zinc-500">5 秒记录：完成 / 卡点 / 明日接。</p>
+      </div>
+      <div className="grid gap-2 md:grid-cols-3">
+        <input
+          value={completedText}
+          onChange={(event) => setCompletedText(event.target.value)}
+          placeholder="完成"
+          className="rounded border border-zinc-300 px-3 py-2 text-sm"
+        />
+        <input
+          value={blockerText}
+          onChange={(event) => setBlockerText(event.target.value)}
+          placeholder="卡点"
+          className="rounded border border-zinc-300 px-3 py-2 text-sm"
+        />
+        <input
+          value={nextText}
+          onChange={(event) => setNextText(event.target.value)}
+          placeholder="明日接"
+          className="rounded border border-zinc-300 px-3 py-2 text-sm"
+        />
+      </div>
+      <div className="flex items-center gap-3">
+        <button disabled={pending} className="rounded bg-zinc-950 px-3 py-2 text-sm text-white disabled:opacity-50">
+          Save
+        </button>
+        {message ? <p className="text-sm text-zinc-600">{message}</p> : null}
+      </div>
+    </form>
+  );
+}
+```
+
+- [ ] **Step 4: Create Check-in API**
+
+Create `src/app/api/checkins/route.ts`:
+
+```ts
+import { and, desc, eq } from "drizzle-orm";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { getWorkspaceIdFromSession } from "@/lib/auth/session";
+import { db } from "@/lib/db/client";
+import { checkins, plans } from "@/lib/db/schema";
+
+const checkinSchema = z.object({
+  completedText: z.string().max(1000).default(""),
+  blockerText: z.string().max(1000).default(""),
+  nextText: z.string().max(1000).default(""),
+});
+
+function startOfToday() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+function toDateKey(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+async function getActivePlanId(workspaceId: string) {
+  const [plan] = await db
+    .select({ id: plans.id })
+    .from(plans)
+    .where(and(eq(plans.workspaceId, workspaceId), eq(plans.status, "active")))
+    .limit(1);
+  return plan?.id ?? null;
+}
+
+async function calculateCheckinStreak(workspaceId: string) {
+  const rows = await db
+    .select({ date: checkins.date })
+    .from(checkins)
+    .where(eq(checkins.workspaceId, workspaceId))
+    .orderBy(desc(checkins.date));
+
+  const checkedDates = new Set(rows.map((row) => toDateKey(row.date)));
+  let cursor = startOfToday();
+  let streak = 0;
+
+  while (checkedDates.has(toDateKey(cursor))) {
+    streak += 1;
+    cursor = addDays(cursor, -1);
+  }
+
+  return streak;
+}
+
+export async function POST(request: Request) {
+  const workspaceId = await getWorkspaceIdFromSession();
+  if (!workspaceId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const planId = await getActivePlanId(workspaceId);
+  if (!planId) return NextResponse.json({ error: "No active plan" }, { status: 400 });
+
+  const body = checkinSchema.parse(await request.json());
+  const today = startOfToday();
+
+  const [existing] = await db
+    .select()
+    .from(checkins)
+    .where(and(eq(checkins.workspaceId, workspaceId), eq(checkins.date, today)))
+    .limit(1);
+
+  if (existing) {
+    await db
+      .update(checkins)
+      .set({
+        completedText: body.completedText,
+        blockerText: body.blockerText,
+        nextText: body.nextText,
+      })
+      .where(eq(checkins.id, existing.id));
+  } else {
+    await db.insert(checkins).values({
+      workspaceId,
+      planId,
+      date: today,
+      completedText: body.completedText,
+      blockerText: body.blockerText,
+      nextText: body.nextText,
+    });
+  }
+
+  const streakDays = await calculateCheckinStreak(workspaceId);
+  return NextResponse.json({ ok: true, streakDays });
+}
+```
+
+- [ ] **Step 5: Create low-style views for Claude Design handoff**
 
 Create `src/components/today-view.tsx`:
 
 ```tsx
+import { DailyCheckin } from "./daily-checkin";
 import { QuickCapture } from "./quick-capture";
 
 export function TodayView() {
@@ -1398,6 +1585,7 @@ export function TodayView() {
       <section className="rounded border border-zinc-200 bg-white p-4">
         <h2 className="font-medium">Routines</h2>
       </section>
+      <DailyCheckin />
     </div>
   );
 }
@@ -1505,7 +1693,7 @@ export function ReschedulePreview() {
 }
 ```
 
-- [ ] **Step 4: Wire Today route**
+- [ ] **Step 6: Wire Today route**
 
 Modify `src/app/(app)/today/page.tsx`:
 
@@ -1577,7 +1765,7 @@ export default function ReschedulePage() {
 }
 ```
 
-- [ ] **Step 5: Browser smoke test**
+- [ ] **Step 7: Browser smoke test**
 
 Create `src/tests/e2e/app-smoke.spec.ts`:
 
@@ -1588,10 +1776,14 @@ test("renders Today on desktop and mobile", async ({ page }) => {
   await page.goto("/today");
   await expect(page.getByRole("heading", { name: "Today" })).toBeVisible();
   await expect(page.getByPlaceholder("+ Quick Capture")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Daily Check-in" })).toBeVisible();
+  await expect(page.getByPlaceholder("完成")).toBeVisible();
+  await expect(page.getByPlaceholder("卡点")).toBeVisible();
+  await expect(page.getByPlaceholder("明日接")).toBeVisible();
 });
 ```
 
-- [ ] **Step 6: Run build and e2e**
+- [ ] **Step 8: Run build and e2e**
 
 Run:
 
@@ -1602,7 +1794,7 @@ npm run test:e2e
 
 Expected: both exit with code 0.
 
-- [ ] **Step 7: Claude Design handoff**
+- [ ] **Step 9: Claude Design handoff**
 
 Create `docs/design/claude-design-brief-v0.1.md`:
 
@@ -1628,6 +1820,8 @@ Design constraints:
 - Today and Week are primary.
 - Project, course, tag, and track are filters.
 - Routine and recovery are visually separate from tasks.
+- Daily Check-in is always visible at the bottom of Today with three inputs: 完成 / 卡点 / 明日接.
+- Do not design PWA push notification for v0.1; only design the Today check-in card and in-app warning state.
 - AI reschedule appears as preview patches requiring confirmation.
 - No landing page.
 - No decorative hero.
@@ -1640,7 +1834,7 @@ Deliver:
 - Visual treatment for AI patch groups: moved, split, defer, backlog, priority change, rejected.
 ```
 
-- [ ] **Step 8: Commit non-AI screens**
+- [ ] **Step 10: Commit non-AI screens**
 
 Run:
 
