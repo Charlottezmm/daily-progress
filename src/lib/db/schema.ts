@@ -7,6 +7,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
@@ -17,10 +18,13 @@ export const taskStatus = pgEnum("task_status", ["todo", "done", "skipped", "bac
 export const priority = pgEnum("priority", ["low", "normal", "high", "urgent"]);
 export const energyLevel = pgEnum("energy_level", ["low", "medium", "high"]);
 export const daySegment = pgEnum("day_segment", ["morning", "afternoon", "evening"]);
+export const routineTimeSegment = pgEnum("routine_time_segment", ["morning", "afternoon", "evening", "specific_window"]);
 export const trackKind = pgEnum("track_kind", ["main", "work", "side", "recovery", "custom"]);
 export const timeBlockKind = pgEnum("time_block_kind", ["course", "meeting", "unavailable", "routine", "recovery"]);
 export const agentPatchStatus = pgEnum("agent_patch_status", ["draft", "applied", "rejected"]);
 export const inboxSource = pgEnum("inbox_source", ["manual", "imported"]);
+export const checkinTaskStatus = pgEnum("checkin_task_status", ["done", "not_done", "partial", "skipped"]);
+export const changeLogSource = pgEnum("change_log_source", ["manual", "agent_patch", "import", "mcp"]);
 export const mcpPermission = pgEnum("mcp_permission", ["read_only", "read_write"]);
 export const conversationContextType = pgEnum("conversation_context_type", [
   "weekly_review",
@@ -93,6 +97,15 @@ export const tracks = pgTable("tracks", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const tags = pgTable("tags", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 80 }).notNull(),
+  color: varchar("color", { length: 32 }).notNull().default("#71717a"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const tasks = pgTable("tasks", {
   id: uuid("id").primaryKey().defaultRandom(),
   workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
@@ -114,6 +127,14 @@ export const tasks = pgTable("tasks", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const taskTags = pgTable("task_tags", {
+  taskId: uuid("task_id").notNull().references(() => tasks.id, { onDelete: "cascade" }),
+  tagId: uuid("tag_id").notNull().references(() => tags.id, { onDelete: "cascade" }),
+  workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+}, (table) => ({
+  uniqueTaskTag: uniqueIndex("task_tags_task_id_tag_id_unique").on(table.taskId, table.tagId),
+}));
+
 export const timeBlocks = pgTable("time_blocks", {
   id: uuid("id").primaryKey().defaultRandom(),
   workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
@@ -133,7 +154,7 @@ export const routines = pgTable("routines", {
   id: uuid("id").primaryKey().defaultRandom(),
   workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
   title: varchar("title", { length: 180 }).notNull(),
-  defaultTimeSegment: daySegment("default_time_segment").notNull(),
+  defaultTimeSegment: routineTimeSegment("default_time_segment").notNull(),
   defaultStartTime: varchar("default_start_time", { length: 5 }),
   defaultEndTime: varchar("default_end_time", { length: 5 }),
   weekdayPattern: varchar("weekday_pattern", { length: 80 }).notNull(),
@@ -142,6 +163,30 @@ export const routines = pgTable("routines", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const dayCapacities = pgTable("day_capacities", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  date: timestamp("date", { withTimezone: true }).notNull(),
+  morningMinutes: integer("morning_minutes").notNull().default(180),
+  afternoonMinutes: integer("afternoon_minutes").notNull().default(240),
+  eveningMinutes: integer("evening_minutes").notNull().default(120),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  uniqueWorkspaceDate: uniqueIndex("day_capacities_workspace_id_date_unique").on(table.workspaceId, table.date),
+}));
+
+export const segmentEnergySettings = pgTable("segment_energy_settings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  segment: daySegment("segment").notNull(),
+  energyLevel: energyLevel("energy_level").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  uniqueWorkspaceSegment: uniqueIndex("segment_energy_workspace_id_segment_unique").on(table.workspaceId, table.segment),
+}));
 
 export const routineCompletions = pgTable("routine_completions", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -172,6 +217,18 @@ export const checkins = pgTable("checkins", {
   nextText: text("next_text").notNull().default(""),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  uniqueWorkspaceDate: uniqueIndex("checkins_workspace_id_date_unique").on(table.workspaceId, table.date),
+}));
+
+export const checkinTasks = pgTable("checkin_tasks", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  checkinId: uuid("checkin_id").notNull().references(() => checkins.id, { onDelete: "cascade" }),
+  taskId: uuid("task_id").notNull().references(() => tasks.id, { onDelete: "cascade" }),
+  status: checkinTaskStatus("status").notNull(),
+  note: text("note").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const agentPatches = pgTable("agent_patches", {
@@ -186,6 +243,16 @@ export const agentPatches = pgTable("agent_patches", {
   createdBy: varchar("created_by", { length: 40 }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   appliedAt: timestamp("applied_at", { withTimezone: true }),
+});
+
+export const changeLogs = pgTable("change_logs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  planId: uuid("plan_id").references(() => plans.id, { onDelete: "cascade" }),
+  source: changeLogSource("source").notNull(),
+  summary: text("summary").notNull(),
+  detailsJson: jsonb("details_json").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const mcpTokens = pgTable("mcp_tokens", {

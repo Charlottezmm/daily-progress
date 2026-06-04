@@ -5,6 +5,7 @@ import { z } from "zod";
 import { setWorkspaceSession } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import { workspaces } from "@/lib/db/schema";
+import { readJsonBody } from "@/lib/validation/common";
 
 const loginSchema = z.object({
   workspaceName: z.string().trim().min(1),
@@ -12,7 +13,7 @@ const loginSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const parsed = loginSchema.safeParse(await request.json());
+  const parsed = loginSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid login payload" }, { status: 400 });
   }

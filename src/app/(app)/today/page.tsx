@@ -1,3 +1,5 @@
+import { TodayView } from "@/components/today-view";
+
 export default function TodayPage() {
-  return <h1 className="text-xl font-semibold">Today</h1>;
+  return <TodayView />;
 }

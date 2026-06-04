@@ -1,0 +1,68 @@
+"use client";
+
+import { useState } from "react";
+
+type SaveResponse = {
+  streakDays?: number;
+  error?: string;
+};
+
+export function DailyCheckin() {
+  const [completedText, setCompletedText] = useState("");
+  const [blockerText, setBlockerText] = useState("");
+  const [nextText, setNextText] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    setPending(true);
+    const response = await fetch("/api/checkins", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ completedText, blockerText, nextText }),
+    });
+    const data = (await response.json()) as SaveResponse;
+    setPending(false);
+    if (!response.ok) {
+      setMessage(data.error ?? "保存失败");
+      return;
+    }
+    setMessage(`记下了。已 ${data.streakDays ?? 0} 天连续打卡`);
+  }
+
+  return (
+    <form onSubmit={submit} className="sticky bottom-4 space-y-3 rounded border border-zinc-200 bg-white p-4 shadow-sm">
+      <div>
+        <h2 className="font-medium">Daily Check-in</h2>
+        <p className="text-xs text-zinc-500">5 秒记录：完成 / 卡点 / 明日接。</p>
+      </div>
+      <div className="grid gap-2 md:grid-cols-3">
+        <input
+          value={completedText}
+          onChange={(event) => setCompletedText(event.target.value)}
+          placeholder="完成"
+          className="rounded border border-zinc-300 px-3 py-2 text-sm"
+        />
+        <input
+          value={blockerText}
+          onChange={(event) => setBlockerText(event.target.value)}
+          placeholder="卡点"
+          className="rounded border border-zinc-300 px-3 py-2 text-sm"
+        />
+        <input
+          value={nextText}
+          onChange={(event) => setNextText(event.target.value)}
+          placeholder="明日接"
+          className="rounded border border-zinc-300 px-3 py-2 text-sm"
+        />
+      </div>
+      <div className="flex items-center gap-3">
+        <button disabled={pending} className="rounded bg-zinc-950 px-3 py-2 text-sm text-white disabled:opacity-50">
+          Save
+        </button>
+        {message ? <p className="text-sm text-zinc-600">{message}</p> : null}
+      </div>
+    </form>
+  );
+}

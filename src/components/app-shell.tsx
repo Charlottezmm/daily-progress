@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { QuickCapture } from "./quick-capture";
 
 const navItems = [
   { href: "/today", label: "Today" },
@@ -22,7 +23,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           ))}
         </nav>
       </aside>
-      <main className="min-h-screen p-4 md:ml-56 md:p-6">{children}</main>
+      <main className="min-h-screen p-4 md:ml-56 md:p-6">
+        <div className="mx-auto mb-6 max-w-5xl">
+          <QuickCapture />
+        </div>
+        {children}
+      </main>
     </div>
   );
 }

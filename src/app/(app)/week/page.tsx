@@ -1,3 +1,5 @@
+import { WeekView } from "@/components/week-view";
+
 export default function WeekPage() {
-  return <h1 className="text-xl font-semibold">Week</h1>;
+  return <WeekView />;
 }

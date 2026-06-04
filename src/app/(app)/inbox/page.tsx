@@ -1,3 +1,5 @@
+import { InboxView } from "@/components/inbox-view";
+
 export default function InboxPage() {
-  return <h1 className="text-xl font-semibold">Inbox</h1>;
+  return <InboxView />;
 }
