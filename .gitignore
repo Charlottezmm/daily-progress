@@ -1,17 +1,13 @@
-# macOS
-.DS_Store
-.AppleDouble
-.LSOverride
+node_modules/
+.next/
+out/
 
-# editors
-.vscode/
-.idea/
-*.swp
-
-# Vercel
-.vercel
-
-# secrets (just in case)
 .env
-.env.*
-!.env.example
+.env*.local
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+.DS_Store

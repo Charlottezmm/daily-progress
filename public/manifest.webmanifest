@@ -1,0 +1,10 @@
+{
+  "name": "Daily Progress",
+  "short_name": "Progress",
+  "description": "Schedule-first MCP-native planning app.",
+  "start_url": "/today",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#111827",
+  "icons": []
+}
