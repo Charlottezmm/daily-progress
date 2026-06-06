@@ -15,6 +15,13 @@
       "when": 1780563623294,
       "tag": "0001_heavy_stature",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780727322148,
+      "tag": "0002_special_mandarin",
+      "breakpoints": true
     }
   ]
 }

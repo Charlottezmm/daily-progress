@@ -42,7 +42,9 @@ export const workspaces = pgTable("workspaces", {
   passwordHash: text("password_hash").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => ({
+  uniqueName: uniqueIndex("workspaces_name_unique").on(table.name),
+}));
 
 export const plans = pgTable("plans", {
   id: uuid("id").primaryKey().defaultRandom(),

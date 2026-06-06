@@ -4,8 +4,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { setWorkspaceSession } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
-import { workspaces } from "@/lib/db/schema";
+import { changeLogs, plans, planVersions, workspaces } from "@/lib/db/schema";
 import { readJsonBody } from "@/lib/validation/common";
+import { buildDefaultPlanValues } from "@/lib/workspaces/default-plan";
 
 const loginSchema = z.object({
   workspaceName: z.string().trim().min(1),
@@ -31,8 +32,16 @@ export async function POST(request: Request) {
       .insert(workspaces)
       .values({ name: parsed.data.workspaceName, passwordHash })
       .returning();
+    const defaults = buildDefaultPlanValues(created.id);
+    const [plan] = await db.insert(plans).values(defaults.plan).returning();
+    const [version] = await db
+      .insert(planVersions)
+      .values({ ...defaults.version, planId: plan.id })
+      .returning();
+    await db.update(plans).set({ currentVersionId: version.id }).where(eq(plans.id, plan.id));
+    await db.insert(changeLogs).values({ ...defaults.changeLog, planId: plan.id });
     await setWorkspaceSession(created.id);
-    return NextResponse.json({ workspaceId: created.id, created: true });
+    return NextResponse.json({ workspaceId: created.id, planId: plan.id, created: true });
   }
 
   const ok = await bcrypt.compare(parsed.data.password, workspace.passwordHash);
