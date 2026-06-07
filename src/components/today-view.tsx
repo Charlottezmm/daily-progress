@@ -4,49 +4,16 @@ import { AlertTriangle, Check, Clock3, Coffee, Lock, Sparkles } from "lucide-rea
 import { useState } from "react";
 
 import { DailyCheckin } from "./daily-checkin";
+import type { TodayViewData } from "@/lib/planning/view-data";
 
-type Segment = "morning" | "afternoon" | "evening";
-
-type Task = {
-  id: string;
-  segment: Segment;
-  title: string;
-  context: string;
-  track: string;
-  minutes: number;
-  energy: "低" | "中" | "高";
-  done: boolean;
-};
+type Segment = TodayViewData["tasks"][number]["segment"];
+type Task = TodayViewData["tasks"][number];
 
 const segmentLabels: Record<Segment, string> = {
   morning: "上午",
   afternoon: "下午",
   evening: "晚上",
 };
-
-const initialTasks: Task[] = [
-  { id: "t1", segment: "morning", title: "完成 MCP token 范围说明", context: "Planner", track: "主线", minutes: 90, energy: "高", done: false },
-  { id: "t2", segment: "morning", title: "复核 patch approval 边界", context: "Planner", track: "主线", minutes: 45, energy: "中", done: false },
-  { id: "t3", segment: "afternoon", title: "线性代数 eigenvalues 习题", context: "MATH 221", track: "课程", minutes: 75, energy: "中", done: false },
-  { id: "t4", segment: "afternoon", title: "回复 advisor 关于 thesis scope", context: "Inbox", track: "课程", minutes: 20, energy: "低", done: false },
-  { id: "t5", segment: "evening", title: "读 20 页 Seeing Like a State", context: "Reading", track: "阅读", minutes: 30, energy: "低", done: false },
-];
-
-const routines = [
-  { id: "r1", title: "做晚饭", minutes: 40, done: false },
-  { id: "r2", title: "整理桌面和餐具", minutes: 15, done: false },
-  { id: "r3", title: "通勤到 campus", minutes: 50, done: true },
-];
-
-const recoveryBlocks = [
-  { id: "rc1", title: "免打扰恢复块", time: "20:30 - 22:30" },
-  { id: "rc2", title: "周日 reset", time: "全天保护" },
-];
-
-const warnings = [
-  { id: "w1", title: "Inbox 已超过 10 条", text: "先处理几条即可，不要让 warning 抢掉今日主任务。" },
-  { id: "w2", title: "本周恢复低于目标", text: "已排 3.5h / 目标 8h，优先保护今晚恢复块。" },
-];
 
 function minutesLabel(minutes: number) {
   if (minutes >= 60) {
@@ -57,13 +24,18 @@ function minutesLabel(minutes: number) {
   return `${minutes}m`;
 }
 
-export function TodayView() {
-  const [tasks, setTasks] = useState(initialTasks);
+export function TodayView({ data }: { data: TodayViewData }) {
+  const [tasks, setTasks] = useState(data.tasks);
   const completed = tasks.filter((task) => task.done).length;
   const remainingMinutes = tasks.filter((task) => !task.done).reduce((sum, task) => sum + task.minutes, 0);
 
   function toggleTask(id: string) {
     setTasks((current) => current.map((task) => (task.id === id ? { ...task, done: !task.done } : task)));
+    void fetch("/api/tasks", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, status: tasks.find((task) => task.id === id)?.done ? "todo" : "done" }),
+    });
   }
 
   return (
@@ -75,13 +47,15 @@ export function TodayView() {
           <p className="mt-1 text-sm font-medium text-zinc-800">今日计划</p>
           <p className="mt-1 text-sm text-zinc-500">主任务按上午 / 下午 / 晚上推进，日常和恢复块单独保护。</p>
         </div>
-        <a
-          href="/reschedule"
-          className="inline-flex w-fit items-center gap-2 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900"
-        >
-          <Sparkles size={16} />
-          3 条待审核调整
-        </a>
+        {data.patchCount > 0 ? (
+          <a
+            href="/reschedule"
+            className="inline-flex w-fit items-center gap-2 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900"
+          >
+            <Sparkles size={16} />
+            {data.patchCount} 条待审核调整
+          </a>
+        ) : null}
       </section>
 
       <section className="rounded border border-zinc-200 bg-white p-4">
@@ -96,7 +70,12 @@ export function TodayView() {
           </span>
         </div>
 
-        <div className="mt-4 space-y-5">
+          <div className="mt-4 space-y-5">
+          {tasks.length === 0 ? (
+            <div className="rounded border border-dashed border-zinc-200 bg-zinc-50 px-3 py-8 text-center text-sm text-zinc-500">
+              今天还没有任务。先用 Quick Capture 收进 Inbox，或导入计划后再排。
+            </div>
+          ) : null}
           {(Object.keys(segmentLabels) as Segment[]).map((segment) => {
             const segmentTasks = tasks.filter((task) => task.segment === segment);
             const segmentMinutes = segmentTasks.filter((task) => !task.done).reduce((sum, task) => sum + task.minutes, 0);
@@ -144,10 +123,11 @@ export function TodayView() {
         <div className="rounded border border-zinc-200 bg-white p-4">
           <div className="flex items-center justify-between">
             <h2 className="font-medium text-zinc-950">日常事项</h2>
-            <span className="rounded bg-zinc-100 px-2 py-1 text-xs text-zinc-600">{routines.filter((item) => item.done).length}/{routines.length}</span>
+            <span className="rounded bg-zinc-100 px-2 py-1 text-xs text-zinc-600">{data.routines.filter((item) => item.done).length}/{data.routines.length}</span>
           </div>
           <div className="mt-3 space-y-2">
-            {routines.map((routine) => (
+            {data.routines.length === 0 ? <p className="text-sm text-zinc-500">还没有 routine。后续可在 Settings 添加。</p> : null}
+            {data.routines.map((routine) => (
               <div key={routine.id} className="flex items-center justify-between rounded border border-zinc-100 px-3 py-2">
                 <div>
                   <p className="text-sm font-medium text-zinc-900">{routine.title}</p>
@@ -168,7 +148,8 @@ export function TodayView() {
             </span>
           </div>
           <div className="mt-3 space-y-2">
-            {recoveryBlocks.map((block) => (
+            {data.recoveryBlocks.length === 0 ? <p className="text-sm text-emerald-800">今天没有已保护的恢复块。</p> : null}
+            {data.recoveryBlocks.map((block) => (
               <div key={block.id} className="flex items-center gap-3 rounded border border-emerald-100 bg-white px-3 py-2">
                 <span className="rounded bg-emerald-100 p-2 text-emerald-700">
                   <Coffee size={16} />
@@ -189,7 +170,8 @@ export function TodayView() {
           <h2 className="font-medium text-zinc-950">轻量提醒</h2>
         </div>
         <div className="grid gap-2 md:grid-cols-2">
-          {warnings.map((warning) => (
+          {data.warnings.length === 0 ? <p className="text-sm text-zinc-500">当前没有需要 surfaced 的提醒。</p> : null}
+          {data.warnings.map((warning) => (
             <div key={warning.id} className="rounded bg-amber-50 px-3 py-2">
               <p className="text-sm font-medium text-amber-950">{warning.title}</p>
               <p className="mt-1 text-xs text-amber-800">{warning.text}</p>
@@ -198,7 +180,13 @@ export function TodayView() {
         </div>
       </section>
 
-      <DailyCheckin />
+      <DailyCheckin
+        initialCompletedText={data.checkin?.completedText}
+        initialBlockerText={data.checkin?.blockerText}
+        initialNextText={data.checkin?.nextText}
+        initialStreakDays={data.streakDays}
+        dataUnavailable={data.dataUnavailable}
+      />
     </div>
   );
 }

@@ -112,3 +112,29 @@ export async function POST(request: Request) {
   const streakDays = await calculateCheckinStreak(workspaceId);
   return NextResponse.json({ ok: true, streakDays });
 }
+
+export async function GET() {
+  const workspaceId = await getWorkspaceIdFromSession();
+  if (!workspaceId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const today = startOfShanghaiToday();
+  const db = getDb();
+  const [checkin] = await db
+    .select()
+    .from(checkins)
+    .where(and(eq(checkins.workspaceId, workspaceId), eq(checkins.date, today)))
+    .limit(1);
+
+  if (!checkin) {
+    return NextResponse.json({ checkin: null, streakDays: await calculateCheckinStreak(workspaceId) });
+  }
+
+  return NextResponse.json({
+    checkin: {
+      completedText: checkin.completedText,
+      blockerText: checkin.blockerText,
+      nextText: checkin.nextText,
+    },
+    streakDays: await calculateCheckinStreak(workspaceId),
+  });
+}

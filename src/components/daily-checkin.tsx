@@ -7,15 +7,33 @@ type SaveResponse = {
   error?: string;
 };
 
-export function DailyCheckin() {
-  const [completedText, setCompletedText] = useState("");
-  const [blockerText, setBlockerText] = useState("");
-  const [nextText, setNextText] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
+type DailyCheckinProps = {
+  initialCompletedText?: string;
+  initialBlockerText?: string;
+  initialNextText?: string;
+  initialStreakDays?: number;
+  dataUnavailable?: boolean;
+};
+
+export function DailyCheckin({
+  initialCompletedText = "",
+  initialBlockerText = "",
+  initialNextText = "",
+  initialStreakDays = 0,
+  dataUnavailable = false,
+}: DailyCheckinProps) {
+  const [completedText, setCompletedText] = useState(initialCompletedText);
+  const [blockerText, setBlockerText] = useState(initialBlockerText);
+  const [nextText, setNextText] = useState(initialNextText);
+  const [message, setMessage] = useState<string | null>(initialStreakDays ? `已 ${initialStreakDays} 天连续打卡` : null);
   const [pending, setPending] = useState(false);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (dataUnavailable) {
+      setMessage("本地数据源未配置，暂时无法保存。");
+      return;
+    }
     setPending(true);
     const response = await fetch("/api/checkins", {
       method: "POST",
@@ -36,6 +54,7 @@ export function DailyCheckin() {
       <div>
         <h2 className="font-medium">Daily Check-in</h2>
         <p className="text-xs text-zinc-500">5 秒记录：完成 / 卡点 / 明日接。</p>
+        {dataUnavailable ? <p className="mt-1 text-xs text-amber-700">当前没有配置数据库，保存会在真实环境启用。</p> : null}
       </div>
       <div className="grid gap-2 md:grid-cols-3">
         <input
@@ -58,7 +77,7 @@ export function DailyCheckin() {
         />
       </div>
       <div className="flex items-center gap-3">
-        <button disabled={pending} className="rounded bg-zinc-950 px-3 py-2 text-sm text-white disabled:opacity-50">
+        <button disabled={pending || dataUnavailable} className="rounded bg-zinc-950 px-3 py-2 text-sm text-white disabled:opacity-50">
           Save
         </button>
         {message ? <p className="text-sm text-zinc-600">{message}</p> : null}

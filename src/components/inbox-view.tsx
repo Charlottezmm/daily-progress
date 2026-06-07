@@ -1,35 +1,60 @@
 "use client";
 
 import { ArrowUpRight, RefreshCcw, Trash2, TriangleAlert } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import type { InboxItemView } from "@/lib/planning/view-data";
 
-const initialItems = [
-  { id: "i1", title: "问 Sam GPU credits 什么时候续", age: "2h" },
-  { id: "i2", title: "月底前预约牙医", age: "5h" },
-  { id: "i3", title: "想法：weekly review template", age: "1d" },
-  { id: "i4", title: "域名续费快到期", age: "1d" },
-  { id: "i5", title: "报销表跟进", age: "2d" },
-  { id: "i6", title: "浇植物，要不要做成 routine", age: "2d" },
-  { id: "i7", title: "读 MCP spec 更新", age: "3d" },
-  { id: "i8", title: "给妈妈挑生日礼物", age: "3d" },
-  { id: "i9", title: "导出旧 Roam graph", age: "4d" },
-  { id: "i10", title: "试新的咖啡研磨档位", age: "4d" },
-  { id: "i11", title: "安排眼科检查", age: "5d" },
-  { id: "i12", title: "取消不用的订阅", age: "6d" },
-];
+type InboxAction = "task" | "routine" | "delete";
 
-const actionLabels = {
+const actionLabels: Record<InboxAction, string> = {
   task: "已提升为任务",
   routine: "已转成日常",
   delete: "已删除",
 };
 
-export function InboxView() {
+export function InboxView({
+  initialItems,
+  dataUnavailable = false,
+}: {
+  initialItems: InboxItemView[];
+  dataUnavailable?: boolean;
+}) {
   const [items, setItems] = useState(initialItems);
   const [lastAction, setLastAction] = useState<string | null>(null);
+  const [pendingId, setPendingId] = useState<string | null>(null);
   const overLimit = items.length > 10;
 
-  function act(id: string, action: keyof typeof actionLabels) {
+  useEffect(() => {
+    function handleCreated(event: Event) {
+      const item = (event as CustomEvent<{ id: string; title: string }>).detail;
+      if (!item?.id || !item.title) return;
+      setItems((current) => [{ id: item.id, title: item.title, age: "刚刚" }, ...current]);
+      setLastAction("已加入 Inbox");
+    }
+
+    window.addEventListener("inbox:item-created", handleCreated);
+    return () => window.removeEventListener("inbox:item-created", handleCreated);
+  }, []);
+
+  async function act(id: string, action: InboxAction) {
+    if (dataUnavailable) {
+      setLastAction("本地数据源未配置，暂时无法处理。");
+      return;
+    }
+
+    setPendingId(id);
+    const response = await fetch("/api/inbox", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, action }),
+    });
+    setPendingId(null);
+
+    if (!response.ok) {
+      setLastAction("处理失败，请重试。");
+      return;
+    }
+
     setItems((current) => current.filter((item) => item.id !== id));
     setLastAction(actionLabels[action]);
   }
@@ -44,6 +69,16 @@ export function InboxView() {
         </div>
         {lastAction ? <span className="w-fit rounded bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{lastAction}</span> : null}
       </section>
+
+      {dataUnavailable ? (
+        <section className="flex gap-3 rounded border border-amber-200 bg-amber-50 p-4">
+          <TriangleAlert size={18} className="mt-0.5 flex-none text-amber-700" />
+          <div>
+            <h2 className="text-sm font-semibold text-amber-950">本地数据源未配置</h2>
+            <p className="mt-1 text-sm text-amber-800">当前没有 DATABASE_URL，Inbox 会显示为空态；配置数据库后会读取真实数据。</p>
+          </div>
+        </section>
+      ) : null}
 
       {overLimit ? (
         <section className="flex gap-3 rounded border border-amber-200 bg-amber-50 p-4">
@@ -80,24 +115,27 @@ export function InboxView() {
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    onClick={() => act(item.id, "task")}
-                    className="inline-flex items-center gap-1 rounded border border-zinc-300 px-2.5 py-1.5 text-xs font-medium text-zinc-900 hover:bg-zinc-50"
+                    disabled={pendingId === item.id}
+                    onClick={() => void act(item.id, "task")}
+                    className="inline-flex items-center gap-1 rounded border border-zinc-300 px-2.5 py-1.5 text-xs font-medium text-zinc-900 hover:bg-zinc-50 disabled:opacity-50"
                   >
                     <ArrowUpRight size={13} />
                     提升为任务
                   </button>
                   <button
                     type="button"
-                    onClick={() => act(item.id, "routine")}
-                    className="inline-flex items-center gap-1 rounded border border-zinc-200 px-2.5 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                    disabled={pendingId === item.id}
+                    onClick={() => void act(item.id, "routine")}
+                    className="inline-flex items-center gap-1 rounded border border-zinc-200 px-2.5 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
                   >
                     <RefreshCcw size={13} />
                     转成日常
                   </button>
                   <button
                     type="button"
-                    onClick={() => act(item.id, "delete")}
-                    className="inline-flex items-center gap-1 rounded border border-rose-200 px-2.5 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-50"
+                    disabled={pendingId === item.id}
+                    onClick={() => void act(item.id, "delete")}
+                    className="inline-flex items-center gap-1 rounded border border-rose-200 px-2.5 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-50"
                   >
                     <Trash2 size={13} />
                     删除

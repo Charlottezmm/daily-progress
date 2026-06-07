@@ -2,68 +2,14 @@
 
 import { ArrowRight, Check, Lock, RotateCcw, ShieldCheck, Sparkles, X } from "lucide-react";
 import { useState } from "react";
+import type { RescheduleViewData } from "@/lib/planning/view-data";
 
 type Decision = "accepted" | "rejected";
+type PatchItem = RescheduleViewData["patchItems"][number];
 
-type PatchItem = {
-  id: string;
-  kind: string;
-  title: string;
-  from?: string;
-  to?: string;
-  reason: string;
-  impact: string[];
-  capacity: string;
-  protected?: boolean;
-};
-
-const patchItems: PatchItem[] = [
-  {
-    id: "p1",
-    kind: "移动",
-    title: "完成 MCP token 范围说明",
-    from: "周六 上午",
-    to: "周日 上午",
-    reason: "周六上午容量接近上限，周日上午在 reset 前仍有空窗。",
-    impact: ["周六容量 -90m", "周日负载 +90m"],
-    capacity: "周六 95% -> 72%",
-  },
-  {
-    id: "p2",
-    kind: "拆分",
-    title: "线性代数 eigenvalues 习题",
-    from: "1 x 75m",
-    to: "2 x 40m",
-    reason: "拆到两段更适合中等能量窗口，避免挤压晚间恢复。",
-    impact: ["专注窗口更短", "保留晚间恢复块"],
-    capacity: "周六 +40m，周四 +40m",
-  },
-  {
-    id: "p3",
-    kind: "延期",
-    title: "读 20 页 Seeing Like a State",
-    from: "今天晚上",
-    to: "下周",
-    reason: "低优先级且不阻塞本周目标，延期能保护今晚免打扰块。",
-    impact: ["保护 recovery", "本周阅读减少 30m"],
-    capacity: "今晚 65% -> 58%",
-  },
-  {
-    id: "p4",
-    kind: "受保护",
-    title: "移动 Evening run 来释放时间",
-    from: "周六 19:00",
-    to: "不可应用",
-    reason: "这是 routine 保护块，agent 不能移动、缩短或删除。",
-    impact: ["routine protected", "需要手动处理"],
-    capacity: "不改变容量",
-    protected: true,
-  },
-];
-
-export function ReschedulePreview() {
+export function ReschedulePreview({ data }: { data: RescheduleViewData }) {
   const [decisions, setDecisions] = useState<Record<string, Decision>>({});
-  const actionable = patchItems.filter((item) => !item.protected);
+  const actionable = data.patchItems.filter((item) => !item.protected);
   const accepted = actionable.filter((item) => decisions[item.id] === "accepted").length;
   const rejected = actionable.filter((item) => decisions[item.id] === "rejected").length;
   const pending = actionable.length - accepted - rejected;
@@ -112,6 +58,12 @@ export function ReschedulePreview() {
         </div>
       </section>
 
+      {data.dataUnavailable ? (
+        <section className="rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          当前没有 DATABASE_URL，无法读取 agent patch；配置数据库后会显示待审核建议。
+        </section>
+      ) : null}
+
       <section className="flex gap-3 rounded border border-emerald-200 bg-emerald-50/60 p-4">
         <ShieldCheck size={18} className="mt-0.5 flex-none text-emerald-700" />
         <div>
@@ -121,7 +73,14 @@ export function ReschedulePreview() {
       </section>
 
       <section className="space-y-3">
-        {patchItems.map((item) => {
+        {data.patchItems.length === 0 ? (
+          <div className="rounded border border-dashed border-zinc-200 bg-white px-4 py-10 text-center">
+            <h2 className="font-medium text-zinc-950">没有待审核建议</h2>
+            <p className="mt-1 text-sm text-zinc-500">当 MCP agent 提出 patch 后，会在这里逐条审核。</p>
+          </div>
+        ) : null}
+
+        {data.patchItems.map((item: PatchItem) => {
           const decision = decisions[item.id];
           return (
             <article

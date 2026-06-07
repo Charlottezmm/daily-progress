@@ -18,6 +18,10 @@ export function QuickCapture() {
         body: JSON.stringify({ title: title.trim() }),
       });
       if (!response.ok) throw new Error("Unable to save inbox item");
+      const data = (await response.json()) as { item?: { id: string; title: string } };
+      if (data.item) {
+        window.dispatchEvent(new CustomEvent("inbox:item-created", { detail: data.item }));
+      }
       setTitle("");
       setStatus("saved");
       window.setTimeout(() => setStatus("idle"), 1200);

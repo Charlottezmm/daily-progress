@@ -1,26 +1,5 @@
 import { ArrowRight, CheckCircle2, ShieldAlert } from "lucide-react";
-
-const days = [
-  { day: "一", date: "6/1", load: 68, capacity: "5.5h", state: "ok", items: ["MCP spec", "MATH lecture", "Run"] },
-  { day: "二", date: "6/2", load: 96, capacity: "7.5h", state: "over", items: ["Deep work", "Advisor", "Pset", "Side ship"] },
-  { day: "三", date: "6/3", load: 58, capacity: "4.5h", state: "ok", items: ["Thesis read", "Errands"] },
-  { day: "四", date: "6/4", load: 78, capacity: "6.0h", state: "ok", items: ["MATH pset", "Patch review", "Reading"] },
-  { day: "五", date: "6/5", load: 42, capacity: "3.0h", state: "room", items: ["Catch-up", "Off block"] },
-  { day: "六", date: "6/6", load: 65, capacity: "5.0h", state: "today", items: ["MCP spec", "Pset", "Off block"] },
-  { day: "日", date: "6/7", load: 12, capacity: "Reset", state: "room", items: ["Recovery reset"] },
-];
-
-const tracks = [
-  { name: "主线", hours: "11.5h", share: 40, color: "bg-zinc-900", note: "稳定" },
-  { name: "课程 / 工作", hours: "9.0h", share: 31, color: "bg-sky-700", note: "正常" },
-  { name: "副线", hours: "4.5h", share: 16, color: "bg-violet-600", note: "比平时 +1.5h" },
-  { name: "恢复", hours: "3.5h", share: 13, color: "bg-emerald-600", note: "低于目标" },
-];
-
-const checkins = [
-  { day: "周五", done: "完成 landing copy，清掉 3 条 Inbox", block: "习题比预期更慢", next: "先开 eigenvalues set" },
-  { day: "周四", done: "Patch review 完成，advisor 已回复", block: "上下文切换损失 1h", next: "小回复集中处理" },
-];
+import type { WeekViewData } from "@/lib/planning/view-data";
 
 function loadColor(state: string) {
   if (state === "over") return "bg-rose-500";
@@ -29,7 +8,7 @@ function loadColor(state: string) {
   return "bg-amber-500";
 }
 
-export function WeekView() {
+export function WeekView({ data }: { data: WeekViewData }) {
   return (
     <div className="mx-auto max-w-6xl space-y-5">
       <section>
@@ -37,6 +16,12 @@ export function WeekView() {
         <h1 className="mt-1 text-2xl font-semibold text-zinc-950">周计划概览</h1>
         <p className="mt-1 text-sm text-zinc-500">看容量、战线比例和恢复红线；这里不是完整 calendar，也不支持拖拽。</p>
       </section>
+
+      {data.dataUnavailable ? (
+        <section className="rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          当前没有 DATABASE_URL，周视图显示为空态；配置数据库后会读取真实任务、容量和 check-in。
+        </section>
+      ) : null}
 
       <section className="rounded border border-zinc-200 bg-white p-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -51,7 +36,7 @@ export function WeekView() {
           </div>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-7">
-          {days.map((day) => (
+          {data.days.map((day) => (
             <div key={day.date} className={`rounded border p-3 ${day.state === "today" ? "border-zinc-950 bg-zinc-50" : "border-zinc-200 bg-white"}`}>
               <div className="flex items-start justify-between">
                 <div>
@@ -64,6 +49,7 @@ export function WeekView() {
                 <div className={`h-2 rounded-full ${loadColor(day.state)}`} style={{ width: `${Math.min(day.load, 100)}%` }} />
               </div>
               <div className="mt-3 space-y-1">
+                {day.items.length === 0 ? <p className="rounded bg-zinc-50 px-2 py-1 text-xs text-zinc-400">无安排</p> : null}
                 {day.items.map((item) => (
                   <p key={item} className="truncate rounded bg-zinc-50 px-2 py-1 text-xs text-zinc-600">{item}</p>
                 ))}
@@ -80,7 +66,8 @@ export function WeekView() {
             <span className="text-xs text-zinc-500">按本周已排时间</span>
           </div>
           <div className="mt-4 space-y-3">
-            {tracks.map((track) => (
+            {data.tracks.length === 0 ? <p className="text-sm text-zinc-500">本周还没有可统计的任务或恢复块。</p> : null}
+            {data.tracks.map((track) => (
               <div key={track.name} className="grid grid-cols-[72px_1fr_56px] items-center gap-3 text-sm">
                 <div className="font-medium text-zinc-800">{track.name}</div>
                 <div>
@@ -101,16 +88,18 @@ export function WeekView() {
             <h2 className="font-medium text-zinc-950">恢复目标</h2>
           </div>
           <div className="mt-4 flex items-end gap-2">
-            <span className="text-3xl font-semibold text-zinc-950">3.5h</span>
-            <span className="pb-1 text-sm text-zinc-500">/ 8h 目标</span>
+            <span className="text-3xl font-semibold text-zinc-950">{data.recovery.scheduledHours}</span>
+            <span className="pb-1 text-sm text-zinc-500">/ {data.recovery.targetHours} 目标</span>
           </div>
           <div className="mt-3 h-3 rounded-full bg-white">
-            <div className="h-3 rounded-full bg-emerald-600" style={{ width: "44%" }} />
+            <div className="h-3 rounded-full bg-emerald-600" style={{ width: `${data.recovery.percent}%` }} />
           </div>
-          <p className="mt-3 text-sm text-emerald-800">低于目标 4.5h。至少再保护一个免打扰块，routine / recovery 不被 agent 移动。</p>
-          <div className="mt-3 rounded border border-emerald-100 bg-white px-3 py-2 text-sm text-zinc-700">
-            周六 20:30 - 22:30 · 免打扰恢复块
-          </div>
+          <p className="mt-3 text-sm text-emerald-800">{data.recovery.note}</p>
+          {data.recovery.blocks.map((block) => (
+            <div key={block} className="mt-3 rounded border border-emerald-100 bg-white px-3 py-2 text-sm text-zinc-700">
+              {block}
+            </div>
+          ))}
         </div>
       </section>
 
@@ -125,7 +114,8 @@ export function WeekView() {
           </a>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
-          {checkins.map((checkin) => (
+          {data.checkins.length === 0 ? <p className="text-sm text-zinc-500">本周还没有 check-in。</p> : null}
+          {data.checkins.map((checkin) => (
             <div key={checkin.day} className="rounded border border-zinc-100 p-3">
               <div className="mb-3 flex items-center gap-2">
                 <CheckCircle2 size={16} className="text-emerald-600" />
