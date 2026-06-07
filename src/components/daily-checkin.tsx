@@ -32,7 +32,7 @@ export function DailyCheckin() {
   }
 
   return (
-    <form onSubmit={submit} className="sticky bottom-4 space-y-3 rounded border border-zinc-200 bg-white p-4 shadow-sm">
+    <form onSubmit={submit} className="space-y-3 rounded border border-zinc-200 bg-white p-4 shadow-sm">
       <div>
         <h2 className="font-medium">Daily Check-in</h2>
         <p className="text-xs text-zinc-500">5 秒记录：完成 / 卡点 / 明日接。</p>

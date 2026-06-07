@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { QuickCapture } from "./quick-capture";
 
 const navItems = [
@@ -7,28 +10,67 @@ const navItems = [
   { href: "/month", label: "Month" },
   { href: "/inbox", label: "Inbox" },
   { href: "/import", label: "Import" },
+  { href: "/reschedule", label: "Reschedule" },
   { href: "/settings", label: "Settings" },
 ];
 
+const primaryMobileNavItems = navItems.filter((item) => ["/today", "/week", "/month", "/inbox"].includes(item.href));
+const secondaryMobileNavItems = navItems.filter((item) => !primaryMobileNavItems.includes(item));
+
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+
+  function isActive(href: string) {
+    return pathname === href || pathname.startsWith(`${href}/`);
+  }
+
   return (
-    <div className="min-h-screen bg-zinc-50 text-zinc-950">
-      <aside className="fixed inset-y-0 left-0 hidden w-56 border-r border-zinc-200 bg-white p-4 md:block">
-        <div className="mb-6 text-sm font-semibold">Daily Progress</div>
-        <nav className="space-y-1">
+    <div className="app-shell">
+      <aside className="app-sidebar">
+        <div className="app-brand" aria-label="Daily Progress">
+          <span className="app-brand-mark" aria-hidden="true">
+            DP
+          </span>
+          <span>
+            <span className="app-brand-name">Daily Progress</span>
+            <span className="app-brand-subtitle">planning workspace</span>
+          </span>
+        </div>
+        <nav className="app-nav" aria-label="Primary navigation">
           {navItems.map((item) => (
-            <Link key={item.href} href={item.href} className="block rounded px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-100">
+            <Link key={item.href} href={item.href} className="app-nav-link" aria-current={isActive(item.href) ? "page" : undefined}>
               {item.label}
             </Link>
           ))}
         </nav>
       </aside>
-      <main className="min-h-screen p-4 md:ml-56 md:p-6">
-        <div className="mx-auto mb-6 max-w-5xl">
+      <div className="app-workspace">
+        <header className="app-topbar">
+          <div className="mobile-brand" aria-label="Daily Progress">
+            <span className="app-brand-mark" aria-hidden="true">
+              DP
+            </span>
+            <span className="app-brand-name">Daily Progress</span>
+          </div>
           <QuickCapture />
-        </div>
-        {children}
-      </main>
+          <nav className="mobile-secondary-nav" aria-label="More navigation">
+            {secondaryMobileNavItems.map((item) => (
+              <Link key={item.href} href={item.href} className="mobile-secondary-link" aria-current={isActive(item.href) ? "page" : undefined}>
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+        </header>
+        <main className="app-content">{children}</main>
+        <nav className="mobile-tabbar" aria-label="Mobile navigation">
+          {primaryMobileNavItems.map((item) => (
+            <Link key={item.href} href={item.href} className="mobile-tab" aria-current={isActive(item.href) ? "page" : undefined}>
+              <span className="mobile-tab-dot" aria-hidden="true" />
+              <span>{item.label}</span>
+            </Link>
+          ))}
+        </nav>
+      </div>
     </div>
   );
 }
