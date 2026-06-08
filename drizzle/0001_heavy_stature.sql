@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS "task_tags" (
 	"workspace_id" uuid NOT NULL
 );
 --> statement-breakpoint
-ALTER TABLE "routines" ALTER COLUMN "default_time_segment" SET DATA TYPE routine_time_segment;--> statement-breakpoint
+ALTER TABLE "routines" ALTER COLUMN "default_time_segment" SET DATA TYPE routine_time_segment USING "default_time_segment"::text::routine_time_segment;--> statement-breakpoint
 DO $$ BEGIN
  ALTER TABLE "change_logs" ADD CONSTRAINT "change_logs_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION
