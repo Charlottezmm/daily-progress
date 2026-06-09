@@ -10,7 +10,11 @@ type PatchItem = RescheduleViewData["patchItems"][number];
 
 export function ReviewPreview({ data }: { data: RescheduleViewData }) {
   const [decisions, setDecisions] = useState<Record<string, Decision>>({});
-  const actionable = data.patchItems.filter((item) => !item.protected);
+  const [appliedPatchIds, setAppliedPatchIds] = useState<string[]>([]);
+  const [isApplying, setIsApplying] = useState(false);
+  const [applyError, setApplyError] = useState<string | null>(null);
+  const visiblePatchItems = data.patchItems.filter((item) => !appliedPatchIds.includes(item.patchId));
+  const actionable = visiblePatchItems.filter((item) => !item.protected);
   const accepted = actionable.filter((item) => decisions[item.id] === "accepted").length;
   const rejected = actionable.filter((item) => decisions[item.id] === "rejected").length;
   const pending = actionable.length - accepted - rejected;
@@ -29,6 +33,40 @@ export function ReviewPreview({ data }: { data: RescheduleViewData }) {
 
   function acceptAll() {
     setDecisions(Object.fromEntries(actionable.map((item) => [item.id, "accepted" as Decision])));
+  }
+
+  async function applySelected() {
+    const acceptedByPatch = new Map<string, number[]>();
+    for (const item of actionable) {
+      if (decisions[item.id] !== "accepted") continue;
+      const operationIndex = Number(item.id.split(":")[1]);
+      if (!Number.isInteger(operationIndex)) continue;
+      acceptedByPatch.set(item.patchId, [...(acceptedByPatch.get(item.patchId) ?? []), operationIndex]);
+    }
+
+    if (acceptedByPatch.size === 0) return;
+
+    setIsApplying(true);
+    setApplyError(null);
+    try {
+      for (const [patchId, acceptedOperationIndexes] of acceptedByPatch.entries()) {
+        const response = await fetch("/api/patches/apply", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ patchId, acceptedOperationIndexes }),
+        });
+        if (!response.ok) {
+          const body = await response.json().catch(() => null);
+          throw new Error(body?.error ?? "应用建议失败");
+        }
+        setAppliedPatchIds((current) => [...current, patchId]);
+        setDecisions((current) => Object.fromEntries(Object.entries(current).filter(([id]) => !id.startsWith(`${patchId}:`))));
+      }
+    } catch (error) {
+      setApplyError(error instanceof Error ? error.message : "应用建议失败");
+    } finally {
+      setIsApplying(false);
+    }
   }
 
   return (
@@ -50,15 +88,21 @@ export function ReviewPreview({ data }: { data: RescheduleViewData }) {
 
       <div className="paw-trust-banner">Routine / Recovery 受保护；Agent 只能建议任务移动、拆分、延期和优先级调整。</div>
 
+      {applyError ? (
+        <section className="paw-status-pill warn" role="status">
+          {applyError}
+        </section>
+      ) : null}
+
       <section className="paw-suggestion-list">
-        {data.patchItems.length === 0 ? (
+        {visiblePatchItems.length === 0 ? (
           <div className="paw-empty">
             <h2>没有待审核建议</h2>
             <p>当 scheduled automation 或手动 Agent 提出 patch 后，会在这里逐条审核。</p>
           </div>
         ) : null}
 
-        {data.patchItems.map((item: PatchItem) => {
+        {visiblePatchItems.map((item: PatchItem) => {
           const decision = decisions[item.id];
           return (
             <article
@@ -97,6 +141,7 @@ export function ReviewPreview({ data }: { data: RescheduleViewData }) {
                       <button
                         type="button"
                         onClick={() => decide(item.id, "accepted")}
+                        disabled={isApplying}
                         className={`paw-sg-btn accept ${decision === "accepted" ? "selected" : ""}`}
                       >
                         <Check size={15} />
@@ -105,6 +150,7 @@ export function ReviewPreview({ data }: { data: RescheduleViewData }) {
                       <button
                         type="button"
                         onClick={() => decide(item.id, "rejected")}
+                        disabled={isApplying}
                         className={`paw-sg-btn reject ${decision === "rejected" ? "selected" : ""}`}
                       >
                         <X size={15} />
@@ -126,14 +172,14 @@ export function ReviewPreview({ data }: { data: RescheduleViewData }) {
       </section>
 
       <section className="paw-review-bottom">
-        <button type="button" onClick={() => setDecisions({})} className="paw-secondary-btn">
+        <button type="button" onClick={() => setDecisions({})} disabled={isApplying} className="paw-secondary-btn">
           <RotateCcw size={14} /> 重新选择
         </button>
-        <button type="button" onClick={acceptAll} className="paw-secondary-btn">
+        <button type="button" onClick={acceptAll} disabled={isApplying} className="paw-secondary-btn">
           全部接受
         </button>
-        <button type="button" disabled={accepted === 0} className="paw-primary-btn">
-          应用 {accepted} 项建议
+        <button type="button" onClick={applySelected} disabled={accepted === 0 || isApplying} className="paw-primary-btn">
+          {isApplying ? "应用中" : `应用 ${accepted} 项建议`}
         </button>
         <span className="paw-status-pill">
           {accepted} 接受 · {rejected} 拒绝 · {pending} 待定
