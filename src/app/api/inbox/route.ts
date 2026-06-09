@@ -3,7 +3,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getWorkspaceIdFromSession } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
-import { inboxItems, plans, routines, tasks } from "@/lib/db/schema";
+import { inboxItems, routines, tasks } from "@/lib/db/schema";
+import { getActivePlanId } from "@/lib/planning/active-plan";
+import { createInboxItem } from "@/lib/planning/service";
 import { startOfShanghaiDay } from "@/lib/planning/view-data";
 import { readJsonBody } from "@/lib/validation/common";
 
@@ -15,16 +17,6 @@ const inboxActionSchema = z.object({
   id: z.string().uuid(),
   action: z.enum(["task", "routine", "delete"]),
 });
-
-async function getActivePlanId(workspaceId: string) {
-  const db = getDb();
-  const [plan] = await db
-    .select({ id: plans.id })
-    .from(plans)
-    .where(and(eq(plans.workspaceId, workspaceId), eq(plans.status, "active")))
-    .limit(1);
-  return plan?.id ?? null;
-}
 
 export async function GET() {
   const workspaceId = await getWorkspaceIdFromSession();
@@ -50,7 +42,7 @@ export async function POST(request: Request) {
   }
 
   const db = getDb();
-  const [item] = await db.insert(inboxItems).values({ workspaceId, title: parsed.data.title }).returning();
+  const item = await createInboxItem(db, { workspaceId, title: parsed.data.title, source: "manual" });
   return NextResponse.json({ item });
 }
 
@@ -78,7 +70,7 @@ export async function PATCH(request: Request) {
   }
 
   if (parsed.data.action === "task") {
-    const planId = await getActivePlanId(workspaceId);
+    const planId = await getActivePlanId(db, workspaceId);
     if (!planId) return NextResponse.json({ error: "No active plan" }, { status: 400 });
     await db.insert(tasks).values({
       workspaceId,

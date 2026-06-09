@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getWorkspaceIdFromSession } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
-import { applyAgentPatch, PatchApplyError } from "@/lib/planning/patch-apply";
+import { applyReviewPatch, PatchApplyError } from "@/lib/planning/service";
 import { readJsonBody } from "@/lib/validation/common";
 
 const applyPatchBodySchema = z.object({
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await applyAgentPatch(getDb(), {
+    const result = await applyReviewPatch(getDb(), {
       workspaceId,
       patchId: parsed.data.patchId,
       acceptedOperationIndexes: parsed.data.acceptedOperationIndexes,

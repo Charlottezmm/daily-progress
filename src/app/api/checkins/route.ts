@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getWorkspaceIdFromSession } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
-import { checkins, plans } from "@/lib/db/schema";
+import { checkins } from "@/lib/db/schema";
+import { createDailyCheckin, PlanningServiceError } from "@/lib/planning/service";
 import { readJsonBody } from "@/lib/validation/common";
 
 const checkinSchema = z.object({
@@ -45,16 +46,6 @@ function addDays(date: Date, days: number) {
   return next;
 }
 
-async function getActivePlanId(workspaceId: string) {
-  const db = getDb();
-  const [plan] = await db
-    .select({ id: plans.id })
-    .from(plans)
-    .where(and(eq(plans.workspaceId, workspaceId), eq(plans.status, "active")))
-    .limit(1);
-  return plan?.id ?? null;
-}
-
 async function calculateCheckinStreak(workspaceId: string) {
   const db = getDb();
   const rows = await db
@@ -79,35 +70,26 @@ export async function POST(request: Request) {
   const workspaceId = await getWorkspaceIdFromSession();
   if (!workspaceId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const planId = await getActivePlanId(workspaceId);
-  if (!planId) return NextResponse.json({ error: "No active plan" }, { status: 400 });
-
   const parsed = checkinSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid check-in payload" }, { status: 400 });
   }
 
   const db = getDb();
-  const today = startOfShanghaiToday();
-  await db
-    .insert(checkins)
-    .values({
+  try {
+    await createDailyCheckin(db, {
       workspaceId,
-      planId,
-      date: today,
       completedText: parsed.data.completedText,
       blockerText: parsed.data.blockerText,
       nextText: parsed.data.nextText,
-    })
-    .onConflictDoUpdate({
-      target: [checkins.workspaceId, checkins.date],
-      set: {
-        completedText: parsed.data.completedText,
-        blockerText: parsed.data.blockerText,
-        nextText: parsed.data.nextText,
-        updatedAt: new Date(),
-      },
+      source: "manual",
     });
+  } catch (error) {
+    if (error instanceof PlanningServiceError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    return NextResponse.json({ error: "Failed to create check-in" }, { status: 500 });
+  }
 
   const streakDays = await calculateCheckinStreak(workspaceId);
   return NextResponse.json({ ok: true, streakDays });
