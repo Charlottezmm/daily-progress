@@ -174,17 +174,43 @@ export async function createInboxItem(
     workspaceId: string;
     title: string;
     source?: InboxSource;
+    changeLogSource?: ChangeSource;
   },
 ) {
   if (input.source && input.source !== "manual" && input.source !== "imported") {
     throw new PlanningServiceError("Invalid inbox source", 400);
   }
   const source = input.source ?? "manual";
-  const [item] = await db
-    .insert(inboxItems)
-    .values({ workspaceId: input.workspaceId, title: input.title, source })
-    .returning();
-  return item;
+
+  if (!input.changeLogSource) {
+    const [item] = await db
+      .insert(inboxItems)
+      .values({ workspaceId: input.workspaceId, title: input.title, source })
+      .returning();
+    return item;
+  }
+
+  return db.transaction(async (tx) => {
+    const [item] = await tx
+      .insert(inboxItems)
+      .values({ workspaceId: input.workspaceId, title: input.title, source })
+      .returning();
+    const planId = await getActivePlanId(tx, input.workspaceId);
+
+    await tx.insert(changeLogs).values({
+      workspaceId: input.workspaceId,
+      planId,
+      source: input.changeLogSource ?? "manual",
+      summary: "Created inbox item through MCP",
+      detailsJson: {
+        inboxItemId: item.id,
+        title: input.title,
+        inboxSource: source,
+      },
+    });
+
+    return item;
+  });
 }
 
 export async function processInboxItem(

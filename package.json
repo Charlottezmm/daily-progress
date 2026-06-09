@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "mcp": "tsx src/mcp/server.ts",
     "lint": "next lint",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -15,6 +16,7 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@neondatabase/serverless": "^0.10.4",
     "bcryptjs": "^2.4.3",
     "drizzle-orm": "^0.36.4",
@@ -37,6 +39,7 @@
     "autoprefixer": "^10.4.20",
     "drizzle-kit": "^0.27.2",
     "tailwindcss": "^3.4.17",
+    "tsx": "^4.22.4",
     "typescript": "^5.7.2",
     "vitest": "^1.6.0"
   }
