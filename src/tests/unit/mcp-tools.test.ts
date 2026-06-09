@@ -88,6 +88,9 @@ function createFakeDb(options: FakeDbOptions = {}) {
               returning() {
                 return Promise.resolve([{ id: `${tableName(table)}-1`, ...values }]);
               },
+              onConflictDoUpdate() {
+                return Promise.resolve();
+              },
               then(resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) {
                 return Promise.resolve().then(resolve, reject);
               },
@@ -257,6 +260,30 @@ describe("MCP planning tools", () => {
       }),
     ]);
     expect(db.updates.filter((write) => write.table === "tasks")).toEqual([]);
+  });
+
+  it("creates a check-in date at the Shanghai day boundary for MCP date strings", async () => {
+    const db = createFakeDb({ activePlanId: "plan-1" });
+
+    await runPawPlanTool(db, "workspace-1", "create_checkin", {
+      date: "2026-06-10",
+      completed_text: "Finished the Stage 3 check-in path.",
+      blocker_text: "",
+      next_text: "Verify the UI can read it.",
+    });
+
+    expect(db.inserts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: "checkins",
+          values: expect.objectContaining({
+            workspaceId: "workspace-1",
+            planId: "plan-1",
+            date: new Date("2026-06-09T16:00:00.000Z"),
+          }),
+        }),
+      ]),
+    );
   });
 
   it("creates an inbox item as manual source and records an MCP audit change log", async () => {

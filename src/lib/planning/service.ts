@@ -62,7 +62,11 @@ function startOfShanghaiDay(date: Date) {
 
 function normalizeCheckinDate(date?: Date | string) {
   if (!date) return startOfShanghaiDay(new Date());
-  return date instanceof Date ? date : new Date(date);
+  if (date instanceof Date) return date;
+
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(date) ? new Date(`${date}T00:00:00.000+08:00`) : new Date(date);
+  if (Number.isNaN(parsed.getTime())) throw new PlanningServiceError("Invalid check-in date", 400);
+  return parsed;
 }
 
 async function requireActivePlanId(db: PlanningDb, workspaceId: string) {
