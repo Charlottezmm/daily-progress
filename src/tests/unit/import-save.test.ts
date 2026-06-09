@@ -1,6 +1,6 @@
 import { getTableName } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import { savePlanImport } from "@/lib/imports/plan-save";
+import { ImportSaveError, savePlanImport } from "@/lib/imports/plan-save";
 import { saveTimetableImport } from "@/lib/imports/timetable-save";
 
 type TableWrite = {
@@ -265,6 +265,30 @@ Deep Learning Lecture,course,Monday,09:00,11:00,2026-09-01,2026-09-14,Deep Learn
         }),
       ]),
     );
+  });
+
+  it("rejects timetable import without an active plan before writing import data", async () => {
+    const db = createFakeDb({ activePlan: null });
+
+    let error: unknown;
+    try {
+      await saveTimetableImport(db, {
+        workspaceId: "workspace-1",
+        csv: `title,kind,day_of_week,start_time,end_time,starts_on,ends_on,course,recurrence,notes
+Deep Learning Lecture,course,Monday,09:00,11:00,2026-09-01,2026-09-14,Deep Learning,weekly,Room 204
+`,
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toBeInstanceOf(ImportSaveError);
+    expect(error).toMatchObject({
+      message: "No active plan",
+      status: 400,
+    });
+
+    expect(db.inserts.filter((write) => ["courses", "time_blocks", "change_logs"].includes(write.table))).toEqual([]);
   });
 
   it("rejects invalid timetable dates and blocks whose end time is not after start time", async () => {

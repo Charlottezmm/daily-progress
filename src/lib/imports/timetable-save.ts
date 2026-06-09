@@ -131,7 +131,8 @@ async function getActivePlanId(tx: ImportDb, workspaceId: string) {
     .where(and(eq(plans.workspaceId, workspaceId), eq(plans.status, "active")))
     .limit(1);
 
-  return (plan?.id as string | undefined) ?? null;
+  if (!plan) throw new ImportSaveError("No active plan", 400);
+  return plan.id as string;
 }
 
 function courseNameFor(row: TimetableImportPreviewRow) {
