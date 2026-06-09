@@ -34,3 +34,24 @@ test("renders Today on desktop and mobile with a workspace session", async ({ co
   await expect(page.getByRole("link", { name: "Review", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "More", exact: true })).toBeVisible();
 });
+
+test("renders real settings surfaces without fake recovery saves", async ({ context, page }) => {
+  await context.addCookies([
+    {
+      name: "daily_progress_workspace",
+      value: signedWorkspaceSession("00000000-0000-0000-0000-000000000001"),
+      domain: "127.0.0.1",
+      path: "/",
+      httpOnly: true,
+      sameSite: "Lax",
+    },
+  ]);
+
+  await page.goto("/settings");
+  await expect(page.getByRole("heading", { name: "设置" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "恢复目标" })).toBeVisible();
+  await expect(page.getByText("系统默认 8 小时", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "日常事项", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "能量规则", exact: true })).toBeVisible();
+  await expect(page.getByText("Workspace / MCP 还未开放", { exact: true })).toBeVisible();
+});
