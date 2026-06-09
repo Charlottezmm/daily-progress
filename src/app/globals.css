@@ -898,6 +898,39 @@ a {
   line-height: 1.35;
 }
 
+.paw-import-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.paw-import-panel {
+  min-width: 0;
+  padding: 20px;
+}
+
+.paw-import-panel.disabled {
+  opacity: 0.68;
+}
+
+.paw-import-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.paw-import-textarea {
+  min-height: 220px;
+  resize: vertical;
+}
+
+.paw-import-preview {
+  margin-top: 18px;
+  border-top: 1px solid var(--app-line);
+  padding-top: 14px;
+}
+
 .paw-more-action {
   margin-left: auto;
   color: var(--app-ink-muted);

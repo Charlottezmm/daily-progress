@@ -4,7 +4,7 @@ import { z } from "zod";
 const rowSchema = z.object({
   title: z.string().trim().min(1),
   kind: z.enum(["course", "meeting", "unavailable", "routine", "recovery"]),
-  day_of_week: z.string().trim().min(1),
+  day_of_week: z.string().trim().optional(),
   start_time: z.string().trim().regex(/^\d{2}:\d{2}$/),
   end_time: z.string().trim().regex(/^\d{2}:\d{2}$/),
   starts_on: z.string().trim().min(1),
@@ -17,7 +17,7 @@ const rowSchema = z.object({
 export type TimetableImportPreviewRow = {
   title: string;
   kind: "course" | "meeting" | "unavailable" | "routine" | "recovery";
-  dayOfWeek: string;
+  dayOfWeek: string | null;
   startTime: string;
   endTime: string;
   startsOn: string;
@@ -47,7 +47,7 @@ export function parseTimetableCsv(csv: string): TimetableImportPreviewRow[] {
     return {
       title: row.title,
       kind: row.kind,
-      dayOfWeek: row.day_of_week,
+      dayOfWeek: optionalCell(row.day_of_week),
       startTime: row.start_time,
       endTime: row.end_time,
       startsOn: row.starts_on,
