@@ -54,7 +54,13 @@ function dateFromDateKey(dateKey: string) {
   return new Date(`${dateKey}T00:00:00.000Z`);
 }
 
-async function applyOperation(tx: any, workspaceId: string, index: number, operation: AgentPatch["operations"][number]) {
+async function applyOperation(
+  tx: any,
+  workspaceId: string,
+  planId: string,
+  index: number,
+  operation: AgentPatch["operations"][number],
+) {
   const now = new Date();
 
   if (operation.type === "move_task") {
@@ -63,11 +69,14 @@ async function applyOperation(tx: any, workspaceId: string, index: number, opera
       return { skipped: { index, type: operation.type, reason: "Invalid target date" } };
     }
 
-    await tx
+    const updatedTasks = await tx
       .update(tasks)
       .set({ date: targetDate, daySegment: operation.to_day_segment, updatedAt: now })
-      .where(and(eq(tasks.id, operation.task_id), eq(tasks.workspaceId, workspaceId)))
+      .where(and(eq(tasks.id, operation.task_id), eq(tasks.workspaceId, workspaceId), eq(tasks.planId, planId)))
       .returning();
+    if (updatedTasks.length === 0) {
+      return { skipped: { index, type: operation.type, reason: "Task not found" } };
+    }
     return { applied: { index, type: operation.type, taskId: operation.task_id, action: "updated task date and segment" } };
   }
 
@@ -75,11 +84,14 @@ async function applyOperation(tx: any, workspaceId: string, index: number, opera
     const targetDate = dateFromDateKey(operation.target_week_or_date);
     const values = targetDate ? { date: targetDate, updatedAt: now } : { status: "backlog" as const, updatedAt: now };
 
-    await tx
+    const updatedTasks = await tx
       .update(tasks)
       .set(values)
-      .where(and(eq(tasks.id, operation.task_id), eq(tasks.workspaceId, workspaceId)))
+      .where(and(eq(tasks.id, operation.task_id), eq(tasks.workspaceId, workspaceId), eq(tasks.planId, planId)))
       .returning();
+    if (updatedTasks.length === 0) {
+      return { skipped: { index, type: operation.type, reason: "Task not found" } };
+    }
     return {
       applied: {
         index,
@@ -91,20 +103,26 @@ async function applyOperation(tx: any, workspaceId: string, index: number, opera
   }
 
   if (operation.type === "move_to_backlog") {
-    await tx
+    const updatedTasks = await tx
       .update(tasks)
       .set({ status: "backlog", updatedAt: now })
-      .where(and(eq(tasks.id, operation.task_id), eq(tasks.workspaceId, workspaceId)))
+      .where(and(eq(tasks.id, operation.task_id), eq(tasks.workspaceId, workspaceId), eq(tasks.planId, planId)))
       .returning();
+    if (updatedTasks.length === 0) {
+      return { skipped: { index, type: operation.type, reason: "Task not found" } };
+    }
     return { applied: { index, type: operation.type, taskId: operation.task_id, action: "moved task to backlog" } };
   }
 
   if (operation.type === "change_priority") {
-    await tx
+    const updatedTasks = await tx
       .update(tasks)
       .set({ priority: operation.to_priority, updatedAt: now })
-      .where(and(eq(tasks.id, operation.task_id), eq(tasks.workspaceId, workspaceId)))
+      .where(and(eq(tasks.id, operation.task_id), eq(tasks.workspaceId, workspaceId), eq(tasks.planId, planId)))
       .returning();
+    if (updatedTasks.length === 0) {
+      return { skipped: { index, type: operation.type, reason: "Task not found" } };
+    }
     return { applied: { index, type: operation.type, taskId: operation.task_id, action: "updated task priority" } };
   }
 
@@ -142,9 +160,13 @@ export async function applyAgentPatch(db: PatchApplyDb, input: ApplyAgentPatchIn
         continue;
       }
 
-      const result = await applyOperation(tx, input.workspaceId, index, operation);
+      const result = await applyOperation(tx, input.workspaceId, patchRow.planId, index, operation);
       if (result.applied) applied.push(result.applied);
       if (result.skipped) skipped.push(result.skipped);
+    }
+
+    if (applied.length === 0) {
+      throw new PatchApplyError("No selected operations could be applied", 400);
     }
 
     const snapshot = {

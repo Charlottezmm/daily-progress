@@ -7,6 +7,9 @@ import type { RescheduleViewData } from "@/lib/planning/view-data";
 
 type Decision = "accepted" | "rejected";
 type PatchItem = RescheduleViewData["patchItems"][number];
+type ApplyPatchResponse = {
+  skipped?: Array<{ reason?: string }>;
+};
 
 export function ReviewPreview({ data }: { data: RescheduleViewData }) {
   const [decisions, setDecisions] = useState<Record<string, Decision>>({});
@@ -58,6 +61,13 @@ export function ReviewPreview({ data }: { data: RescheduleViewData }) {
         if (!response.ok) {
           const body = await response.json().catch(() => null);
           throw new Error(body?.error ?? "应用建议失败");
+        }
+        const body = (await response.json().catch(() => null)) as ApplyPatchResponse | null;
+        const skipped = body?.skipped ?? [];
+        if (skipped.length > 0) {
+          const reasons = [...new Set(skipped.map((item) => item.reason).filter(Boolean))];
+          setApplyError(`有 ${skipped.length} 条建议未应用${reasons.length > 0 ? `：${reasons.join("；")}` : ""}`);
+          continue;
         }
         setAppliedPatchIds((current) => [...current, patchId]);
         setDecisions((current) => Object.fromEntries(Object.entries(current).filter(([id]) => !id.startsWith(`${patchId}:`))));

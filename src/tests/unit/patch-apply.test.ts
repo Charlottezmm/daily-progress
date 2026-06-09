@@ -12,13 +12,27 @@ type PatchRow = {
   };
 };
 
-function createFakeDb(patch: PatchRow, latestVersionNumber = 0) {
+function createFakeDb(
+  patch: PatchRow,
+  latestVersionNumber = 0,
+  options: { taskUpdateResults?: Array<Array<Record<string, unknown>>> } = {},
+) {
   const updates: Array<{ table: string; values: Record<string, unknown> }> = [];
   const inserts: Array<{ table: string; values: Record<string, unknown> }> = [];
+  const taskUpdateWhereClauses: unknown[] = [];
+  let taskUpdateCount = 0;
   let inTransaction = false;
 
   function tableName(table: unknown) {
     return getTableName(table as Parameters<typeof getTableName>[0]);
+  }
+
+  function objectContainsValue(value: unknown, expected: string, seen = new WeakSet<object>()): boolean {
+    if (value === expected) return true;
+    if (!value || typeof value !== "object") return false;
+    if (seen.has(value)) return false;
+    seen.add(value);
+    return Object.values(value as Record<string, unknown>).some((child) => objectContainsValue(child, expected, seen));
   }
 
   const tx = {
@@ -47,10 +61,18 @@ function createFakeDb(patch: PatchRow, latestVersionNumber = 0) {
       return {
         set(values: Record<string, unknown>) {
           return {
-            where() {
+            where(condition: unknown) {
               updates.push({ table: tableName(table), values });
+              if (tableName(table) === "tasks") {
+                taskUpdateWhereClauses.push(condition);
+              }
               return {
                 returning() {
+                  if (tableName(table) === "tasks") {
+                    const result = options.taskUpdateResults?.[taskUpdateCount];
+                    taskUpdateCount += 1;
+                    if (result) return Promise.resolve(result);
+                  }
                   return Promise.resolve([{ id: values.currentVersionId ?? "updated" }]);
                 },
               };
@@ -76,11 +98,14 @@ function createFakeDb(patch: PatchRow, latestVersionNumber = 0) {
   return {
     updates,
     inserts,
+    taskUpdateWhereClauses,
     transaction: async <T>(callback: (transaction: typeof tx) => Promise<T>) => {
       inTransaction = true;
       return callback(tx);
     },
     wasInTransaction: () => inTransaction,
+    taskUpdateWhereContains: (expected: string) =>
+      taskUpdateWhereClauses.every((condition) => objectContainsValue(condition, expected)),
   };
 }
 
@@ -195,5 +220,105 @@ describe("applyAgentPatch", () => {
         }),
       ]),
     );
+  });
+
+  it("skips missing task updates and keeps skipped details in the apply result", async () => {
+    const db = createFakeDb(
+      {
+        id: "patch-1",
+        workspaceId: "workspace-1",
+        planId: "plan-1",
+        status: "draft",
+        patchJson: {
+          operations: [
+            {
+              type: "move_task",
+              task_id: "task-missing",
+              from_date: "2026-06-10",
+              from_day_segment: "morning",
+              to_date: "2026-06-11",
+              to_day_segment: "afternoon",
+              reason: "Move it out of a full morning.",
+            },
+            {
+              type: "change_priority",
+              task_id: "task-priority",
+              from_priority: "normal",
+              to_priority: "high",
+              reason: "Deadline moved earlier.",
+            },
+          ],
+        },
+      },
+      3,
+      { taskUpdateResults: [[], [{ id: "task-priority" }]] },
+    );
+
+    const result = await applyAgentPatch(db, {
+      workspaceId: "workspace-1",
+      patchId: "patch-1",
+      acceptedOperationIndexes: [0, 1],
+    });
+
+    expect(result.applied).toEqual([
+      { index: 1, type: "change_priority", taskId: "task-priority", action: "updated task priority" },
+    ]);
+    expect(result.skipped).toEqual([{ index: 0, type: "move_task", reason: "Task not found" }]);
+    expect(db.taskUpdateWhereContains("plan_id")).toBe(true);
+    expect(db.inserts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: "plan_versions",
+          values: expect.objectContaining({
+            snapshot: expect.objectContaining({
+              applied: result.applied,
+              skipped: result.skipped,
+            }),
+          }),
+        }),
+        expect.objectContaining({
+          table: "change_logs",
+          values: expect.objectContaining({
+            detailsJson: expect.objectContaining({
+              applied: result.applied,
+              skipped: result.skipped,
+            }),
+          }),
+        }),
+      ]),
+    );
+  });
+
+  it("rejects selected operations when none can be applied without writing apply records", async () => {
+    const db = createFakeDb({
+      id: "patch-1",
+      workspaceId: "workspace-1",
+      planId: "plan-1",
+      status: "draft",
+      patchJson: {
+        operations: [
+          {
+            type: "move_task",
+            task_id: "task-missing",
+            from_date: "2026-06-10",
+            from_day_segment: "morning",
+            to_date: "2026-06-11",
+            to_day_segment: "afternoon",
+            reason: "Move it out of a full morning.",
+          },
+        ],
+      },
+    }, 3, { taskUpdateResults: [[]] });
+
+    await expect(
+      applyAgentPatch(db, {
+        workspaceId: "workspace-1",
+        patchId: "patch-1",
+        acceptedOperationIndexes: [0],
+      }),
+    ).rejects.toMatchObject({ message: "No selected operations could be applied", status: 400 });
+
+    expect(db.inserts.filter((insert) => insert.table === "plan_versions" || insert.table === "change_logs")).toEqual([]);
+    expect(db.updates.filter((update) => update.table === "plans" || update.table === "agent_patches")).toEqual([]);
   });
 });
