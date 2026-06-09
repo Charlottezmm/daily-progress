@@ -3,10 +3,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getWorkspaceIdFromSession } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
-import { inboxItems, routines, tasks } from "@/lib/db/schema";
-import { getActivePlanId } from "@/lib/planning/active-plan";
-import { createInboxItem } from "@/lib/planning/service";
-import { startOfShanghaiDay } from "@/lib/planning/view-data";
+import { inboxItems } from "@/lib/db/schema";
+import { createInboxItem, PlanningServiceError, processInboxItem } from "@/lib/planning/service";
 import { readJsonBody } from "@/lib/validation/common";
 
 const inboxSchema = z.object({
@@ -56,50 +54,17 @@ export async function PATCH(request: Request) {
   }
 
   const db = getDb();
-  const [item] = await db
-    .select()
-    .from(inboxItems)
-    .where(and(eq(inboxItems.id, parsed.data.id), eq(inboxItems.workspaceId, workspaceId), isNull(inboxItems.processedAt)))
-    .limit(1);
-
-  if (!item) return NextResponse.json({ error: "Inbox item not found" }, { status: 404 });
-
-  if (parsed.data.action === "delete") {
-    await db.delete(inboxItems).where(and(eq(inboxItems.id, item.id), eq(inboxItems.workspaceId, workspaceId)));
-    return NextResponse.json({ ok: true, action: "delete" });
-  }
-
-  if (parsed.data.action === "task") {
-    const planId = await getActivePlanId(db, workspaceId);
-    if (!planId) return NextResponse.json({ error: "No active plan" }, { status: 400 });
-    await db.insert(tasks).values({
+  try {
+    const result = await processInboxItem(db, {
       workspaceId,
-      planId,
-      title: item.title,
-      date: startOfShanghaiDay(new Date()),
-      daySegment: "morning",
-      estimatedMinutes: 30,
-      energyLevel: "medium",
-      priority: "normal",
-      status: "todo",
+      inboxItemId: parsed.data.id,
+      action: parsed.data.action,
     });
+    return NextResponse.json(result);
+  } catch (error) {
+    if (error instanceof PlanningServiceError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    return NextResponse.json({ error: "Failed to process inbox item" }, { status: 500 });
   }
-
-  if (parsed.data.action === "routine") {
-    await db.insert(routines).values({
-      workspaceId,
-      title: item.title,
-      defaultTimeSegment: "evening",
-      weekdayPattern: "daily",
-      estimatedMinutes: 30,
-      energyLevel: "low",
-    });
-  }
-
-  await db
-    .update(inboxItems)
-    .set({ processedAt: new Date() })
-    .where(and(eq(inboxItems.id, item.id), eq(inboxItems.workspaceId, workspaceId)));
-
-  return NextResponse.json({ ok: true, action: parsed.data.action });
 }

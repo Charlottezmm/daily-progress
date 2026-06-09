@@ -1,5 +1,5 @@
-import { and, eq, or } from "drizzle-orm";
-import { agentPatches, changeLogs, checkins, inboxItems, tasks, timeBlocks } from "@/lib/db/schema";
+import { and, eq, isNull, or } from "drizzle-orm";
+import { agentPatches, changeLogs, checkins, inboxItems, routines, tasks, timeBlocks } from "@/lib/db/schema";
 import { validatePatchAgainstProtectedBlocks, type AgentPatch } from "@/lib/patches/patch-schema";
 import { applyAgentPatch as applyReviewPatch, PatchApplyError } from "@/lib/planning/patch-apply";
 import { getActivePlanId } from "@/lib/planning/active-plan";
@@ -9,11 +9,13 @@ type PlanningDb = {
   select: (...args: any[]) => any;
   insert: (...args: any[]) => any;
   update: (...args: any[]) => any;
+  delete: (...args: any[]) => any;
 };
 
 type ChangeSource = "manual" | "mcp";
 type TaskStatus = "todo" | "done" | "skipped" | "backlog";
-type InboxSource = "manual" | "imported" | "mcp";
+type InboxAction = "task" | "routine" | "delete";
+type InboxSource = "manual" | "imported";
 type PatchMode = "today" | "week";
 type PatchCreatedBy = "claude" | "codex" | "user";
 const shanghaiTimeZone = "Asia/Shanghai";
@@ -174,12 +176,80 @@ export async function createInboxItem(
     source?: InboxSource;
   },
 ) {
-  const source = input.source === "imported" ? "imported" : "manual";
+  if (input.source && input.source !== "manual" && input.source !== "imported") {
+    throw new PlanningServiceError("Invalid inbox source", 400);
+  }
+  const source = input.source ?? "manual";
   const [item] = await db
     .insert(inboxItems)
     .values({ workspaceId: input.workspaceId, title: input.title, source })
     .returning();
   return item;
+}
+
+export async function processInboxItem(
+  db: PlanningDb,
+  input: {
+    workspaceId: string;
+    inboxItemId: string;
+    action: InboxAction;
+  },
+) {
+  return db.transaction(async (tx) => {
+    const [item] = await tx
+      .select()
+      .from(inboxItems)
+      .where(
+        and(
+          eq(inboxItems.id, input.inboxItemId),
+          eq(inboxItems.workspaceId, input.workspaceId),
+          isNull(inboxItems.processedAt),
+        ),
+      )
+      .limit(1);
+
+    if (!item) throw new PlanningServiceError("Inbox item not found", 404);
+
+    if (input.action === "delete") {
+      await tx
+        .delete(inboxItems)
+        .where(and(eq(inboxItems.id, item.id), eq(inboxItems.workspaceId, input.workspaceId)));
+      return { ok: true, action: "delete" as const };
+    }
+
+    if (input.action === "task") {
+      const planId = await requireActivePlanId(tx, input.workspaceId);
+      await tx.insert(tasks).values({
+        workspaceId: input.workspaceId,
+        planId,
+        title: item.title,
+        date: startOfShanghaiDay(new Date()),
+        daySegment: "morning",
+        estimatedMinutes: 30,
+        energyLevel: "medium",
+        priority: "normal",
+        status: "todo",
+      });
+    }
+
+    if (input.action === "routine") {
+      await tx.insert(routines).values({
+        workspaceId: input.workspaceId,
+        title: item.title,
+        defaultTimeSegment: "evening",
+        weekdayPattern: "daily",
+        estimatedMinutes: 30,
+        energyLevel: "low",
+      });
+    }
+
+    await tx
+      .update(inboxItems)
+      .set({ processedAt: new Date() })
+      .where(and(eq(inboxItems.id, item.id), eq(inboxItems.workspaceId, input.workspaceId)));
+
+    return { ok: true, action: input.action };
+  });
 }
 
 export async function proposeAgentPatch(

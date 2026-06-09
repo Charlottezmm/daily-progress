@@ -1,7 +1,9 @@
 import { getTableName } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import {
+  createInboxItem,
   createDailyCheckin,
+  processInboxItem,
   proposeAgentPatch,
   updateTaskStatus,
 } from "@/lib/planning/service";
@@ -9,10 +11,12 @@ import {
 type TableWrite = {
   table: string;
   values: Record<string, unknown>;
+  inTransaction: boolean;
 };
 
 type FakeDbOptions = {
   activePlanId?: string | null;
+  inboxItems?: Array<Record<string, unknown>>;
   taskUpdateResult?: Array<Record<string, unknown>>;
   protectedBlockIds?: string[];
 };
@@ -20,6 +24,7 @@ type FakeDbOptions = {
 function createFakeDb(options: FakeDbOptions = {}) {
   const inserts: TableWrite[] = [];
   const updates: TableWrite[] = [];
+  const deletes: Array<{ table: string; inTransaction: boolean }> = [];
   let inTransaction = false;
 
   function tableName(table: unknown) {
@@ -30,6 +35,9 @@ function createFakeDb(options: FakeDbOptions = {}) {
     const name = tableName(table);
     if (name === "plans") {
       return options.activePlanId === null ? [] : [{ id: options.activePlanId ?? "plan-1" }];
+    }
+    if (name === "inbox_items") {
+      return options.inboxItems ?? [];
     }
     if (name === "time_blocks") {
       return (options.protectedBlockIds ?? []).map((id) => ({ id }));
@@ -67,7 +75,7 @@ function createFakeDb(options: FakeDbOptions = {}) {
           set(values: Record<string, unknown>) {
             return {
               where() {
-                updates.push({ table: tableName(table), values });
+                updates.push({ table: tableName(table), values, inTransaction });
                 return {
                   returning() {
                     return Promise.resolve(options.taskUpdateResult ?? []);
@@ -81,10 +89,10 @@ function createFakeDb(options: FakeDbOptions = {}) {
       insert(table: unknown) {
         return {
           values(values: Record<string, unknown>) {
-            inserts.push({ table: tableName(table), values });
+            inserts.push({ table: tableName(table), values, inTransaction });
             return {
               onConflictDoUpdate(config: { set: Record<string, unknown> }) {
-                updates.push({ table: tableName(table), values: config.set });
+                updates.push({ table: tableName(table), values: config.set, inTransaction });
                 return Promise.resolve();
               },
               returning() {
@@ -97,6 +105,14 @@ function createFakeDb(options: FakeDbOptions = {}) {
           },
         };
       },
+      delete(table: unknown) {
+        return {
+          where() {
+            deletes.push({ table: tableName(table), inTransaction });
+            return Promise.resolve();
+          },
+        };
+      },
     };
   }
 
@@ -105,6 +121,7 @@ function createFakeDb(options: FakeDbOptions = {}) {
   return {
     inserts,
     updates,
+    deletes,
     transaction: async <T>(callback: (tx: ReturnType<typeof createClient>) => Promise<T>) => {
       inTransaction = true;
       return callback(client);
@@ -235,5 +252,125 @@ describe("planning service", () => {
         }),
       }),
     ]);
+  });
+
+  it("processes an inbox item into a task using the active plan", async () => {
+    const db = createFakeDb({
+      activePlanId: "plan-1",
+      inboxItems: [{ id: "inbox-1", workspaceId: "workspace-1", title: "Draft launch checklist" }],
+    });
+
+    const result = await processInboxItem(db, {
+      workspaceId: "workspace-1",
+      inboxItemId: "inbox-1",
+      action: "task",
+    });
+
+    expect(result).toEqual({ ok: true, action: "task" });
+    expect(db.wasInTransaction()).toBe(true);
+    expect(db.inserts).toEqual([
+      expect.objectContaining({
+        table: "tasks",
+        inTransaction: true,
+        values: expect.objectContaining({
+          workspaceId: "workspace-1",
+          planId: "plan-1",
+          title: "Draft launch checklist",
+          date: expect.any(Date),
+          daySegment: "morning",
+          estimatedMinutes: 30,
+          energyLevel: "medium",
+          priority: "normal",
+          status: "todo",
+        }),
+      }),
+    ]);
+    expect(db.updates).toEqual([
+      expect.objectContaining({
+        table: "inbox_items",
+        inTransaction: true,
+        values: expect.objectContaining({ processedAt: expect.any(Date) }),
+      }),
+    ]);
+  });
+
+  it("processes an inbox item into a routine", async () => {
+    const db = createFakeDb({
+      inboxItems: [{ id: "inbox-1", workspaceId: "workspace-1", title: "Read before bed" }],
+    });
+
+    const result = await processInboxItem(db, {
+      workspaceId: "workspace-1",
+      inboxItemId: "inbox-1",
+      action: "routine",
+    });
+
+    expect(result).toEqual({ ok: true, action: "routine" });
+    expect(db.inserts).toEqual([
+      expect.objectContaining({
+        table: "routines",
+        inTransaction: true,
+        values: expect.objectContaining({
+          workspaceId: "workspace-1",
+          title: "Read before bed",
+          defaultTimeSegment: "evening",
+          weekdayPattern: "daily",
+          estimatedMinutes: 30,
+          energyLevel: "low",
+        }),
+      }),
+    ]);
+    expect(db.updates).toEqual([
+      expect.objectContaining({
+        table: "inbox_items",
+        inTransaction: true,
+        values: expect.objectContaining({ processedAt: expect.any(Date) }),
+      }),
+    ]);
+  });
+
+  it("deletes an inbox item without creating a task or routine", async () => {
+    const db = createFakeDb({
+      inboxItems: [{ id: "inbox-1", workspaceId: "workspace-1", title: "Discard this" }],
+    });
+
+    const result = await processInboxItem(db, {
+      workspaceId: "workspace-1",
+      inboxItemId: "inbox-1",
+      action: "delete",
+    });
+
+    expect(result).toEqual({ ok: true, action: "delete" });
+    expect(db.deletes).toEqual([expect.objectContaining({ table: "inbox_items", inTransaction: true })]);
+    expect(db.inserts.filter((write) => write.table === "tasks" || write.table === "routines")).toEqual([]);
+    expect(db.updates.filter((write) => write.table === "inbox_items")).toEqual([]);
+  });
+
+  it("creates manual and imported inbox items without mcp fallback", async () => {
+    const db = createFakeDb();
+
+    await createInboxItem(db, { workspaceId: "workspace-1", title: "Manual item", source: "manual" });
+    await createInboxItem(db, { workspaceId: "workspace-1", title: "Imported item", source: "imported" });
+
+    expect(db.inserts).toEqual([
+      expect.objectContaining({
+        table: "inbox_items",
+        values: expect.objectContaining({ source: "manual" }),
+      }),
+      expect.objectContaining({
+        table: "inbox_items",
+        values: expect.objectContaining({ source: "imported" }),
+      }),
+    ]);
+    expect(db.inserts.map((write) => write.values.source)).not.toContain("mcp");
+  });
+
+  it("does not accept mcp as an inbox item source", async () => {
+    const db = createFakeDb();
+
+    await expect(
+      // @ts-expect-error MCP inbox semantics are intentionally undefined until Stage 3.
+      createInboxItem(db, { workspaceId: "workspace-1", title: "MCP item", source: "mcp" }),
+    ).rejects.toThrow("Invalid inbox source");
   });
 });
