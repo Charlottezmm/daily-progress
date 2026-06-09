@@ -64,13 +64,13 @@ export function ReviewPreview({ data }: { data: RescheduleViewData }) {
         }
         const body = (await response.json().catch(() => null)) as ApplyPatchResponse | null;
         const skipped = body?.skipped ?? [];
+        setAppliedPatchIds((current) => [...current, patchId]);
+        setDecisions((current) => Object.fromEntries(Object.entries(current).filter(([id]) => !id.startsWith(`${patchId}:`))));
         if (skipped.length > 0) {
           const reasons = [...new Set(skipped.map((item) => item.reason).filter(Boolean))];
           setApplyError(`有 ${skipped.length} 条建议未应用${reasons.length > 0 ? `：${reasons.join("；")}` : ""}`);
           continue;
         }
-        setAppliedPatchIds((current) => [...current, patchId]);
-        setDecisions((current) => Object.fromEntries(Object.entries(current).filter(([id]) => !id.startsWith(`${patchId}:`))));
       }
     } catch (error) {
       setApplyError(error instanceof Error ? error.message : "应用建议失败");

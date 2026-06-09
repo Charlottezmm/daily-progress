@@ -15,7 +15,10 @@ type PatchRow = {
 function createFakeDb(
   patch: PatchRow,
   latestVersionNumber = 0,
-  options: { taskUpdateResults?: Array<Array<Record<string, unknown>>> } = {},
+  options: {
+    taskUpdateResults?: Array<Array<Record<string, unknown>>>;
+    agentPatchUpdateResult?: Array<Record<string, unknown>>;
+  } = {},
 ) {
   const updates: Array<{ table: string; values: Record<string, unknown> }> = [];
   const inserts: Array<{ table: string; values: Record<string, unknown> }> = [];
@@ -72,6 +75,9 @@ function createFakeDb(
                     const result = options.taskUpdateResults?.[taskUpdateCount];
                     taskUpdateCount += 1;
                     if (result) return Promise.resolve(result);
+                  }
+                  if (tableName(table) === "agent_patches" && options.agentPatchUpdateResult) {
+                    return Promise.resolve(options.agentPatchUpdateResult);
                   }
                   return Promise.resolve([{ id: values.currentVersionId ?? "updated" }]);
                 },
@@ -309,6 +315,71 @@ describe("applyAgentPatch", () => {
         ],
       },
     }, 3, { taskUpdateResults: [[]] });
+
+    await expect(
+      applyAgentPatch(db, {
+        workspaceId: "workspace-1",
+        patchId: "patch-1",
+        acceptedOperationIndexes: [0],
+      }),
+    ).rejects.toMatchObject({ message: "No selected operations could be applied", status: 400 });
+
+    expect(db.inserts.filter((insert) => insert.table === "plan_versions" || insert.table === "change_logs")).toEqual([]);
+    expect(db.updates.filter((update) => update.table === "plans" || update.table === "agent_patches")).toEqual([]);
+  });
+
+  it("rolls back when marking the draft patch applied does not update a row", async () => {
+    const db = createFakeDb(
+      {
+        id: "patch-1",
+        workspaceId: "workspace-1",
+        planId: "plan-1",
+        status: "draft",
+        patchJson: {
+          operations: [
+            {
+              type: "change_priority",
+              task_id: "task-priority",
+              from_priority: "normal",
+              to_priority: "high",
+              reason: "Deadline moved earlier.",
+            },
+          ],
+        },
+      },
+      3,
+      { agentPatchUpdateResult: [] },
+    );
+
+    await expect(
+      applyAgentPatch(db, {
+        workspaceId: "workspace-1",
+        patchId: "patch-1",
+        acceptedOperationIndexes: [0],
+      }),
+    ).rejects.toMatchObject({ message: "Draft patch not found", status: 404 });
+  });
+
+  it("rejects impossible calendar dates when no selected operations can be applied", async () => {
+    const db = createFakeDb({
+      id: "patch-1",
+      workspaceId: "workspace-1",
+      planId: "plan-1",
+      status: "draft",
+      patchJson: {
+        operations: [
+          {
+            type: "move_task",
+            task_id: "task-move",
+            from_date: "2026-02-28",
+            from_day_segment: "morning",
+            to_date: "2026-02-31",
+            to_day_segment: "afternoon",
+            reason: "Move it out of a full morning.",
+          },
+        ],
+      },
+    }, 3);
 
     await expect(
       applyAgentPatch(db, {

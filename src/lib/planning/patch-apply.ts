@@ -51,7 +51,9 @@ function uniqueAcceptedIndexes(indexes: number[]) {
 
 function dateFromDateKey(dateKey: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return null;
-  return new Date(`${dateKey}T00:00:00.000Z`);
+  const date = new Date(`${dateKey}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== dateKey) return null;
+  return date;
 }
 
 async function applyOperation(
@@ -215,7 +217,7 @@ export async function applyAgentPatch(db: PatchApplyDb, input: ApplyAgentPatchIn
       },
     });
 
-    await tx
+    const appliedPatchRows = await tx
       .update(agentPatches)
       .set({ status: "applied", appliedAt: new Date() })
       .where(
@@ -226,6 +228,9 @@ export async function applyAgentPatch(db: PatchApplyDb, input: ApplyAgentPatchIn
         ),
       )
       .returning();
+    if (appliedPatchRows.length === 0) {
+      throw new PatchApplyError("Draft patch not found", 404);
+    }
 
     return { patchId: input.patchId, planId: patchRow.planId, applied, skipped };
   });
