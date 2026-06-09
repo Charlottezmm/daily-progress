@@ -2,280 +2,238 @@
 
 ## 1. 项目定位
 
-这是一个面向个人使用的 MCP-native planning app。它不是传统 project management 工具，也不是日历替代品的第一版。它的父结构是时间和日程管理：项目、课程、标签、track 都只是用来解释“时间被什么占用”的分类维度。
+这是一个 agent-first 的 MCP-native planning app。它不是传统 todo app，也不是手动日历规划工具。
 
-当前页面和 Claude Design zip 都只能作为低保真设计输入。它们用于固定信息架构、核心入口、页面状态和数据边界，不是可以直接照搬进 Next.js 的实现稿。后续 Codex 集成必须做成一套响应式 Web/PWA 组件，而不是并行维护 `app/` 和 `pwa/` 两套页面。
+核心分工：
 
-## 2. 设计目标
+- Agent 负责拆计划、排日期、顺延任务、生成调整建议。
+- PWA 只负责人类操作：今日 check、收工反馈、确认 Agent patch。
+- Postgres 是真实数据源。
+- MCP server 给 Codex/Cowork/Claude 读取和写入结构化数据。
+- Codex/Cowork scheduled automation 负责定时唤起 Agent。App 不设计自己的 scheduler UI，不实现浏览器后台定时器，也不实现 server cron。
 
-这套 UI 应该让用户每天快速完成三件事：
+这次设计只需要一个最简单的静态视觉参考。不要写复杂 JSX，不要做完整交互，不要设计数据模型，不要设计 AI chat。
 
-1. 看今天应该做什么，以及哪些时间已经被 routine、课程、recovery 占掉。
-2. 用最低摩擦记录完成情况、卡点和明天接什么。
-3. 让外部 agent 通过 MCP 提出重排建议后，用户能清楚预览、选择、确认或拒绝 patch。
+## 2. 输出要求
 
-核心感受：清晰、安静、可重复使用、适合每天打开多次。不要做营销 landing page，不要 hero，不要大面积装饰图，不要把它设计成项目管理 SaaS 首页。
+请输出一个单 HTML 文件即可：
 
-## 3. 这次 zip 审查后的修订要求
+- CSS 写在 `<style>` 标签里。
+- 可以有极少量 JS 用于 tab 切换演示，但不需要真实功能。
+- 不需要 React、不需要 shadcn、不需要复杂组件结构。
+- 重点是视觉层级、布局、按钮形态、状态呈现、移动端可用性。
 
-可以吸收：
+Codex 后续会把视觉参考拆成真实 Next.js 组件并接 Postgres 数据。
 
-- Today / Week / Month / Inbox / Import / Settings / Reschedule Preview 的页面信息架构。
-- 桌面 sidebar、移动端底部 tab、状态提示、patch review、protected recovery/routine block 这些交互概念。
-- Inbox 不占 capacity、不进入 agent patch 的边界。
-- Reschedule Preview 作为变更审查页，而不是聊天页。
+## 3. 全局导航
 
-不能照搬：
+导航只保留四个入口：
 
-- 不能把 zip 里的 `app/` 和 `pwa/` 两套原型分别搬进项目。项目里只允许一套响应式 Next 组件，根据 viewport 调整布局。
-- mobile Quick Capture 不能只藏在 FAB 后面。Today mobile 首屏必须有可见的 Quick Capture 入口，FAB 可以作为辅助快捷入口。
-- 不能继续大面积使用 linen/beige 作为主视觉。可以保留少量暖色 accent，但主背景和 surface 应该更中性、更清爽。
-- mobile Inbox 不能缺少 `Convert to routine`。Inbox item 在手机端也必须能转 task、转 routine、删除。
-- Reschedule Preview 不能只显示 reason。每个 patch item 必须给出足够的信任证据，让用户知道为什么可以接受或为什么应该拒绝。
+- Today
+- Plan
+- Review
+- More
 
-## 4. 全局结构
+移动端优先。手机端建议底部 tab；桌面端可以使用左侧窄导航或居中 app shell，但不要做复杂后台系统。
 
-### App Shell
+不要再把 Week、Month、Inbox、Import、Settings、Reschedule 全部作为一级导航。
 
-全局需要有稳定导航。桌面端可以是左侧 sidebar，移动端可以是底部 tab 或紧凑顶部导航。Today 和 Week 是主入口，Month、Inbox、Import、Settings、Reschedule Preview 是辅助入口。
+## 4. 页面 1：Today
 
-所有主页面顶部都要有 `+ Quick Capture`。这是低摩擦 inbox 入口，不属于某个页面，而是全局捕捉入口。用户想到一件事时，可以 1 秒丢进去，不需要决定它是不是 task、routine 或课程相关事项。
+目标：用户 30 秒内完成今日执行反馈。
 
-### 全局 Quick Capture
+Today 不是手动 planner。它只回答三个问题：
 
-功能：
+- 今天 Agent 给我安排了什么？
+- 我完成了哪些、卡住哪些、要延后哪些？
+- 今天收工时要给 Agent 留什么事实反馈？
 
-- 输入一行 title。
-- Add 后进入 Inbox。
-- 不占 capacity。
-- 不进入 AI/agent 重排。
-- 不要求用户立即分类。
+页面内容：
 
-需要设计状态：
+- 顶部显示日期和 Agent 状态，例如：`Agent 已为你安排 5 个任务`。
+- 今日任务列表，建议 3-7 个。
+- 每个任务只显示最少信息：
+  - 标题
+  - 预计时间
+  - 所属项目 / 课程 / track
+  - 当前状态
+- 每个任务只需要这些操作：
+  - 完成
+  - 卡住
+  - 跳过
+  - 延后
+- 页面底部固定或接近底部显示“收工反馈”。
 
-- empty input。
-- typing。
-- submitting。
-- success feedback。
-- failed feedback。
-- mobile 下按钮和输入框不能挤压变形。
-- mobile Today 首屏必须能看到 Quick Capture，不要只依赖浮动按钮。
+收工反馈字段：
 
-## 5. 页面清单
+- 完成：今天实际完成了什么。
+- 卡点：今天卡在哪里。
+- 明日接：明天必须从哪里继续。
 
-### 5.1 Today
+保存后显示轻反馈，例如：
 
-Today 是第一优先级页面，也是用户每天最常打开的页面。
+- `已记录，Agent 下次审核会参考。`
+- `有 2 个未完成任务待 Review。`
 
-页面应该包含：
+Today 不要设计：
 
-- 今日 warnings：例如 inbox 堆积、昨天没 check-in、本周 recovery 不足。
-- 今日 tasks：按 morning / afternoon / evening 分组，显示任务标题、项目/课程/track、预计分钟、优先级、energy。
-- Routines：家务、做饭、运动、通勤等重复非 task 活动，和 tasks 分开显示。
-- Recovery：当天或本周已经锁定的休息/游戏/off block，视觉上要像“保护块”，不是待办。
-- Daily Check-in：固定在页面底部或底部附近，永远容易看到。
+- 手动拖拽排期。
+- 复杂日历。
+- 大面积 routine/recovery 卡片。
+- 复杂 Quick Capture 顶部输入区。
 
-Daily Check-in 卡片固定 3 个输入框：
+Routine、课程、recovery 可以作为轻量状态条出现，例如：
 
-- 完成
-- 卡点
-- 明日接
+- `今天固定日程占用 3h`
+- `本周 recovery 不足，Agent 重排时会保护休息块`
 
-还有一个 Save 按钮。不要让用户选日期，默认就是今天。不要把 check-in 设计成复杂表单，不需要打开子页面。保存后显示轻反馈，例如“记下了。已 N 天连续打卡”。
+## 5. 页面 2：Plan
 
-Today 需要设计状态：
+目标：展示日 / 周 / 月计划，不作为主要编辑页面。
 
-- 无任务。
-- 有任务但无 warning。
-- 有 warning。
-- routine 已完成/未完成。
-- check-in 未填写/已保存/保存失败。
-- agent patch pending 时的入口提示。
+Plan 顶部有三个 tab：
 
-### 5.2 Week
+- 日
+- 周
+- 月
 
-Week 是第二优先级页面，用来看一周的容量、战线平衡和 recovery 红线。
+日视图：
 
-页面应该包含：
+- 展示今天任务分布。
+- 展示固定课程 / routine / unavailable time 对容量的影响。
+- 不需要精确 calendar 拖拽。
 
-- 一周时间概览：可以按天展示，也可以用 compact timeline。
-- Track Balance：展示 main / work / side / recovery / custom 的本周占用。
-- Recovery target：展示本周 recovery 已排多少小时、目标多少小时。
-- 容量提示：哪些天过载，哪些天还可承接延期任务。
-- Check-in history surface：不需要单独历史页，但 Week 里应能看到最近 check-in 摘要。
+周视图：
 
-Week 不是甘特图，也不是完整 calendar。重点是帮助用户判断“这周是否还塞得下”和“哪条战线被侵蚀”。
+- 展示本周重点。
+- 展示课程占用、routine 占用、recovery 状态。
+- 展示本周是否过载。
 
-需要设计状态：
+月视图：
 
-- recovery 达标。
-- recovery 不足。
-- track 失衡。
-- 某天 capacity 超载。
-- 本周没有 check-in 记录。
+- 展示本月目标。
+- 展示每周拆分。
+- 展示 deadline 或重要节点。
 
-### 5.3 Month
+Plan 是“Agent 编排结果展示”，不是用户每天手动调整日期的地方。
 
-Month 用于查看更长周期的计划分布，不是每天精确排程的地方。
+## 6. 页面 3：Review
 
-页面应该包含：
+目标：确认 Agent 自动重排建议。
 
-- 月度目标或 baseline plan 摘要。
-- 当前执行版和 baseline 的差异提示。
-- 每周分布概览。
-- 重要 deadline。
-- 导入计划后的 preview/确认入口可以从这里链接到 Import 或 Reschedule Preview。
+Review 是整个产品的信任核心。这里展示 Codex/Cowork automation 或用户手动请求 Agent 后写回的 patch preview。
 
-Month 的重点是宏观视角：这个月的任务有没有压到某几周，计划是否偏离原始 baseline。
+每条建议示例：
 
-### 5.4 Inbox
+- `把「写 PRD」从今天顺延到明天上午`
+- `把「课程复习」拆成两个 45min`
+- `因为周三有课，把「硬件学习」移到周四`
+- `保留周六 recovery，不允许继续塞任务`
 
-Inbox 是临时缓冲池，处理琐事和还没有分类的想法。
-
-每个 inbox item 需要有三个主要动作：
-
-- Promote to task：转成 task。
-- Convert to routine：转成 routine。
-- Delete：删除。
-
-这些动作桌面和 mobile web 都必须存在。手机端可以把三个动作放进 compact action row 或 item menu，但不能删除 `Convert to routine`。
-
-Inbox 不参与计划、不占 capacity、不参与 agent patch。它只是防止琐事污染今日计划。
-
-需要设计状态：
-
-- 空 inbox。
-- 少量 item。
-- 超过 10 条时的红色/高优先级提示。
-- item hover/action 状态。
-- mobile 下 item 操作不要太拥挤。
-
-### 5.5 Import
-
-Import 页面用于导入两个核心输入：
-
-- `plan.md`
-- `timetable.csv`
-
-导入不是直接写库，而是先 preview，再确认。
-
-`plan.md` preview 应显示：
-
-- goal。
-- projects。
-- deadlines。
-- constraints。
-
-`timetable.csv` preview 应显示：
-
-- title。
-- kind：course / meeting / unavailable / routine / recovery。
-- day of week。
-- start/end time。
-- date range。
-- recurrence。
-- course。
-
-需要设计状态：
-
-- 上传/粘贴输入。
-- 解析成功 preview。
-- 解析失败，指出错误。
-- preview 待确认。
-- 确认保存后的反馈。
-
-第一版不做 PDF、图片、截图、任意 HTML 解析。
-
-### 5.6 Settings
-
-Settings 是工作区和规则设置，不是高频页面。
-
-需要包含：
-
-- Workspace password。
-- MCP token 管理入口：生成、复制一次、撤销、权限 read-only/read-write。
-- Routines 管理。
-- Recovery weekly target。
-- Segment energy 默认值：morning / afternoon / evening。
-- Track thresholds。
-- Import/export。
-- Hosted limits 提示。
-
-Settings 的信息密度可以比 Today 更高，但要分组清晰，不要做成一长串无结构表单。
-
-### 5.7 Reschedule Preview
-
-Reschedule Preview 是 agent patch 的审批页面。它是信任系统的核心，不能设计得像“AI 已经帮你改好了”。
-
-页面应该表达：
-
-- 这是建议，不是自动改动。
-- 用户可以接受全部。
-- 用户可以取消某些 patch item。
-- 用户可以拒绝全部。
-- routine/recovery 是 protected block，不允许被移动或缩短。
-
-Patch group 类型：
-
-- moved：任务从某天/某时段移到另一处。
-- split：任务拆成多个小任务。
-- defer：延期到某天或下周。
-- backlog：移入 backlog。
-- priority change：优先级变化。
-- milestone suggestion：里程碑文字建议。
-- rejected/invalid：违反约束的 patch。
-
-每个 patch item 至少要显示：
+每条建议至少显示：
 
 - 改了什么。
-- 从哪里到哪里。
-- reason。
-- 对 capacity / recovery / track 的影响，如果有。
-- accept/reject 控制。
-- 触发建议的证据，例如来源 task、原始冲突、容量数字、被保护块、约束命中、agent patch id 或 plan version。
-- 应用前后的结果摘要，例如“周三 evening 从 130/120 min 降到 90/120 min”。
+- 为什么改。
+- before / after。
+- 对容量、课程、routine、recovery 的影响。
+- 接受 / 拒绝。
 
-不要把 patch 设计成聊天气泡。这个页面更像变更审查/差异预览。
+页面底部或顶部需要有：
 
-## 6. 移动端要求
+- 接受全部
+- 重新生成
+- 稍后处理
 
-这个产品会被当作 PWA 使用，手机端不是附属版本。
+必须明确表达：这是建议，不是已经自动改库。用户确认后才 apply。
 
-移动端需要特别处理：
+不要把 Review 做成聊天界面。
 
-- Today 首屏能看到 Quick Capture、Today 标题、至少一部分 tasks 或 check-in。
-- Daily Check-in 输入不能被键盘遮住到无法保存。
-- Week 的 track/recovery 信息要能快速扫读，不要横向溢出。
-- Inbox item 必须能转 task、转 routine、删除。
-- Reschedule Preview 的 patch item 要能逐条处理，并能看到 patch 证据。
-- 导航要适合单手使用。
+## 7. 页面 4：More
 
-## 7. 组件状态要求
+More 是低频工具入口，简单列表即可：
 
-每个主要页面至少要设计这些状态：
+- Inbox
+- Calendar & Courses
+- Routines
+- Settings
+- Import
+- MCP Token
 
-- Empty。
-- Loading。
-- Populated。
-- Warning。
-- Error。
-- Saving/submitting。
-- Saved/success。
-- Unauthorized / needs workspace login。
+Calendar & Courses 是约束层，不是主入口。它可以包含：
 
-不要只交付静态 populated 状态，否则 Codex 后续实现时会缺少失败和空状态依据。
+- 课程
+- 固定日程
+- 不可用时间
+- routine，例如打扫卫生、做饭、洗澡、运动、通勤
+- recovery block
 
-## 8. 明确不要设计的内容
+Routine 需要能表达两种类型：
+
+- 固定 routine：固定时间，不允许 Agent 移动。
+- 弹性 routine：占用容量，但 Agent 可以建议安排到合适时间。
+
+## 8. 视觉风格
+
+风格关键词：
+
+- 极简
+- 清楚
+- 轻量
+- 执行控制台
+- 不像复杂 todo app
+- 不像项目管理 SaaS 后台
+
+要求：
+
+- mobile-first。
+- 桌面端也能舒适居中或轻量扩展。
+- 不要 landing page。
+- 不要 hero。
+- 不要大面积装饰。
+- 不要复杂动画。
+- 不要大面积米色 / beige / linen。
+- 不要一眼看起来像传统 calendar。
+- 按钮和状态要清楚，尤其是完成 / 卡住 / 跳过 / 延后。
+
+## 9. 必须设计的状态
+
+Today：
+
+- 无任务。
+- 有 3-7 个任务。
+- 任务完成 / 卡住 / 跳过 / 延后。
+- 收工反馈未填 / 已保存 / 保存失败。
+- 有未完成任务待 Agent 审核。
+
+Plan：
+
+- 日 / 周 / 月 tab。
+- 有课程或 routine 占用。
+- 本周过载。
+- recovery 不足。
+
+Review：
+
+- 无建议。
+- 有待确认建议。
+- 单条接受 / 拒绝。
+- 接受全部。
+- patch 被保护规则阻止。
+
+More：
+
+- 简单工具列表即可。
+
+## 10. 不要设计
 
 不要设计：
 
-- 营销 landing page。
-- 平台专属移动应用交付流程。
-- Chat UI。
-- 模型 API key 设置页。
-- 复杂团队协作。
-- 公开分享页面。
-- 日历级精确拖拽排程。
-- PWA push notification 的完整流程。
-
-PWA push 可以作为未来功能提到，但 v0.1 只需要设计 Today 内的 check-in 卡片和 warning 状态。
+- AI chat UI。
+- API key 设置。
+- app 内置 scheduler。
+- PWA push notification 完整流程。
+- 团队协作。
+- 公开分享页。
+- 复杂日历拖拽。
+- 完整 task 创建后台。
+- 两套 desktop/mobile 代码结构。

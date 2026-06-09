@@ -1,19 +1,15 @@
 "use client";
 
-import { AlertTriangle, Check, Clock3, Coffee, Lock, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { AlertTriangle, Check, Clock3, RotateCcw } from "lucide-react";
+import { useMemo, useState } from "react";
 
+import { CatIcon } from "./cat-icon";
 import { DailyCheckin } from "./daily-checkin";
 import type { TodayViewData } from "@/lib/planning/view-data";
 
-type Segment = TodayViewData["tasks"][number]["segment"];
 type Task = TodayViewData["tasks"][number];
-
-const segmentLabels: Record<Segment, string> = {
-  morning: "上午",
-  afternoon: "下午",
-  evening: "晚上",
-};
+type PersistedStatus = Task["status"];
+type DisplayStatus = PersistedStatus | "blocked";
 
 function minutesLabel(minutes: number) {
   if (minutes >= 60) {
@@ -24,159 +20,162 @@ function minutesLabel(minutes: number) {
   return `${minutes}m`;
 }
 
-export function TodayView({ data }: { data: TodayViewData }) {
-  const [tasks, setTasks] = useState(data.tasks);
-  const completed = tasks.filter((task) => task.done).length;
-  const remainingMinutes = tasks.filter((task) => !task.done).reduce((sum, task) => sum + task.minutes, 0);
+function statusClass(status: DisplayStatus) {
+  if (status === "done") return "done";
+  if (status === "blocked") return "stuck";
+  if (status === "skipped") return "skipped";
+  if (status === "backlog") return "deferred";
+  return "";
+}
 
-  function toggleTask(id: string) {
-    setTasks((current) => current.map((task) => (task.id === id ? { ...task, done: !task.done } : task)));
-    void fetch("/api/tasks", {
+export function TodayView({ data }: { data: TodayViewData }) {
+  const [tasks, setTasks] = useState<Array<Task & { displayStatus: DisplayStatus }>>(
+    data.tasks.map((task) => ({ ...task, displayStatus: task.status })),
+  );
+
+  const doneCount = tasks.filter((task) => task.displayStatus === "done").length;
+  const unresolvedTasks = tasks.filter((task) => task.displayStatus !== "done");
+  const unresolvedMinutes = unresolvedTasks.reduce((sum, task) => sum + task.minutes, 0);
+  const fixedMinutes = useMemo(() => {
+    return data.routines.reduce((sum, routine) => sum + routine.minutes, 0);
+  }, [data.routines]);
+
+  async function persistStatus(id: string, status: PersistedStatus) {
+    await fetch("/api/tasks", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, status: tasks.find((task) => task.id === id)?.done ? "todo" : "done" }),
+      body: JSON.stringify({ id, status }),
     });
   }
 
+  function setTaskStatus(id: string, status: DisplayStatus) {
+    setTasks((current) =>
+      current.map((task) => {
+        if (task.id !== id) return task;
+        const nextStatus = task.displayStatus === status ? "todo" : status;
+        return {
+          ...task,
+          displayStatus: nextStatus,
+          status: nextStatus === "blocked" ? task.status : nextStatus,
+          done: nextStatus === "done" || nextStatus === "skipped",
+        };
+      }),
+    );
+
+    if (status !== "blocked") {
+      const currentTask = tasks.find((task) => task.id === id);
+      const nextStatus = currentTask?.displayStatus === status ? "todo" : status;
+      void persistStatus(id, nextStatus);
+    }
+  }
+
   return (
-    <div className="mx-auto max-w-5xl space-y-5">
-      <section className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-[0.16em] text-zinc-500">今天</p>
-          <h1 className="mt-1 text-2xl font-semibold text-zinc-950">Today</h1>
-          <p className="mt-1 text-sm font-medium text-zinc-800">今日计划</p>
-          <p className="mt-1 text-sm text-zinc-500">主任务按上午 / 下午 / 晚上推进，日常和恢复块单独保护。</p>
+    <div className="paw-page">
+      <section className="paw-page-header">
+        <p className="paw-greeting">今天</p>
+        <h1 className="paw-page-date">今日执行</h1>
+        <div className="paw-agent-row">
+          <CatIcon size={44} />
+          <p className="paw-agent-msg">Agent 今天排了 {tasks.length} 个任务；你只需要勾选事实，未完成项会进入下一次审核。</p>
         </div>
-        {data.patchCount > 0 ? (
-          <a
-            href="/reschedule"
-            className="inline-flex w-fit items-center gap-2 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900"
-          >
-            <Sparkles size={16} />
-            {data.patchCount} 条待审核调整
-          </a>
-        ) : null}
-      </section>
-
-      <section className="rounded border border-zinc-200 bg-white p-4">
-        <div className="flex flex-col gap-2 border-b border-zinc-100 pb-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="font-medium text-zinc-950">主任务</h2>
-            <p className="text-sm text-zinc-500">已完成 {completed}/{tasks.length}，剩余 {minutesLabel(remainingMinutes)}。</p>
-          </div>
-          <span className="inline-flex w-fit items-center gap-1 rounded bg-zinc-100 px-2 py-1 text-xs text-zinc-600">
-            <Clock3 size={13} />
-            不含日常 / 恢复
-          </span>
-        </div>
-
-          <div className="mt-4 space-y-5">
-          {tasks.length === 0 ? (
-            <div className="rounded border border-dashed border-zinc-200 bg-zinc-50 px-3 py-8 text-center text-sm text-zinc-500">
-              今天还没有任务。先用 Quick Capture 收进 Inbox，或导入计划后再排。
-            </div>
+        <div className="paw-status-pills">
+          {fixedMinutes > 0 ? <span className="paw-status-pill">固定安排 {minutesLabel(fixedMinutes)}</span> : null}
+          <span className="paw-status-pill">剩余 {minutesLabel(unresolvedMinutes)}</span>
+          {data.patchCount > 0 ? (
+            <a href="/review" className="paw-status-pill link">
+              {data.patchCount} 条建议待确认
+            </a>
           ) : null}
-          {(Object.keys(segmentLabels) as Segment[]).map((segment) => {
-            const segmentTasks = tasks.filter((task) => task.segment === segment);
-            const segmentMinutes = segmentTasks.filter((task) => !task.done).reduce((sum, task) => sum + task.minutes, 0);
-            return (
-              <div key={segment}>
-                <div className="mb-2 flex items-center gap-3">
-                  <h3 className="text-sm font-semibold text-zinc-800">{segmentLabels[segment]}</h3>
-                  <div className="h-px flex-1 bg-zinc-100" />
-                  <span className="text-xs text-zinc-500">{segmentMinutes ? minutesLabel(segmentMinutes) : "完成"}</span>
-                </div>
-                <div className="space-y-2">
-                  {segmentTasks.map((task) => (
-                    <button
-                      key={task.id}
-                      type="button"
-                      onClick={() => toggleTask(task.id)}
-                      className="flex w-full items-start gap-3 rounded border border-zinc-200 bg-zinc-50 px-3 py-3 text-left transition hover:border-zinc-300"
-                    >
-                      <span
-                        className={`mt-0.5 flex h-5 w-5 flex-none items-center justify-center rounded-full border ${
-                          task.done ? "border-zinc-950 bg-zinc-950 text-white" : "border-zinc-300 bg-white text-transparent"
-                        }`}
-                      >
-                        <Check size={13} />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className={`block text-sm font-medium ${task.done ? "text-zinc-400 line-through" : "text-zinc-950"}`}>{task.title}</span>
-                        <span className="mt-1 flex flex-wrap gap-2 text-xs text-zinc-500">
-                          <span>{minutesLabel(task.minutes)}</span>
-                          <span>{task.context}</span>
-                          <span>{task.track}</span>
-                          <span>能量 {task.energy}</span>
-                        </span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="grid gap-4 lg:grid-cols-[1fr_1fr]">
-        <div className="rounded border border-zinc-200 bg-white p-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-medium text-zinc-950">日常事项</h2>
-            <span className="rounded bg-zinc-100 px-2 py-1 text-xs text-zinc-600">{data.routines.filter((item) => item.done).length}/{data.routines.length}</span>
-          </div>
-          <div className="mt-3 space-y-2">
-            {data.routines.length === 0 ? <p className="text-sm text-zinc-500">还没有 routine。后续可在 Settings 添加。</p> : null}
-            {data.routines.map((routine) => (
-              <div key={routine.id} className="flex items-center justify-between rounded border border-zinc-100 px-3 py-2">
-                <div>
-                  <p className="text-sm font-medium text-zinc-900">{routine.title}</p>
-                  <p className="text-xs text-zinc-500">{minutesLabel(routine.minutes)} · 不参与 agent 重排</p>
-                </div>
-                <span className={`text-xs ${routine.done ? "text-emerald-700" : "text-zinc-500"}`}>{routine.done ? "已完成" : "待做"}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded border border-emerald-200 bg-emerald-50/60 p-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-medium text-zinc-950">恢复保护</h2>
-            <span className="inline-flex items-center gap-1 rounded bg-white px-2 py-1 text-xs text-emerald-700">
-              <Lock size={13} />
-              protected
+          {data.warnings.slice(0, 1).map((warning) => (
+            <span key={warning.id} className="paw-status-pill warn">
+              {warning.title}
             </span>
-          </div>
-          <div className="mt-3 space-y-2">
-            {data.recoveryBlocks.length === 0 ? <p className="text-sm text-emerald-800">今天没有已保护的恢复块。</p> : null}
-            {data.recoveryBlocks.map((block) => (
-              <div key={block.id} className="flex items-center gap-3 rounded border border-emerald-100 bg-white px-3 py-2">
-                <span className="rounded bg-emerald-100 p-2 text-emerald-700">
-                  <Coffee size={16} />
-                </span>
-                <div>
-                  <p className="text-sm font-medium text-zinc-900">{block.title}</p>
-                  <p className="text-xs text-zinc-500">{block.time} · 不移动、不压缩</p>
-                </div>
-              </div>
-            ))}
-          </div>
+          ))}
         </div>
       </section>
 
-      <section className="rounded border border-zinc-200 bg-white p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <AlertTriangle size={16} className="text-amber-600" />
-          <h2 className="font-medium text-zinc-950">轻量提醒</h2>
-        </div>
-        <div className="grid gap-2 md:grid-cols-2">
-          {data.warnings.length === 0 ? <p className="text-sm text-zinc-500">当前没有需要 surfaced 的提醒。</p> : null}
-          {data.warnings.map((warning) => (
-            <div key={warning.id} className="rounded bg-amber-50 px-3 py-2">
-              <p className="text-sm font-medium text-amber-950">{warning.title}</p>
-              <p className="mt-1 text-xs text-amber-800">{warning.text}</p>
-            </div>
+      {data.dataUnavailable ? (
+        <section className="paw-status-pill warn" role="status">
+          当前没有 DATABASE_URL，Today 显示为空态；配置数据库后会读取真实计划。
+        </section>
+      ) : null}
+
+      <section>
+        <div className="paw-section-label">今日任务 · 完成 {doneCount}/{tasks.length}</div>
+
+        {tasks.length === 0 ? (
+          <div className="paw-empty">
+            <p>今天还没有 Agent 安排的任务。</p>
+            <p>可以先在 Inbox 捕捉想法，或等 scheduled automation 写回计划。</p>
+          </div>
+        ) : null}
+
+        <div className="paw-task-list">
+          {tasks.map((task) => (
+            <article key={task.id} className={`paw-task-card ${statusClass(task.displayStatus)}`}>
+              <div className="paw-task-body">
+                <h3 className="paw-task-title">{task.title}</h3>
+                <div className="paw-task-meta">
+                  <span className="inline-flex items-center gap-1">
+                    <Clock3 size={12} />
+                    {minutesLabel(task.minutes)}
+                  </span>
+                  <span className="paw-dot" />
+                  <span className="paw-task-tag">{task.context}</span>
+                  <span>{task.track}</span>
+                  <span>能量 {task.energy}</span>
+                </div>
+              </div>
+              <div className="paw-task-actions">
+                <button
+                  type="button"
+                  onClick={() => setTaskStatus(task.id, "done")}
+                  className={`paw-act-btn done ${task.displayStatus === "done" ? "selected" : ""}`}
+                >
+                  <Check size={14} /> 完成
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTaskStatus(task.id, "blocked")}
+                  className={`paw-act-btn stuck ${task.displayStatus === "blocked" ? "selected" : ""}`}
+                >
+                  卡住
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTaskStatus(task.id, "skipped")}
+                  className={`paw-act-btn skip ${task.displayStatus === "skipped" ? "selected" : ""}`}
+                >
+                  跳过
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTaskStatus(task.id, "backlog")}
+                  className={`paw-act-btn defer ${task.displayStatus === "backlog" ? "selected" : ""}`}
+                >
+                  延后
+                </button>
+              </div>
+              {task.displayStatus === "blocked" ? (
+                <p className="mt-2 flex items-center gap-1 text-xs text-amber-700 sm:hidden">
+                  <AlertTriangle size={12} />
+                  卡住状态会进入本页反馈；下一阶段会写入 MCP 任务状态。
+                </p>
+              ) : null}
+            </article>
           ))}
+        </div>
+      </section>
+
+      <section className="mt-6">
+        <div className="paw-card p-5">
+          <h2 className="text-base font-bold text-[var(--app-ink)]">下一次自动审核</h2>
+          <p className="mt-1 text-sm font-medium text-[var(--app-ink-soft)]">
+            今天没完成、卡住或延后的任务，会进入下一次 Agent 审核；你不用手动改日期。
+          </p>
+          <a href="/review" className="mt-3 inline-flex items-center gap-1 text-sm font-bold text-[var(--app-accent-dark)]">
+            去看建议 <RotateCcw size={14} />
+          </a>
         </div>
       </section>
 

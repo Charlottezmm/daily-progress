@@ -1,10 +1,10 @@
 {
-  "name": "Daily Progress",
-  "short_name": "Progress",
+  "name": "PawPlan",
+  "short_name": "PawPlan",
   "description": "Schedule-first MCP-native planning app.",
   "start_url": "/today",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#111827",
+  "background_color": "#F8FAFB",
+  "theme_color": "#5B9BD5",
   "icons": []
 }

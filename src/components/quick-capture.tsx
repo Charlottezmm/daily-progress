@@ -41,16 +41,16 @@ export function QuickCapture() {
           setTitle(event.target.value);
           if (status !== "saving") setStatus("idle");
         }}
-        placeholder="+ Quick Capture"
+        placeholder="+ 捕捉想法"
         className="quick-capture-input"
       />
       <span className="quick-capture-status" data-status={status} aria-live="polite">
-        {status === "saving" ? "Saving" : null}
-        {status === "saved" ? "Added" : null}
-        {status === "error" ? "Retry" : null}
+        {status === "saving" ? "保存中" : null}
+        {status === "saved" ? "已添加" : null}
+        {status === "error" ? "重试" : null}
       </span>
       <button disabled={!title.trim() || status === "saving"} className="quick-capture-button">
-        {status === "saving" ? "Adding" : "Add"}
+        {status === "saving" ? "添加中" : "添加"}
       </button>
     </form>
   );

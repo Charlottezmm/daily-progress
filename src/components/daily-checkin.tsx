@@ -25,7 +25,7 @@ export function DailyCheckin({
   const [completedText, setCompletedText] = useState(initialCompletedText);
   const [blockerText, setBlockerText] = useState(initialBlockerText);
   const [nextText, setNextText] = useState(initialNextText);
-  const [message, setMessage] = useState<string | null>(initialStreakDays ? `已 ${initialStreakDays} 天连续打卡` : null);
+  const [message, setMessage] = useState<string | null>(initialStreakDays ? `已 ${initialStreakDays} 天连续记录` : null);
   const [pending, setPending] = useState(false);
 
   async function submit(event: React.FormEvent) {
@@ -46,41 +46,53 @@ export function DailyCheckin({
       setMessage(data.error ?? "保存失败");
       return;
     }
-    setMessage(`记下了。已 ${data.streakDays ?? 0} 天连续打卡`);
+    setMessage(`已记录。Agent 下次审核会参考，已 ${data.streakDays ?? 0} 天连续记录`);
   }
 
   return (
-    <form onSubmit={submit} className="space-y-3 rounded border border-zinc-200 bg-white p-4 shadow-sm">
+    <form onSubmit={submit} className="paw-feedback-card">
       <div>
-        <h2 className="font-medium">Daily Check-in</h2>
-        <p className="text-xs text-zinc-500">5 秒记录：完成 / 卡点 / 明日接。</p>
-        {dataUnavailable ? <p className="mt-1 text-xs text-amber-700">当前没有配置数据库，保存会在真实环境启用。</p> : null}
+        <h2 className="paw-feedback-title">收工反馈</h2>
+        <p className="paw-feedback-subtitle">5 秒记录事实：完成 / 卡点 / 明日接。Agent 下次重排会参考这里。</p>
+        {dataUnavailable ? <p className="paw-feedback-subtitle text-amber-700">当前没有配置数据库，保存会在真实环境启用。</p> : null}
       </div>
-      <div className="grid gap-2 md:grid-cols-3">
-        <input
-          value={completedText}
-          onChange={(event) => setCompletedText(event.target.value)}
-          placeholder="完成"
-          className="rounded border border-zinc-300 px-3 py-2 text-sm"
-        />
-        <input
-          value={blockerText}
-          onChange={(event) => setBlockerText(event.target.value)}
-          placeholder="卡点"
-          className="rounded border border-zinc-300 px-3 py-2 text-sm"
-        />
-        <input
-          value={nextText}
-          onChange={(event) => setNextText(event.target.value)}
-          placeholder="明日接"
-          className="rounded border border-zinc-300 px-3 py-2 text-sm"
-        />
+      <div className="paw-feedback-fields">
+        <label>
+          <span className="paw-field-label">完成</span>
+          <textarea
+            value={completedText}
+            onChange={(event) => setCompletedText(event.target.value)}
+            placeholder="今天实际完成了什么"
+            rows={2}
+            className="paw-textarea"
+          />
+        </label>
+        <label>
+          <span className="paw-field-label">卡点</span>
+          <textarea
+            value={blockerText}
+            onChange={(event) => setBlockerText(event.target.value)}
+            placeholder="今天卡在哪里"
+            rows={2}
+            className="paw-textarea"
+          />
+        </label>
+        <label>
+          <span className="paw-field-label">明日接</span>
+          <textarea
+            value={nextText}
+            onChange={(event) => setNextText(event.target.value)}
+            placeholder="明天从哪里继续"
+            rows={2}
+            className="paw-textarea"
+          />
+        </label>
       </div>
-      <div className="flex items-center gap-3">
-        <button disabled={pending || dataUnavailable} className="rounded bg-zinc-950 px-3 py-2 text-sm text-white disabled:opacity-50">
-          Save
+      <div className="paw-save-row">
+        <button disabled={pending || dataUnavailable} className="paw-save-btn">
+          {pending ? "保存中" : "保存反馈"}
         </button>
-        {message ? <p className="text-sm text-zinc-600">{message}</p> : null}
+        {message ? <p className="paw-toast">{message}</p> : null}
       </div>
     </form>
   );

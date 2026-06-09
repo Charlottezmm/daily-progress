@@ -41,6 +41,7 @@ export type TodayTaskView = {
   track: string;
   minutes: number;
   energy: "低" | "中" | "高";
+  status: TaskStatus;
   done: boolean;
 };
 
@@ -413,6 +414,7 @@ export async function getTodayPageData(workspaceId: string): Promise<TodayViewDa
           track: track?.name ?? "未分类",
           minutes: task.estimatedMinutes,
           energy: energyLabel(task.energyLevel),
+          status: task.status,
           done: statusDone(task.status),
         };
       }),

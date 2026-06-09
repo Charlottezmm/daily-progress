@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { CatIcon } from "./cat-icon";
 
 type LoginResponse = {
   error?: string;
@@ -34,28 +35,35 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={submit} className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-4 px-6">
-      <div>
-        <h1 className="text-xl font-semibold">Daily Progress</h1>
-        <p className="mt-1 text-sm text-zinc-500">创建或进入你的 workspace。</p>
+    <form onSubmit={submit} className="paw-login">
+      <div className="paw-login-card">
+        <div>
+          <h1 className="paw-login-brand">
+            <CatIcon size={38} />
+            PawPlan
+          </h1>
+          <p className="paw-login-copy">创建或进入你的 workspace。每个人只看到自己的计划数据。</p>
+        </div>
+        <div className="paw-login-fields">
+          <input
+            value={workspaceName}
+            onChange={(event) => setWorkspaceName(event.target.value)}
+            placeholder="Workspace name"
+            className="paw-input"
+          />
+          <input
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="Password"
+            type="password"
+            className="paw-input"
+          />
+          <button disabled={pending} className="paw-primary-btn">
+            {pending ? "Saving..." : "Continue"}
+          </button>
+          {message ? <p className="paw-error">{message}</p> : null}
+        </div>
       </div>
-      <input
-        value={workspaceName}
-        onChange={(event) => setWorkspaceName(event.target.value)}
-        placeholder="Workspace name"
-        className="rounded border border-zinc-300 px-3 py-2 text-sm"
-      />
-      <input
-        value={password}
-        onChange={(event) => setPassword(event.target.value)}
-        placeholder="Password"
-        type="password"
-        className="rounded border border-zinc-300 px-3 py-2 text-sm"
-      />
-      <button disabled={pending} className="rounded bg-zinc-950 px-3 py-2 text-sm text-white disabled:opacity-50">
-        {pending ? "Saving..." : "Continue"}
-      </button>
-      {message ? <p className="text-sm text-red-600">{message}</p> : null}
     </form>
   );
 }

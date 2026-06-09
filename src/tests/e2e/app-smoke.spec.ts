@@ -8,7 +8,7 @@ function signedWorkspaceSession(workspaceId: string) {
 
 test("redirects unauthenticated visitors to login", async ({ page }) => {
   await page.goto("/today");
-  await expect(page.getByRole("heading", { name: "Daily Progress" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "PawPlan" })).toBeVisible();
   await expect(page.getByPlaceholder("Workspace name")).toBeVisible();
 });
 
@@ -25,10 +25,12 @@ test("renders Today on desktop and mobile with a workspace session", async ({ co
   ]);
 
   await page.goto("/today");
-  await expect(page.getByRole("heading", { name: "Today" })).toBeVisible();
-  await expect(page.getByPlaceholder("+ Quick Capture")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Daily Check-in" })).toBeVisible();
-  await expect(page.getByPlaceholder("完成")).toBeVisible();
-  await expect(page.getByPlaceholder("卡点")).toBeVisible();
-  await expect(page.getByPlaceholder("明日接")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "今日执行" })).toBeVisible();
+  await expect(page.getByText("Agent 今天排了")).toBeVisible();
+  await expect(page.getByText("今日任务")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "收工反馈" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Today", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Plan", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Review", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "More", exact: true })).toBeVisible();
 });

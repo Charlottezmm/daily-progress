@@ -1,5 +1,5 @@
-import { MonthView } from "@/components/month-view";
+import { redirect } from "next/navigation";
 
 export default function MonthPage() {
-  return <MonthView />;
+  redirect("/plan");
 }
