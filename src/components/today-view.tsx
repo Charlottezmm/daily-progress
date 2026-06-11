@@ -75,19 +75,23 @@ export function TodayView({ data }: { data: TodayViewData }) {
   }, []);
 
   const allDone = tasks.length > 0 && doneCount === tasks.length;
-  let catMood: "happy" | "think" | "sleep" = "think";
+  const blockedCount = tasks.filter((task) => task.displayStatus === "blocked").length;
+  let catMood: "happy" | "think" | "sleep" | "celebrate" | "worried" | "cheer" = "think";
   let catMsg = `今天排了 ${tasks.length} 件事。完成就勾掉，做不完的我来重排。`;
   if (allDone) {
-    catMood = "happy";
+    catMood = "celebrate";
     catMsg = "全部搞定！剩下的时间都是你的。";
   } else if (hour !== null && (hour >= 22 || hour < 4)) {
     catMood = "sleep";
     catMsg = "很晚了，记个收工反馈就去休息吧。";
+  } else if (blockedCount > 0) {
+    catMood = "worried";
+    catMsg = `有 ${blockedCount} 件卡住了，先做别的，重排的事交给我。`;
   } else if (tasks.length === 0) {
     catMood = "sleep";
     catMsg = "今天还没有安排任务，要记什么找右下角的小猫。";
   } else if (doneCount > 0) {
-    catMood = "happy";
+    catMood = "cheer";
     catMsg = `已完成 ${doneCount}/${tasks.length}，节奏不错，继续。`;
   }
 
@@ -158,7 +162,7 @@ export function TodayView({ data }: { data: TodayViewData }) {
 
         {tasks.length > 0 && doneCount === tasks.length ? (
           <div className="paw-celebrate" role="status">
-            <CatIcon size={44} />
+            <CatIcon size={44} mood="celebrate" />
             <p className="paw-celebrate-text">今天全部搞定，收工！</p>
           </div>
         ) : null}

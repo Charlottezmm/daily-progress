@@ -99,7 +99,7 @@ export function DailyCheckin({
       </div>
       {savedStreak !== null ? (
         <div className="paw-streak-pop" role="status">
-          <CatIcon size={52} />
+          <CatIcon size={52} mood="celebrate" />
           <div>
             <p className="paw-streak-num">{savedStreak}</p>
             <p className="paw-streak-label">天连续记录，今天也收工了</p>

@@ -87,8 +87,8 @@ export function InboxView({
 
       {overLimit ? (
         <section className="paw-trust-banner">
-          <TriangleAlert size={18} className="mt-0.5 flex-none text-amber-700" />
-          Inbox 超过 10 条会污染计划判断。先处理几条，不需要一次清空。
+          <CatIcon size={28} mood="worried" />
+          攒了 10 多条啦，挑几条处理一下吧，不用一次清空。
         </section>
       ) : null}
 

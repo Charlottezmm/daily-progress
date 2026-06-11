@@ -85,7 +85,12 @@ export function FloatingCat() {
         aria-label={open ? "收起快速捕捉" : "快速捕捉想法"}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={open ? "/cats/think.png" : "/cats/happy.png"} alt="" width={44} height={44} />
+        <img
+          src={status === "error" ? "/cats/sorry.png" : open ? "/cats/think.png" : "/cats/happy.png"}
+          alt=""
+          width={44}
+          height={44}
+        />
       </button>
     </div>
   );

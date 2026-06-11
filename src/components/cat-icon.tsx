@@ -1,5 +1,5 @@
 type CatIconProps = {
-  mood?: "happy" | "think" | "sleep";
+  mood?: "happy" | "think" | "sleep" | "celebrate" | "worried" | "cheer" | "sorry";
   size?: number;
   className?: string;
 };
