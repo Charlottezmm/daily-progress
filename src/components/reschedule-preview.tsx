@@ -82,11 +82,10 @@ export function ReviewPreview({ data }: { data: RescheduleViewData }) {
   return (
     <div className="paw-page">
       <section className="paw-page-header">
-        <p className="paw-greeting">Review</p>
-        <h1 className="paw-page-date">建议审核</h1>
+        <h1 className="paw-page-date">审核</h1>
         <div className="paw-agent-row">
-          <CatIcon size={44} mood="think" />
-          <p className="paw-agent-msg">这是 Codex/Cowork 通过 MCP 写回的建议；你确认后才会应用到计划。</p>
+          <CatIcon size={40} mood="think" />
+          <p className="paw-agent-msg">这些是 Agent 提的调整建议，你点头才会生效。</p>
         </div>
       </section>
 
@@ -96,7 +95,7 @@ export function ReviewPreview({ data }: { data: RescheduleViewData }) {
         </section>
       ) : null}
 
-      <div className="paw-trust-banner">Routine / Recovery 受保护；Agent 只能建议任务移动、拆分、延期和优先级调整。</div>
+      <div className="paw-trust-banner">Routine 和 Recovery 受保护，Agent 只能动任务的时间和优先级。</div>
 
       {applyError ? (
         <section className="paw-status-pill warn" role="status">
@@ -107,8 +106,8 @@ export function ReviewPreview({ data }: { data: RescheduleViewData }) {
       <section className="paw-suggestion-list">
         {visiblePatchItems.length === 0 ? (
           <div className="paw-empty">
-            <h2>没有待审核建议</h2>
-            <p>当 scheduled automation 或手动 Agent 提出 patch 后，会在这里逐条审核。</p>
+            <h2>暂时没有新建议</h2>
+            <p>Agent 提出调整后会出现在这里，逐条确认就行。</p>
           </div>
         ) : null}
 
@@ -181,6 +180,7 @@ export function ReviewPreview({ data }: { data: RescheduleViewData }) {
         })}
       </section>
 
+      {visiblePatchItems.length > 0 ? (
       <section className="paw-review-bottom">
         <button type="button" onClick={() => setDecisions({})} disabled={isApplying} className="paw-secondary-btn">
           <RotateCcw size={14} /> 重新选择
@@ -195,6 +195,7 @@ export function ReviewPreview({ data }: { data: RescheduleViewData }) {
           {accepted} 接受 · {rejected} 拒绝 · {pending} 待定
         </span>
       </section>
+      ) : null}
     </div>
   );
 }

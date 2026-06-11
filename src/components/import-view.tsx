@@ -2,6 +2,7 @@
 
 import { Ban, Eye, FileText, Save, Table } from "lucide-react";
 import { useState } from "react";
+import { BackLink } from "./back-link";
 import { CatIcon } from "./cat-icon";
 
 type PlanPreview = {
@@ -123,11 +124,11 @@ export function ImportView() {
   return (
     <div className="paw-page">
       <section className="paw-page-header">
-        <p className="paw-greeting">Import</p>
+        <BackLink />
         <h1 className="paw-page-date">导入</h1>
         <div className="paw-agent-row">
-          <CatIcon size={44} mood="think" />
-          <p className="paw-agent-msg">先预览，再保存。plan.md 只写入项目和导入摘要；timetable.csv 会新增课程和时间块。</p>
+          <CatIcon size={40} mood="think" />
+          <p className="paw-agent-msg">支持 plan.md 和 timetable.csv。先预览，确认没问题再保存。</p>
         </div>
       </section>
 
@@ -195,7 +196,7 @@ export function ImportView() {
             </span>
             <div>
               <h2 className="paw-more-label">timetable.csv</h2>
-              <p className="paw-more-text">保存会按日期范围展开并新增 time_blocks；重复保存会继续新增记录。</p>
+              <p className="paw-more-text">保存后会按日期生成对应的时间块；注意重复保存会重复添加。</p>
             </div>
           </div>
           <label className="paw-field-label" htmlFor="timetable-csv">

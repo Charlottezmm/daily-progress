@@ -2,7 +2,9 @@
 
 import { ArrowUpRight, RefreshCcw, Trash2, TriangleAlert } from "lucide-react";
 import { useEffect, useState } from "react";
+import { BackLink } from "./back-link";
 import { CatIcon } from "./cat-icon";
+import { QuickCapture } from "./quick-capture";
 import type { InboxItemView } from "@/lib/planning/view-data";
 
 type InboxAction = "task" | "routine" | "delete";
@@ -63,15 +65,15 @@ export function InboxView({
   return (
     <div className="paw-page">
       <section className="paw-page-header">
-        <p className="paw-greeting">Inbox</p>
+        <BackLink />
         <h1 className="paw-page-date">暂存池</h1>
         <div className="paw-agent-row">
-          <CatIcon size={44} mood="think" />
-          <p className="paw-agent-msg">{items.length} 条未处理。这里只接住想法，不占今日容量，也不参与 Agent patch。</p>
+          <CatIcon size={40} mood="think" />
+          <p className="paw-agent-msg">想到什么先丢进来，不占今天的容量。攒着的 {items.length} 条想处理时再处理。</p>
         </div>
         <div className="paw-status-pills">
           <span className="paw-status-pill">未处理 {items.length}</span>
-          <span className="paw-status-pill">不占 capacity</span>
+          <span className="paw-status-pill">不占今日容量</span>
           {lastAction ? <span className="paw-status-pill link">{lastAction}</span> : null}
         </div>
       </section>
@@ -90,19 +92,21 @@ export function InboxView({
         </section>
       ) : null}
 
+      <QuickCapture />
+
       <section className="paw-list-card">
         <div className="paw-list-header">
           <div>
             <h2 className="paw-list-title">未处理条目</h2>
-            <p className="paw-list-subtitle">每条只做一个决定：变任务、变日常、删除。</p>
+            <p className="paw-list-subtitle">每条想清楚一件事就行：变成任务、变成日常、还是删掉。</p>
           </div>
-          <span className="paw-status-pill">不触发 patch</span>
+          <span className="paw-status-pill">不打扰计划</span>
         </div>
 
         {items.length === 0 ? (
           <div className="paw-empty mt-4">
-            <h3>暂存池已清空</h3>
-            <p>新的 quick capture 会继续进入这里，等你手动整理。</p>
+            <h3>暂存池是空的</h3>
+            <p>随手记下的想法会先到这里，想处理的时候再处理。</p>
           </div>
         ) : (
           <div className="paw-list">

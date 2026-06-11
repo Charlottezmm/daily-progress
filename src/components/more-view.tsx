@@ -74,11 +74,10 @@ export function MoreView() {
   return (
     <div className="paw-page">
       <section className="paw-page-header">
-        <p className="paw-greeting">More</p>
-        <h1 className="paw-page-date">更多工具</h1>
+        <h1 className="paw-page-date">更多</h1>
         <div className="paw-agent-row">
-          <CatIcon size={44} mood="sleep" />
-          <p className="paw-agent-msg">这里放低频入口；每天真正要看的仍然只有 Today、Plan 和 Review。</p>
+          <CatIcon size={40} mood="sleep" />
+          <p className="paw-agent-msg">不常用的入口都收在这里。每天看 Today、Plan、Review 就够了。</p>
         </div>
       </section>
 
@@ -97,7 +96,7 @@ export function MoreView() {
                     <div>
                       <h3 className="paw-more-label">{tool.title}</h3>
                       <p className="paw-more-text">{tool.text}</p>
-                      {!tool.active ? <p className="paw-more-text">暂未开放编辑</p> : null}
+                      {!tool.active ? <span className="paw-more-badge">即将开放</span> : null}
                     </div>
                     {tool.active ? (
                       <span className="paw-more-action" aria-hidden="true">

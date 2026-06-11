@@ -26,11 +26,10 @@ export function PlanView({ today, week }: { today: TodayViewData; week: WeekView
   return (
     <div className="paw-page">
       <section className="paw-page-header">
-        <p className="paw-greeting">Plan</p>
-        <h1 className="paw-page-date">计划展示</h1>
+        <h1 className="paw-page-date">计划</h1>
         <div className="paw-agent-row">
-          <CatIcon size={44} mood="think" />
-          <p className="paw-agent-msg">这里展示 Agent 编排好的日 / 周 / 月计划；日期调整只在 Review 确认后生效。</p>
+          <CatIcon size={40} mood="think" />
+          <p className="paw-agent-msg">日、周、月的安排都在这里。想调整的话，去 Review 里确认。</p>
         </div>
         <div className="paw-sub-tabs">
           {[

@@ -41,7 +41,7 @@ export function QuickCapture() {
           setTitle(event.target.value);
           if (status !== "saving") setStatus("idle");
         }}
-        placeholder="+ 捕捉想法"
+        placeholder="记一条想法…"
         className="quick-capture-input"
       />
       <span className="quick-capture-status" data-status={status} aria-live="polite">

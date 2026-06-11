@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { CatIcon } from "./cat-icon";
 
 type SaveResponse = {
   streakDays?: number;
@@ -27,6 +28,7 @@ export function DailyCheckin({
   const [nextText, setNextText] = useState(initialNextText);
   const [message, setMessage] = useState<string | null>(initialStreakDays ? `已 ${initialStreakDays} 天连续记录` : null);
   const [pending, setPending] = useState(false);
+  const [savedStreak, setSavedStreak] = useState<number | null>(null);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -46,14 +48,15 @@ export function DailyCheckin({
       setMessage(data.error ?? "保存失败");
       return;
     }
-    setMessage(`已记录。Agent 下次审核会参考，已 ${data.streakDays ?? 0} 天连续记录`);
+    setMessage(null);
+    setSavedStreak(data.streakDays ?? 1);
   }
 
   return (
     <form onSubmit={submit} className="paw-feedback-card">
       <div>
         <h2 className="paw-feedback-title">收工反馈</h2>
-        <p className="paw-feedback-subtitle">5 秒记录事实：完成 / 卡点 / 明日接。Agent 下次重排会参考这里。</p>
+        <p className="paw-feedback-subtitle">花 5 秒记三件事：做完了什么、卡在哪、明天从哪继续。</p>
         {dataUnavailable ? <p className="paw-feedback-subtitle text-amber-700">当前没有配置数据库，保存会在真实环境启用。</p> : null}
       </div>
       <div className="paw-feedback-fields">
@@ -94,6 +97,15 @@ export function DailyCheckin({
         </button>
         {message ? <p className="paw-toast">{message}</p> : null}
       </div>
+      {savedStreak !== null ? (
+        <div className="paw-streak-pop" role="status">
+          <CatIcon size={52} />
+          <div>
+            <p className="paw-streak-num">{savedStreak}</p>
+            <p className="paw-streak-label">天连续记录，今天也收工了</p>
+          </div>
+        </div>
+      ) : null}
     </form>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, Check, Clock3, RotateCcw } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { CatIcon } from "./cat-icon";
 import { DailyCheckin } from "./daily-checkin";
@@ -40,6 +40,57 @@ export function TodayView({ data }: { data: TodayViewData }) {
     return data.routines.reduce((sum, routine) => sum + routine.minutes, 0);
   }, [data.routines]);
 
+  // 完成 / 跳过 / 延后的任务沉到列表底部，未处理的永远在最上面
+  const sortedTasks = useMemo(() => {
+    const sunk = new Set<DisplayStatus>(["done", "skipped", "backlog"]);
+    return [...tasks].sort(
+      (a, b) => Number(sunk.has(a.displayStatus)) - Number(sunk.has(b.displayStatus)),
+    );
+  }, [tasks]);
+
+  // FLIP：卡片重新排序时做位置过渡动画
+  const listRef = useRef<HTMLDivElement>(null);
+  const cardPositions = useRef<Map<string, number>>(new Map());
+  useLayoutEffect(() => {
+    const cards = listRef.current?.querySelectorAll<HTMLElement>("[data-task-id]") ?? [];
+    cards.forEach((el) => {
+      const id = el.dataset.taskId;
+      if (!id) return;
+      const nextTop = el.getBoundingClientRect().top;
+      const prevTop = cardPositions.current.get(id);
+      if (prevTop !== undefined && prevTop !== nextTop) {
+        el.animate(
+          [{ transform: `translateY(${prevTop - nextTop}px)` }, { transform: "none" }],
+          { duration: 380, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+        );
+      }
+      cardPositions.current.set(id, nextTop);
+    });
+  });
+
+  // 猫的表情和台词跟随状态（小时数挂载后再取，避免 SSR 时区差异）
+  const [hour, setHour] = useState<number | null>(null);
+  useEffect(() => {
+    setHour(new Date().getHours());
+  }, []);
+
+  const allDone = tasks.length > 0 && doneCount === tasks.length;
+  let catMood: "happy" | "think" | "sleep" = "think";
+  let catMsg = `今天排了 ${tasks.length} 件事。完成就勾掉，做不完的我来重排。`;
+  if (allDone) {
+    catMood = "happy";
+    catMsg = "全部搞定！剩下的时间都是你的。";
+  } else if (hour !== null && (hour >= 22 || hour < 4)) {
+    catMood = "sleep";
+    catMsg = "很晚了，记个收工反馈就去休息吧。";
+  } else if (tasks.length === 0) {
+    catMood = "sleep";
+    catMsg = "今天还没有安排任务，要记什么找右下角的小猫。";
+  } else if (doneCount > 0) {
+    catMood = "happy";
+    catMsg = `已完成 ${doneCount}/${tasks.length}，节奏不错，继续。`;
+  }
+
   async function persistStatus(id: string, status: PersistedStatus) {
     await fetch("/api/tasks", {
       method: "PATCH",
@@ -72,11 +123,13 @@ export function TodayView({ data }: { data: TodayViewData }) {
   return (
     <div className="paw-page">
       <section className="paw-page-header">
-        <p className="paw-greeting">今天</p>
+        <p className="paw-greeting">
+          {new Intl.DateTimeFormat("zh-CN", { month: "long", day: "numeric", weekday: "long" }).format(new Date())}
+        </p>
         <h1 className="paw-page-date">今日执行</h1>
         <div className="paw-agent-row">
-          <CatIcon size={44} />
-          <p className="paw-agent-msg">Agent 今天排了 {tasks.length} 个任务；你只需要勾选事实，未完成项会进入下一次审核。</p>
+          <CatIcon size={40} mood={catMood} />
+          <p className="paw-agent-msg">{catMsg}</p>
         </div>
         <div className="paw-status-pills">
           {fixedMinutes > 0 ? <span className="paw-status-pill">固定安排 {minutesLabel(fixedMinutes)}</span> : null}
@@ -103,16 +156,23 @@ export function TodayView({ data }: { data: TodayViewData }) {
       <section>
         <div className="paw-section-label">今日任务 · 完成 {doneCount}/{tasks.length}</div>
 
-        {tasks.length === 0 ? (
-          <div className="paw-empty">
-            <p>今天还没有 Agent 安排的任务。</p>
-            <p>可以先在 Inbox 捕捉想法，或等 scheduled automation 写回计划。</p>
+        {tasks.length > 0 && doneCount === tasks.length ? (
+          <div className="paw-celebrate" role="status">
+            <CatIcon size={44} />
+            <p className="paw-celebrate-text">今天全部搞定，收工！</p>
           </div>
         ) : null}
 
-        <div className="paw-task-list">
-          {tasks.map((task) => (
-            <article key={task.id} className={`paw-task-card ${statusClass(task.displayStatus)}`}>
+        {tasks.length === 0 ? (
+          <div className="paw-empty">
+            <p>今天还没有安排任务。</p>
+            <p>点右下角的小猫记个想法，或者在「更多 → 导入」里放入你的计划。</p>
+          </div>
+        ) : null}
+
+        <div className="paw-task-list" ref={listRef}>
+          {sortedTasks.map((task) => (
+            <article key={task.id} data-task-id={task.id} className={`paw-task-card ${statusClass(task.displayStatus)}`}>
               <div className="paw-task-body">
                 <h3 className="paw-task-title">{task.title}</h3>
                 <div className="paw-task-meta">
@@ -159,7 +219,7 @@ export function TodayView({ data }: { data: TodayViewData }) {
               {task.displayStatus === "blocked" ? (
                 <p className="mt-2 flex items-center gap-1 text-xs text-amber-700 sm:hidden">
                   <AlertTriangle size={12} />
-                  卡住状态会进入本页反馈；下一阶段会写入 MCP 任务状态。
+                  标了卡住没关系，Agent 会帮你想办法重排。
                 </p>
               ) : null}
             </article>
@@ -169,9 +229,9 @@ export function TodayView({ data }: { data: TodayViewData }) {
 
       <section className="mt-6">
         <div className="paw-card p-5">
-          <h2 className="text-base font-bold text-[var(--app-ink)]">下一次自动审核</h2>
+          <h2 className="text-base font-bold text-[var(--app-ink)]">没做完的不用管</h2>
           <p className="mt-1 text-sm font-medium text-[var(--app-ink-soft)]">
-            今天没完成、卡住或延后的任务，会进入下一次 Agent 审核；你不用手动改日期。
+            没完成、卡住、延后的任务，Agent 会重新安排，你不用手动改日期。
           </p>
           <a href="/review" className="mt-3 inline-flex items-center gap-1 text-sm font-bold text-[var(--app-accent-dark)]">
             去看建议 <RotateCcw size={14} />

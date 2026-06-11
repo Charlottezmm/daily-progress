@@ -2,6 +2,7 @@
 
 import { KeyRound, Plus, RotateCcw, Save, Settings, ShieldCheck, Trash2, Zap } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { BackLink } from "./back-link";
 import { CatIcon } from "./cat-icon";
 
 type DaySegment = "morning" | "afternoon" | "evening";
@@ -201,11 +202,11 @@ export function SettingsView() {
   return (
     <div className="paw-page">
       <section className="paw-page-header">
-        <p className="paw-greeting">Settings</p>
+        <BackLink />
         <h1 className="paw-page-date">设置</h1>
         <div className="paw-agent-row">
-          <CatIcon size={44} mood="sleep" />
-          <p className="paw-agent-msg">这里放不会每天改的规则。Today 不承担设置功能，避免主界面变复杂。</p>
+          <CatIcon size={40} mood="sleep" />
+          <p className="paw-agent-msg">不常改的规则放这里，Today 保持干净。</p>
         </div>
         <div className="paw-status-pills">
           <span className="paw-status-pill">Recovery: 系统默认 {formatHours(activeRecoveryTarget.minutes)}</span>

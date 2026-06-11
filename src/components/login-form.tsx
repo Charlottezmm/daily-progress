@@ -42,24 +42,24 @@ export function LoginForm() {
             <CatIcon size={38} />
             PawPlan
           </h1>
-          <p className="paw-login-copy">创建或进入你的 workspace。每个人只看到自己的计划数据。</p>
+          <p className="paw-login-copy">输入名字和密码就能进入；新名字会自动创建一个属于你的空间。</p>
         </div>
         <div className="paw-login-fields">
           <input
             value={workspaceName}
             onChange={(event) => setWorkspaceName(event.target.value)}
-            placeholder="Workspace name"
+            placeholder="Workspace 名称"
             className="paw-input"
           />
           <input
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            placeholder="Password"
+            placeholder="密码"
             type="password"
             className="paw-input"
           />
           <button disabled={pending} className="paw-primary-btn">
-            {pending ? "Saving..." : "Continue"}
+            {pending ? "进入中…" : "进入"}
           </button>
           {message ? <p className="paw-error">{message}</p> : null}
         </div>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { CalendarDays, CheckCircle2, MoreHorizontal, PawPrint } from "lucide-react";
 import { CatIcon } from "./cat-icon";
+import { FloatingCat } from "./floating-cat";
 
 const navItems = [
   { href: "/today", label: "Today" },
@@ -48,6 +49,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </header>
       <div className="app-workspace">
         <main className="app-content">{children}</main>
+        <FloatingCat />
         <nav className="mobile-tabbar" aria-label="Mobile navigation">
           {navItems.map((item) => {
             const Icon = navIcons[item.label as keyof typeof navIcons];
