@@ -5,6 +5,9 @@ import { ImportSaveError } from "@/lib/imports/plan-save";
 
 type ImportDb = {
   transaction<T>(callback: (tx: any) => Promise<T>): Promise<T>;
+} & TimetableWriteDb;
+
+type TimetableWriteDb = {
   select: (...args: any[]) => any;
   insert: (...args: any[]) => any;
 };
@@ -99,7 +102,13 @@ function datesForRow(row: TimetableImportPreviewRow) {
   return dates;
 }
 
-function materializeRows(rows: TimetableImportPreviewRow[]) {
+export type MaterializedTimetableBlock = {
+  row: TimetableImportPreviewRow;
+  startsAt: Date;
+  endsAt: Date;
+};
+
+export function materializeTimetableRows(rows: TimetableImportPreviewRow[]) {
   const blocks: Array<{
     row: TimetableImportPreviewRow;
     startsAt: Date;
@@ -124,7 +133,7 @@ function materializeRows(rows: TimetableImportPreviewRow[]) {
   return blocks;
 }
 
-async function getActivePlanId(tx: ImportDb, workspaceId: string) {
+async function getActivePlanId(tx: TimetableWriteDb, workspaceId: string) {
   const [plan] = await tx
     .select({ id: plans.id })
     .from(plans)
@@ -154,73 +163,96 @@ export async function saveTimetableImport(
   } catch (error) {
     throw new ImportSaveError(error instanceof Error ? error.message : "Invalid timetable CSV", 400);
   }
-  const blocks = materializeRows(preview);
+  materializeTimetableRows(preview);
 
   return db.transaction(async (tx) => {
-    const planId = await getActivePlanId(tx, input.workspaceId);
-    const courseIds = new Map<string, string>();
-    let coursesCreated = 0;
-    let coursesReused = 0;
+    return saveTimetableRowsInTransaction(tx, {
+      workspaceId: input.workspaceId,
+      rows: preview,
+      sourceLabel: "timetable.csv",
+      summary: "Imported timetable.csv preview",
+      writeChangeLog: true,
+    });
+  });
+}
 
-    for (const block of blocks) {
-      const courseName = courseNameFor(block.row);
-      if (!courseName || courseIds.has(courseName)) continue;
+export async function saveTimetableRowsInTransaction(
+  tx: TimetableWriteDb,
+  input: {
+    workspaceId: string;
+    rows: TimetableImportPreviewRow[];
+    planId?: string;
+    sourceLabel?: string;
+    summary?: string;
+    writeChangeLog?: boolean;
+  },
+) {
+  const blocks = materializeTimetableRows(input.rows);
+  const planId = input.planId ?? (await getActivePlanId(tx, input.workspaceId));
+  const courseIds = new Map<string, string>();
+  let coursesCreated = 0;
+  let coursesReused = 0;
 
-      const [existing] = await tx
-        .select({ id: courses.id })
-        .from(courses)
-        .where(and(eq(courses.workspaceId, input.workspaceId), eq(courses.name, courseName)))
-        .limit(1);
+  for (const block of blocks) {
+    const courseName = courseNameFor(block.row);
+    if (!courseName || courseIds.has(courseName)) continue;
 
-      if (existing) {
-        courseIds.set(courseName, existing.id);
-        coursesReused += 1;
-        continue;
-      }
+    const [existing] = await tx
+      .select({ id: courses.id })
+      .from(courses)
+      .where(and(eq(courses.workspaceId, input.workspaceId), eq(courses.name, courseName)))
+      .limit(1);
 
-      const [created] = await tx
-        .insert(courses)
-        .values({ workspaceId: input.workspaceId, name: courseName })
-        .returning();
-      courseIds.set(courseName, created.id);
-      coursesCreated += 1;
+    if (existing) {
+      courseIds.set(courseName, existing.id);
+      coursesReused += 1;
+      continue;
     }
 
-    const blockValues = blocks.map((block) => {
-      const courseName = courseNameFor(block.row);
-      return {
-        workspaceId: input.workspaceId,
-        title: block.row.title,
-        kind: block.row.kind,
-        startsAt: block.startsAt,
-        endsAt: block.endsAt,
-        recurrenceRule: block.row.recurrence,
-        courseId: courseName ? courseIds.get(courseName) ?? null : null,
-        movable: false,
-      };
-    });
+    const [created] = await tx
+      .insert(courses)
+      .values({ workspaceId: input.workspaceId, name: courseName })
+      .returning();
+    courseIds.set(courseName, created.id);
+    coursesCreated += 1;
+  }
 
-    await tx.insert(timeBlocks).values(blockValues);
+  const blockValues = blocks.map((block) => {
+    const courseName = courseNameFor(block.row);
+    return {
+      workspaceId: input.workspaceId,
+      title: block.row.title,
+      kind: block.row.kind,
+      startsAt: block.startsAt,
+      endsAt: block.endsAt,
+      recurrenceRule: block.row.recurrence,
+      courseId: courseName ? courseIds.get(courseName) ?? null : null,
+      movable: false,
+    };
+  });
 
+  await tx.insert(timeBlocks).values(blockValues);
+
+  if (input.writeChangeLog !== false) {
     await tx.insert(changeLogs).values({
       workspaceId: input.workspaceId,
       planId,
       source: "import",
-      summary: "Imported timetable.csv preview",
+      summary: input.summary ?? "Imported timetable preview",
       detailsJson: {
-        format: "timetable.csv",
-        rowsPreviewed: preview.length,
+        format: input.sourceLabel ?? "timetable",
+        rowsPreviewed: input.rows.length,
         blocksCreated: blockValues.length,
         coursesCreated,
         coursesReused,
         note: "Save adds new time_blocks; duplicate imports are not deduplicated.",
       },
     });
+  }
 
-    return {
-      blocksCreated: blockValues.length,
-      coursesCreated,
-      coursesReused,
-    };
-  });
+  return {
+    blocksCreated: blockValues.length,
+    coursesCreated,
+    coursesReused,
+  };
 }

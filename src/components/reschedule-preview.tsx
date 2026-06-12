@@ -133,7 +133,7 @@ export function ReviewPreview({ data }: { data: RescheduleViewData }) {
         </section>
       ) : null}
 
-      <div className="paw-trust-banner">Routine 和 Recovery 受保护，Agent 只能动任务的时间和优先级。</div>
+      <div className="paw-trust-banner">Routine 和 Recovery 受保护；Agent 可以提任务调整或日程导入草稿，但只有你确认后才会写入。</div>
 
       {applyError ? (
         <section className="paw-status-pill warn" role="status">

@@ -1,5 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { agentPatches, agentPatchReviews, changeLogs, plans, planVersions, tasks } from "@/lib/db/schema";
+import { materializeTimetableRows, saveTimetableRowsInTransaction } from "@/lib/imports/timetable-save";
+import { findTimetableImportConflicts } from "@/lib/mcp/timetable-import";
 import { agentPatchSchema, type AgentPatch } from "@/lib/patches/patch-schema";
 
 type PatchApplyDb = {
@@ -229,6 +231,37 @@ async function applyOperation(
       return { skipped: { index, type: operation.type, reason: "Task not found" } };
     }
     return { applied: { index, type: operation.type, taskId: operation.task_id, action: "updated task priority" } };
+  }
+
+  if (operation.type === "import_timetable") {
+    const blocks = materializeTimetableRows(operation.rows);
+    const overlaps = await findTimetableImportConflicts(tx, { workspaceId, blocks });
+    if (overlaps.length > 0) {
+      const reason = "Timetable import overlaps existing blocks";
+      const conflict = {
+        index,
+        type: operation.type,
+        reason,
+        expected: { overlapCount: 0 },
+        actual: { overlapCount: overlaps.length, overlaps: overlaps.slice(0, 10) },
+      };
+      return { skipped: { index, type: operation.type, reason }, conflict };
+    }
+
+    const result = await saveTimetableRowsInTransaction(tx, {
+      workspaceId,
+      planId,
+      rows: operation.rows,
+      sourceLabel: operation.source_label,
+      writeChangeLog: false,
+    });
+    return {
+      applied: {
+        index,
+        type: operation.type,
+        action: `imported ${result.blocksCreated} timetable blocks`,
+      },
+    };
   }
 
   return { skipped: { index, type: operation.type, reason: "Unsupported operation for apply v0.1" } };

@@ -39,14 +39,20 @@ Run the server from this repo root (`/Users/charlotte/daily-progress`). The MCP 
 - `get_month`
 - `get_constraints`
 - `get_capacity`
+- `get_decisions`
+- `get_conversations`
 - `get_checkins`
 - `get_tasks`
 - `create_inbox_item`
 - `create_checkin`
 - `update_task_status`
+- `save_conversation_summary`
+- `record_decision`
 - `propose_patch`
+- `propose_timetable_import`
+- `import_plan_bundle`
 
-`get_constraints` and `get_capacity` are read-only context tools. Agent rescheduling must be preview-first: scheduled automation reads data through MCP and writes proposed changes with `propose_patch`. Users confirm changes in `/review` before apply.
+`get_constraints` and `get_capacity` are read-only context tools. Agent rescheduling and timetable imports must be preview-first: scheduled automation reads data through MCP and writes proposed changes with `propose_patch` or `propose_timetable_import`. Users confirm changes in `/review` before apply. MCP must not directly edit constraints.
 
 Scheduled automation is configured outside PawPlan in Codex / Cowork. PawPlan does not implement an app-owned scheduler, server cron, browser timer, or PWA background rescheduler. See `docs/automation/pawplan-scheduled-automation.md`.
 

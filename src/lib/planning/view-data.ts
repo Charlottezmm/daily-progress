@@ -22,6 +22,7 @@ import {
   type CapacityTaskInput,
   type CapacityTimeBlockInput,
 } from "@/lib/planning/capacity-model";
+import { materializeTimetableRows } from "@/lib/imports/timetable-save";
 import { calculateTrackBalance } from "@/lib/planning/track-balance";
 import { buildWarnings } from "@/lib/planning/warnings";
 import type { AgentPatch } from "@/lib/patches/patch-schema";
@@ -921,6 +922,7 @@ function operationKind(type: string) {
     move_to_backlog: "移入 backlog",
     change_priority: "优先级",
     suggest_milestone_change: "里程碑",
+    import_timetable: "导入日程",
   };
   return labels[type] ?? type;
 }
@@ -1049,6 +1051,17 @@ export function buildReschedulePatchItems(input: {
           impact: evidenceList(operation.capacity_impact).length
             ? evidenceList(operation.capacity_impact)
             : ["优先级变化", `patch ${patch.id.slice(0, 8)}`],
+        });
+      } else if (operation.type === "import_timetable") {
+        const blockCount = materializeTimetableRows(operation.rows).length;
+        patchItems.push({
+          ...base,
+          title: `导入日程表：${operation.source_label ?? "MCP draft"}`,
+          from: "未导入",
+          to: `${operation.rows.length} 行 / ${blockCount} 个时间块`,
+          impact: evidenceList(operation.capacity_impact).length
+            ? evidenceList(operation.capacity_impact)
+            : [`将创建 ${blockCount} 个固定时间块`, "不会自动写入，需用户确认"],
         });
       } else {
         patchItems.push({

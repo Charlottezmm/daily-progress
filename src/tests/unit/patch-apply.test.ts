@@ -19,6 +19,7 @@ function createFakeDb(
     taskSelectResults?: Array<Array<Record<string, unknown>>>;
     taskUpdateResults?: Array<Array<Record<string, unknown>>>;
     agentPatchUpdateResult?: Array<Record<string, unknown>>;
+    selectRows?: Partial<Record<string, Array<Record<string, unknown>>>>;
   } = {},
 ) {
   const updates: Array<{ table: string; values: Record<string, unknown> }> = [];
@@ -59,6 +60,9 @@ function createFakeDb(
                     taskSelectCount += 1;
                     return Promise.resolve(result ?? []);
                   }
+                  if (options.selectRows?.[tableName(table)]) {
+                    return Promise.resolve(options.selectRows[tableName(table)]);
+                  }
                   return Promise.resolve([patch]);
                 },
               };
@@ -96,11 +100,20 @@ function createFakeDb(
     },
     insert(table: unknown) {
       return {
-        values(values: Record<string, unknown>) {
-          inserts.push({ table: tableName(table), values });
+        values(values: Record<string, unknown> | Array<Record<string, unknown>>) {
+          const rows = Array.isArray(values) ? values : [values];
+          for (const row of rows) {
+            inserts.push({ table: tableName(table), values: row });
+          }
           return {
             returning() {
-              return Promise.resolve([{ id: `${tableName(table)}-1`, versionNumber: values.versionNumber }]);
+              return Promise.resolve(
+                rows.map((row, index) => ({
+                  id: `${tableName(table)}-${inserts.length - rows.length + index + 1}`,
+                  versionNumber: row.versionNumber,
+                  ...row,
+                })),
+              );
             },
           };
         },
@@ -621,5 +634,99 @@ describe("applyAgentPatch", () => {
     expect(db.inserts.filter((insert) => insert.table === "agent_patch_reviews")).toHaveLength(1);
     expect(db.inserts.filter((insert) => insert.table === "plan_versions" || insert.table === "change_logs")).toEqual([]);
     expect(db.updates.filter((update) => update.table === "plans" || update.table === "agent_patches")).toEqual([]);
+  });
+
+  it("applies a user-accepted timetable import draft by creating courses and time blocks", async () => {
+    const db = createFakeDb(
+      {
+        id: "patch-timetable",
+        workspaceId: "workspace-1",
+        planId: "plan-1",
+        status: "draft",
+        patchJson: {
+          operations: [
+            {
+              type: "import_timetable",
+              source_label: "summer timetable",
+              rows: [
+                {
+                  title: "Embodied AI seminar",
+                  kind: "course",
+                  dayOfWeek: "monday",
+                  startTime: "09:00",
+                  endTime: "10:30",
+                  startsOn: "2026-06-15",
+                  endsOn: "2026-06-22",
+                  course: "Embodied AI",
+                  recurrence: null,
+                  notes: null,
+                },
+              ],
+              reason: "Import course constraints after user review.",
+            },
+          ],
+        },
+      },
+      4,
+      {
+        selectRows: {
+          time_blocks: [],
+          courses: [],
+        },
+      },
+    );
+
+    const result = await applyAgentPatch(db, {
+      workspaceId: "workspace-1",
+      patchId: "patch-timetable",
+      acceptedOperationIndexes: [0],
+    });
+
+    expect(result.status).toBe("applied");
+    expect(result.applied).toEqual([
+      expect.objectContaining({
+        index: 0,
+        type: "import_timetable",
+        action: "imported 2 timetable blocks",
+      }),
+    ]);
+    expect(db.inserts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: "courses",
+          values: expect.objectContaining({
+            workspaceId: "workspace-1",
+            name: "Embodied AI",
+          }),
+        }),
+        expect.objectContaining({
+          table: "time_blocks",
+          values: expect.objectContaining({
+            workspaceId: "workspace-1",
+            title: "Embodied AI seminar",
+            kind: "course",
+            startsAt: new Date("2026-06-15T01:00:00.000Z"),
+            endsAt: new Date("2026-06-15T02:30:00.000Z"),
+            courseId: "courses-1",
+            movable: false,
+          }),
+        }),
+        expect.objectContaining({
+          table: "time_blocks",
+          values: expect.objectContaining({
+            startsAt: new Date("2026-06-22T01:00:00.000Z"),
+            endsAt: new Date("2026-06-22T02:30:00.000Z"),
+          }),
+        }),
+        expect.objectContaining({
+          table: "agent_patch_reviews",
+          values: expect.objectContaining({
+            workspaceId: "workspace-1",
+            patchId: "patch-timetable",
+            acceptedOperationIndexes: [0],
+          }),
+        }),
+      ]),
+    );
   });
 });

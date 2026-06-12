@@ -152,6 +152,7 @@ describe("MCP planning tools", () => {
     expect(allowedPawPlanToolNames("read_write")).toContain("import_plan_bundle");
     expect(allowedPawPlanToolNames("read_write")).toContain("save_conversation_summary");
     expect(allowedPawPlanToolNames("read_write")).toContain("record_decision");
+    expect(allowedPawPlanToolNames("read_write")).toContain("propose_timetable_import");
   });
 
   it("reads tasks scoped to the requested workspace", async () => {
@@ -290,6 +291,69 @@ describe("MCP planning tools", () => {
       }),
     ]);
     expect(db.updates.filter((write) => write.table === "tasks")).toEqual([]);
+  });
+
+  it("proposes a timetable import as a review draft without writing constraints", async () => {
+    const db = createFakeDb({ activePlanId: "plan-1" });
+
+    const result = await runPawPlanTool(db, "workspace-1", "propose_timetable_import", {
+      reason: "Prepare the user's course table for review.",
+      source_label: "summer timetable",
+      created_by: "codex",
+      rows: [
+        {
+          title: "Embodied AI seminar",
+          kind: "course",
+          day_of_week: "monday",
+          start_time: "09:00",
+          end_time: "10:30",
+          starts_on: "2026-06-15",
+          ends_on: "2026-06-22",
+          course: "Embodied AI",
+        },
+      ],
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        patchId: "agent_patches-1",
+        workspaceId: "workspace-1",
+        planId: "plan-1",
+        status: "draft",
+        previewOnly: true,
+        rowsPreviewed: 1,
+        blocksPreviewed: 2,
+      }),
+    );
+    expect(db.inserts).toEqual([
+      expect.objectContaining({
+        table: "agent_patches",
+        values: expect.objectContaining({
+          workspaceId: "workspace-1",
+          planId: "plan-1",
+          reason: "Prepare the user's course table for review.",
+          patchJson: {
+            operations: [
+              expect.objectContaining({
+                type: "import_timetable",
+                source_label: "summer timetable",
+                rows: [
+                  expect.objectContaining({
+                    title: "Embodied AI seminar",
+                    dayOfWeek: "monday",
+                    startTime: "09:00",
+                    endTime: "10:30",
+                  }),
+                ],
+                capacity_impact: ["将创建 2 个固定时间块", "不会自动写入，需用户在 Review 确认"],
+              }),
+            ],
+          },
+          createdBy: "codex",
+        }),
+      }),
+    ]);
+    expect(db.inserts.filter((write) => write.table === "courses" || write.table === "time_blocks")).toEqual([]);
   });
 
   it("creates a check-in date at the Shanghai day boundary for MCP date strings", async () => {

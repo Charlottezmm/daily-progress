@@ -22,6 +22,6 @@ test("review route frames suggestions as user-reviewed drafts, not applied chang
 
   await expect(page.getByRole("heading", { name: "审核" })).toBeVisible();
   await expect(page.getByText("这些是 Agent 提的调整建议，你点头才会生效。")).toBeVisible();
-  await expect(page.getByText("Routine 和 Recovery 受保护，Agent 只能动任务的时间和优先级。")).toBeVisible();
+  await expect(page.getByText("Routine 和 Recovery 受保护；Agent 可以提任务调整或日程导入草稿，但只有你确认后才会写入。")).toBeVisible();
   await expect(page.getByText("已应用")).toHaveCount(0);
 });

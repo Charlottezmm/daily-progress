@@ -2,6 +2,7 @@ import { z } from "zod";
 
 const daySegmentSchema = z.enum(["morning", "afternoon", "evening"]);
 const prioritySchema = z.enum(["low", "normal", "high", "urgent"]);
+const timetableKindSchema = z.enum(["course", "meeting", "unavailable", "routine", "recovery"]);
 const evidenceFields = {
   capacity_impact: z.array(z.string()).optional(),
   protected_evidence: z.array(z.string()).optional(),
@@ -66,6 +67,27 @@ const suggestMilestoneChangeSchema = z.object({
   ...evidenceFields,
 });
 
+const timetableImportRowSchema = z.object({
+  title: z.string().trim().min(1),
+  kind: timetableKindSchema,
+  dayOfWeek: z.string().trim().nullable(),
+  startTime: z.string().trim().regex(/^\d{2}:\d{2}$/),
+  endTime: z.string().trim().regex(/^\d{2}:\d{2}$/),
+  startsOn: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/),
+  endsOn: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/),
+  course: z.string().trim().nullable(),
+  recurrence: z.string().trim().nullable(),
+  notes: z.string().trim().nullable(),
+});
+
+const importTimetableSchema = z.object({
+  type: z.literal("import_timetable"),
+  source_label: z.string().trim().max(120).optional(),
+  rows: z.array(timetableImportRowSchema).min(1).max(200),
+  reason: z.string(),
+  ...evidenceFields,
+});
+
 const moveProtectedBlockSchema = z.object({
   type: z.literal("move_protected_block"),
   block_id: z.string(),
@@ -81,6 +103,7 @@ export const agentPatchSchema = z.object({
       moveToBacklogSchema,
       changePrioritySchema,
       suggestMilestoneChangeSchema,
+      importTimetableSchema,
     ]),
   ),
 });

@@ -50,6 +50,25 @@ describe("agent patch schema", () => {
           proposed_text: "Ship MCP planning foundation.",
           reason: "Scope is now clearer.",
         },
+        {
+          type: "import_timetable",
+          source_label: "spring timetable",
+          rows: [
+            {
+              title: "Embodied AI seminar",
+              kind: "course",
+              dayOfWeek: "monday",
+              startTime: "09:00",
+              endTime: "10:30",
+              startsOn: "2026-06-15",
+              endsOn: "2026-06-22",
+              course: "Embodied AI",
+              recurrence: null,
+              notes: "Imported from MCP draft.",
+            },
+          ],
+          reason: "User asked the agent to prepare a timetable import for review.",
+        },
       ],
     });
 
@@ -60,6 +79,7 @@ describe("agent patch schema", () => {
       "move_to_backlog",
       "change_priority",
       "suggest_milestone_change",
+      "import_timetable",
     ]);
   });
 

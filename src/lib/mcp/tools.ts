@@ -15,6 +15,7 @@ import {
   recordDecision,
   saveConversationSummary,
 } from "@/lib/mcp/conversation-tools";
+import { proposeTimetableImport, proposeTimetableImportArgsSchema } from "@/lib/mcp/timetable-import";
 
 type PlanningDb = {
   transaction<T>(callback: (tx: any) => Promise<T>): Promise<T>;
@@ -140,6 +141,7 @@ export const pawPlanToolSchemas = {
       created_by: createdBySchema.optional(),
     })
     .strict(),
+  propose_timetable_import: proposeTimetableImportArgsSchema,
   import_plan_bundle: z
     .object({
       import_key: z.string().trim().min(1).max(160),
@@ -208,6 +210,7 @@ export const pawPlanToolDescriptions: Record<PawPlanToolName, string> = {
   save_conversation_summary: "Save a structured conversation summary without storing raw transcript, with MCP provenance.",
   record_decision: "Record a structured workspace decision with MCP provenance.",
   propose_patch: "Create a preview-only agent patch draft; this never applies the patch.",
+  propose_timetable_import: "Create a preview-only timetable import draft for user review; this never writes constraints directly.",
   import_plan_bundle: "Import a trusted structured plan bundle into real PawPlan tasks with MCP provenance.",
 };
 
@@ -227,6 +230,7 @@ const pawPlanToolPermissions: Record<PawPlanToolName, "read" | "write"> = {
   save_conversation_summary: "write",
   record_decision: "write",
   propose_patch: "write",
+  propose_timetable_import: "write",
   import_plan_bundle: "write",
 };
 
@@ -681,6 +685,11 @@ export async function runPawPlanTool(
       },
       monthlySummary: parsed.monthly_summary,
     });
+  }
+
+  if (toolName === "propose_timetable_import") {
+    const parsed = pawPlanToolSchemas.propose_timetable_import.parse(args);
+    return proposeTimetableImport(db, workspaceId, parsed);
   }
 
   const parsed = pawPlanToolSchemas.propose_patch.parse(args);
