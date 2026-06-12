@@ -1,6 +1,7 @@
 import { and, desc, eq, gte, lt, type SQL } from "drizzle-orm";
 import { z } from "zod";
-import { checkins, tasks } from "@/lib/db/schema";
+import { checkins, courses, dayCapacities, routines, tasks, timeBlocks } from "@/lib/db/schema";
+import { buildCapacityModel } from "@/lib/planning/capacity-model";
 import {
   createDailyCheckin,
   createInboxItem,
@@ -8,6 +9,12 @@ import {
   updateTaskStatus,
 } from "@/lib/planning/service";
 import { saveMcpPlanImport } from "@/lib/mcp/plan-import";
+import {
+  getConversationSummaries,
+  getDecisionRecords,
+  recordDecision,
+  saveConversationSummary,
+} from "@/lib/mcp/conversation-tools";
 
 type PlanningDb = {
   transaction<T>(callback: (tx: any) => Promise<T>): Promise<T>;
@@ -24,6 +31,17 @@ const prioritySchema = z.enum(["low", "normal", "high", "urgent"]);
 const energyLevelSchema = z.enum(["low", "medium", "high"]);
 const daySegmentSchema = z.enum(["morning", "afternoon", "evening"]);
 const dateStringSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const createdBySchema = z.enum(["codex", "claude", "user"]);
+const conversationContextTypeSchema = z.enum([
+  "weekly_review",
+  "decision",
+  "learning_qa",
+  "check_in_followup",
+  "methodology",
+  "adhoc",
+]);
+const decisionStatusSchema = z.enum(["active", "superseded", "abandoned"]);
+const limitSchema = z.number().int().min(1).max(100).optional();
 
 const emptyArgsSchema = z.object({}).strict();
 const rangeArgsSchema = z
@@ -37,6 +55,20 @@ export const pawPlanToolSchemas = {
   get_today: emptyArgsSchema,
   get_week: emptyArgsSchema,
   get_month: rangeArgsSchema,
+  get_constraints: rangeArgsSchema,
+  get_capacity: rangeArgsSchema,
+  get_decisions: z
+    .object({
+      status: decisionStatusSchema.optional(),
+      limit: limitSchema,
+    })
+    .strict(),
+  get_conversations: z
+    .object({
+      context_type: conversationContextTypeSchema.optional(),
+      limit: limitSchema,
+    })
+    .strict(),
   get_checkins: z
     .object({
       days: z.number().int().min(1).max(90).optional(),
@@ -69,18 +101,49 @@ export const pawPlanToolSchemas = {
       note: z.string().max(1000).optional(),
     })
     .strict(),
+  save_conversation_summary: z
+    .object({
+      topic: z.string().trim().min(1).max(240),
+      context_type: conversationContextTypeSchema,
+      summary: z.string().trim().min(1).max(10000),
+      decisions: z
+        .array(
+          z
+            .object({
+              topic: z.string().trim().min(1).max(240),
+              chosen: z.string().trim().min(1).max(2000),
+              rationale: z.string().trim().min(1).max(4000),
+            })
+            .strict(),
+        )
+        .max(50),
+      open_questions: z.array(z.string().trim().min(1).max(1000)).max(50),
+      created_by: createdBySchema,
+    })
+    .strict(),
+  record_decision: z
+    .object({
+      topic: z.string().trim().min(1).max(240),
+      context: z.string().trim().min(1).max(10000),
+      options_considered: z.array(z.string().trim().min(1).max(2000)).min(1).max(50),
+      chosen: z.string().trim().min(1).max(4000),
+      rationale: z.string().trim().min(1).max(10000),
+      tradeoffs_accepted: z.string().trim().max(10000),
+      status: decisionStatusSchema,
+    })
+    .strict(),
   propose_patch: z
     .object({
       mode: z.enum(["today", "week"]),
       reason: z.string().min(1),
       patch: z.unknown(),
-      created_by: z.enum(["codex", "claude", "user"]).optional(),
+      created_by: createdBySchema.optional(),
     })
     .strict(),
   import_plan_bundle: z
     .object({
       import_key: z.string().trim().min(1).max(160),
-      created_by: z.enum(["codex", "claude", "user"]).optional(),
+      created_by: createdBySchema.optional(),
       source_label: z.string().trim().max(120).optional(),
       overall_plan: z
         .object({
@@ -133,11 +196,17 @@ export const pawPlanToolDescriptions: Record<PawPlanToolName, string> = {
   get_today: "Read today's PawPlan planning context for the configured workspace.",
   get_week: "Read this week's PawPlan planning context for the configured workspace.",
   get_month: "Read a minimal raw month/range task list for the configured workspace.",
+  get_constraints: "Read workspace-scoped protected blocks, courses, routines, and time blocks.",
+  get_capacity: "Read shared day/segment capacity for the configured workspace.",
+  get_decisions: "Read recent workspace-scoped structured decisions, optionally filtered by status.",
+  get_conversations: "Read recent workspace-scoped structured conversation summaries, optionally filtered by context type.",
   get_checkins: "Read recent daily check-ins for the configured workspace.",
   get_tasks: "Read workspace-scoped tasks, optionally filtered by status and date range.",
   create_inbox_item: "Create an inbox item and record an MCP audit changelog.",
   create_checkin: "Create or update a daily check-in with MCP source attribution.",
   update_task_status: "Update a task status with MCP source attribution.",
+  save_conversation_summary: "Save a structured conversation summary without storing raw transcript, with MCP provenance.",
+  record_decision: "Record a structured workspace decision with MCP provenance.",
   propose_patch: "Create a preview-only agent patch draft; this never applies the patch.",
   import_plan_bundle: "Import a trusted structured plan bundle into real PawPlan tasks with MCP provenance.",
 };
@@ -146,14 +215,28 @@ const pawPlanToolPermissions: Record<PawPlanToolName, "read" | "write"> = {
   get_today: "read",
   get_week: "read",
   get_month: "read",
+  get_constraints: "read",
+  get_capacity: "read",
+  get_decisions: "read",
+  get_conversations: "read",
   get_checkins: "read",
   get_tasks: "read",
   create_inbox_item: "write",
   create_checkin: "write",
   update_task_status: "write",
+  save_conversation_summary: "write",
+  record_decision: "write",
   propose_patch: "write",
   import_plan_bundle: "write",
 };
+
+export const pawPlanWriteToolNames = pawPlanToolNames.filter(
+  (name) => pawPlanToolPermissions[name] === "write",
+);
+
+export function isPawPlanWriteTool(name: string) {
+  return Object.hasOwn(pawPlanToolSchemas, name) && pawPlanToolPermissions[name as PawPlanToolName] === "write";
+}
 
 export function allowedPawPlanToolNames(permission: McpPermission) {
   return pawPlanToolNames.filter((name) => permission === "read_write" || pawPlanToolPermissions[name] === "read");
@@ -210,6 +293,26 @@ function serializeCheckin(checkin: Record<string, any>) {
   };
 }
 
+function serializeDateFields(row: Record<string, any>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(row).map(([key, value]) => [key, value instanceof Date ? value.toISOString() : value]),
+  );
+}
+
+function readRange(args: { date_from?: string; date_to?: string }) {
+  const start = args.date_from ? parseDateBoundary(args.date_from) : startOfShanghaiDay(new Date());
+  const end = args.date_to ? parseDateBoundary(args.date_to) : addDays(start, 7);
+  return { start, end, date_from: toDateKey(start), date_to: toDateKey(end) };
+}
+
+function datesInRange(start: Date, end: Date) {
+  const dates: Date[] = [];
+  for (let cursor = start; cursor < end; cursor = addDays(cursor, 1)) {
+    dates.push(cursor);
+  }
+  return dates;
+}
+
 function buildTaskFilters(
   workspaceId: string,
   args: {
@@ -259,6 +362,76 @@ async function readCheckins(db: PlanningDb, workspaceId: string, days = 7) {
     workspaceId,
     days,
     checkins: rows.map(serializeCheckin),
+  };
+}
+
+async function readConstraints(
+  db: PlanningDb,
+  workspaceId: string,
+  args: {
+    date_from?: string;
+    date_to?: string;
+  },
+) {
+  const range = readRange(args);
+  const [courseRows, routineRows, blockRows] = await Promise.all([
+    db.select().from(courses).where(eq(courses.workspaceId, workspaceId)).orderBy(courses.createdAt),
+    db.select().from(routines).where(eq(routines.workspaceId, workspaceId)).orderBy(routines.createdAt),
+    db
+      .select()
+      .from(timeBlocks)
+      .where(and(eq(timeBlocks.workspaceId, workspaceId), lt(timeBlocks.startsAt, range.end), gte(timeBlocks.endsAt, range.start)))
+      .orderBy(timeBlocks.startsAt),
+  ]);
+
+  const serializedBlocks: Record<string, unknown>[] = blockRows.map((block: Record<string, any>) => serializeDateFields(block));
+  return {
+    workspaceId,
+    filters: args,
+    courses: courseRows.map(serializeDateFields),
+    routines: routineRows.map(serializeDateFields),
+    timeBlocks: serializedBlocks,
+    protectedBlocks: serializedBlocks.filter((block) =>
+      ["course", "meeting", "unavailable", "routine", "recovery"].includes(String(block.kind)),
+    ),
+  };
+}
+
+async function readCapacity(
+  db: PlanningDb,
+  workspaceId: string,
+  args: {
+    date_from?: string;
+    date_to?: string;
+  },
+) {
+  const range = readRange(args);
+  const [taskRows, blockRows, routineRows, capacityRows] = await Promise.all([
+    db
+      .select()
+      .from(tasks)
+      .where(and(eq(tasks.workspaceId, workspaceId), gte(tasks.date, range.start), lt(tasks.date, range.end))),
+    db
+      .select()
+      .from(timeBlocks)
+      .where(and(eq(timeBlocks.workspaceId, workspaceId), lt(timeBlocks.startsAt, range.end), gte(timeBlocks.endsAt, range.start))),
+    db.select().from(routines).where(eq(routines.workspaceId, workspaceId)),
+    db
+      .select()
+      .from(dayCapacities)
+      .where(and(eq(dayCapacities.workspaceId, workspaceId), gte(dayCapacities.date, range.start), lt(dayCapacities.date, range.end))),
+  ]);
+
+  return {
+    workspaceId,
+    filters: args,
+    capacity: buildCapacityModel({
+      dates: datesInRange(range.start, range.end),
+      capacities: capacityRows,
+      tasks: taskRows,
+      timeBlocks: blockRows,
+      routines: routineRows,
+    }),
   };
 }
 
@@ -369,6 +542,25 @@ export async function runPawPlanTool(
     const parsed = pawPlanToolSchemas.get_month.parse(args);
     return readMonth(db, workspaceId, parsed);
   }
+  if (toolName === "get_constraints") {
+    const parsed = pawPlanToolSchemas.get_constraints.parse(args);
+    return readConstraints(db, workspaceId, parsed);
+  }
+  if (toolName === "get_capacity") {
+    const parsed = pawPlanToolSchemas.get_capacity.parse(args);
+    return readCapacity(db, workspaceId, parsed);
+  }
+  if (toolName === "get_decisions") {
+    const parsed = pawPlanToolSchemas.get_decisions.parse(args);
+    return getDecisionRecords(db, workspaceId, parsed);
+  }
+  if (toolName === "get_conversations") {
+    const parsed = pawPlanToolSchemas.get_conversations.parse(args);
+    return getConversationSummaries(db, workspaceId, {
+      contextType: parsed.context_type,
+      limit: parsed.limit,
+    });
+  }
   if (toolName === "get_checkins") {
     const parsed = pawPlanToolSchemas.get_checkins.parse(args);
     return readCheckins(db, workspaceId, parsed.days ?? 7);
@@ -432,8 +624,35 @@ export async function runPawPlanTool(
             persisted: false,
             reason: "Task status notes are not supported by the current schema.",
           }
-        : undefined,
+      : undefined,
     };
+  }
+
+  if (toolName === "save_conversation_summary") {
+    const parsed = pawPlanToolSchemas.save_conversation_summary.parse(args);
+    return saveConversationSummary(db, {
+      workspaceId,
+      topic: parsed.topic,
+      contextType: parsed.context_type,
+      summary: parsed.summary,
+      decisions: parsed.decisions,
+      openQuestions: parsed.open_questions,
+      createdBy: parsed.created_by,
+    });
+  }
+
+  if (toolName === "record_decision") {
+    const parsed = pawPlanToolSchemas.record_decision.parse(args);
+    return recordDecision(db, {
+      workspaceId,
+      topic: parsed.topic,
+      context: parsed.context,
+      optionsConsidered: parsed.options_considered,
+      chosen: parsed.chosen,
+      rationale: parsed.rationale,
+      tradeoffsAccepted: parsed.tradeoffs_accepted,
+      status: parsed.status,
+    });
   }
 
   if (toolName === "import_plan_bundle") {

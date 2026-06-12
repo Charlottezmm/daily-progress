@@ -80,6 +80,28 @@ describe("agent patch schema", () => {
     ).toThrow("Agent patch cannot modify routine or recovery blocks");
   });
 
+  it("rejects supported operations that carry protected block mutation evidence", () => {
+    expect(() =>
+      validatePatchAgainstProtectedBlocks(
+        {
+          operations: [
+            {
+              type: "move_task",
+              task_id: "task-1",
+              from_date: "2026-06-03",
+              from_day_segment: "morning",
+              to_date: "2026-06-04",
+              to_day_segment: "evening",
+              protected_block_id: "recovery-1",
+              reason: "Move work into a recovery block.",
+            },
+          ],
+        },
+        ["recovery-1"],
+      ),
+    ).toThrow("Agent patch cannot modify routine or recovery blocks");
+  });
+
   it("parses non-protected raw patches through the agent patch schema", () => {
     const parsed = validatePatchAgainstProtectedBlocks(
       {

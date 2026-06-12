@@ -1,6 +1,6 @@
 "use client";
 
-import { KeyRound, Plus, RotateCcw, Save, ShieldCheck, Trash2, Zap } from "lucide-react";
+import { AlertTriangle, Download, KeyRound, Plus, RotateCcw, Save, ShieldCheck, Trash2, Upload, Zap } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { BackLink } from "./back-link";
 import { CatIcon } from "./cat-icon";
@@ -61,6 +61,13 @@ type SettingsResponse = {
     editable: false;
     source: "system_default";
   };
+};
+
+type TemplateImportResult = {
+  planId: string;
+  tasksCreated: number;
+  routinesCreated: number;
+  timeBlocksCreated: number;
 };
 
 type RoutineForm = Omit<Routine, "id"> & { id?: string };
@@ -144,9 +151,17 @@ export function SettingsView() {
   const [tokenForm, setTokenForm] = useState<TokenForm>(emptyTokenForm);
   const [rawToken, setRawToken] = useState<string | null>(null);
   const [mcpMessage, setMcpMessage] = useState<string | null>(null);
+  const [workspaceName, setWorkspaceName] = useState("");
+  const [workspaceDeleteConfirmation, setWorkspaceDeleteConfirmation] = useState("");
+  const [workspaceDeleteMessage, setWorkspaceDeleteMessage] = useState<string | null>(null);
+  const [templateMessage, setTemplateMessage] = useState<string | null>(null);
 
   const isEditing = Boolean(routineForm.id);
   const activeRecoveryTarget = useMemo(() => recoveryTarget, []);
+  const trimmedWorkspaceName = workspaceName.trim();
+  const expectedWorkspaceDeleteConfirmation = trimmedWorkspaceName ? `DELETE ${trimmedWorkspaceName}` : "";
+  const canDeleteWorkspace =
+    Boolean(expectedWorkspaceDeleteConfirmation) && workspaceDeleteConfirmation === expectedWorkspaceDeleteConfirmation;
 
   useEffect(() => {
     let active = true;
@@ -325,6 +340,83 @@ export function SettingsView() {
     setMcpMessage("MCP token 已撤销。");
   }
 
+  async function exportTemplate() {
+    setPending("template-export");
+    setTemplateMessage(null);
+    const response = await fetch("/api/templates/export");
+    setPending(null);
+
+    if (!response.ok) {
+      setTemplateMessage("Template export failed.");
+      return;
+    }
+
+    const template = await response.json();
+    const blob = new Blob([JSON.stringify(template, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `pawplan-template-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setTemplateMessage("Template exported.");
+  }
+
+  async function importTemplate(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setPending("template-import");
+    setTemplateMessage(null);
+    try {
+      const template = JSON.parse(await file.text());
+      const response = await fetch("/api/templates/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ template, mode: "new_plan" }),
+      });
+      const data = (await response.json()) as TemplateImportResult & { error?: string };
+      if (!response.ok) {
+        setTemplateMessage(data.error ?? "Template import failed.");
+        return;
+      }
+      setTemplateMessage(
+        `Template imported: ${data.tasksCreated} tasks, ${data.routinesCreated} routines, ${data.timeBlocksCreated} time blocks.`,
+      );
+    } catch {
+      setTemplateMessage("Template import failed.");
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function deleteWorkspace(event: React.FormEvent) {
+    event.preventDefault();
+    if (!canDeleteWorkspace) {
+      setWorkspaceDeleteMessage("请输入完整确认短语。");
+      return;
+    }
+
+    setPending("workspace-delete");
+    const response = await fetch("/api/workspace", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirmation: workspaceDeleteConfirmation }),
+    });
+    const data = (await response.json()) as { deleted?: boolean; error?: string };
+    setPending(null);
+
+    if (!response.ok || !data.deleted) {
+      setWorkspaceDeleteMessage(data.error ?? "Workspace 删除失败。");
+      return;
+    }
+
+    window.location.replace("/login");
+  }
+
   return (
     <div className="paw-page">
       <section className="paw-page-header">
@@ -338,6 +430,42 @@ export function SettingsView() {
           <span className="paw-status-pill">Recovery: 系统默认 {formatHours(activeRecoveryTarget.minutes)}</span>
           {dataUnavailable ? <span className="paw-status-pill warn">数据源未配置</span> : null}
           {message ? <span className="paw-status-pill link">{message}</span> : null}
+        </div>
+      </section>
+
+      <section className="paw-list-card mb-4">
+        <div className="paw-list-header">
+          <div>
+            <h2 className="paw-list-title">Workspace template</h2>
+            <p className="paw-list-subtitle">Export reusable planning structure without tokens, check-ins, or progress history.</p>
+          </div>
+          <span className="paw-more-icon">
+            <Download size={18} />
+          </span>
+        </div>
+
+        <div className="paw-save-row !mt-4">
+          <button
+            type="button"
+            disabled={pending === "template-export"}
+            onClick={() => void exportTemplate()}
+            className="paw-primary-btn !px-4 !py-2 !text-sm"
+          >
+            <Download size={15} />
+            {pending === "template-export" ? "Exporting" : "Export workspace template"}
+          </button>
+          <label className="paw-secondary-btn !px-4 !py-2 !text-sm">
+            <Upload size={15} />
+            Import template
+            <input
+              type="file"
+              accept="application/json,.json"
+              disabled={pending === "template-import"}
+              onChange={(event) => void importTemplate(event)}
+              className="sr-only"
+            />
+          </label>
+          {templateMessage ? <span className="paw-status-pill link">{templateMessage}</span> : null}
         </div>
       </section>
 
@@ -650,7 +778,7 @@ export function SettingsView() {
         )}
       </section>
 
-      <section className="paw-list-card">
+      <section className="paw-list-card mb-4">
         <div className="paw-list-header">
           <div>
             <h2 className="paw-list-title">能量规则</h2>
@@ -691,6 +819,52 @@ export function SettingsView() {
             {pending === "energy" ? "保存中" : "保存能量规则"}
           </button>
         </div>
+      </section>
+
+      <section className="paw-list-card">
+        <div className="paw-list-header">
+          <div>
+            <h2 className="paw-list-title">Danger zone</h2>
+            <p className="paw-list-subtitle">删除当前 workspace 会同时删除它下面的计划、任务、设置、token 和记录。</p>
+          </div>
+          <span className="paw-more-icon text-[var(--app-danger)]">
+            <AlertTriangle size={18} />
+          </span>
+        </div>
+
+        <form onSubmit={deleteWorkspace} className="grid gap-3 border-t border-[var(--app-line)] pt-4">
+          <div className="grid gap-3 md:grid-cols-2">
+            <label>
+              <span className="paw-field-label">Workspace 名称</span>
+              <input
+                value={workspaceName}
+                onChange={(event) => setWorkspaceName(event.target.value)}
+                className="paw-input"
+                placeholder="当前 workspace 名称"
+              />
+            </label>
+            <label>
+              <span className="paw-field-label">删除确认</span>
+              <input
+                value={workspaceDeleteConfirmation}
+                onChange={(event) => setWorkspaceDeleteConfirmation(event.target.value)}
+                className="paw-input"
+                placeholder={expectedWorkspaceDeleteConfirmation || "DELETE <workspace name>"}
+              />
+            </label>
+          </div>
+          <div className="paw-save-row !mt-1">
+            <button
+              type="submit"
+              disabled={!canDeleteWorkspace || pending === "workspace-delete"}
+              className="paw-secondary-btn !px-4 !py-2 !text-sm text-[var(--app-danger)]"
+            >
+              <Trash2 size={15} />
+              {pending === "workspace-delete" ? "删除中" : "删除 workspace"}
+            </button>
+            {workspaceDeleteMessage ? <span className="paw-status-pill warn">{workspaceDeleteMessage}</span> : null}
+          </div>
+        </form>
       </section>
     </div>
   );

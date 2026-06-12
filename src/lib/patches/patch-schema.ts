@@ -2,6 +2,12 @@ import { z } from "zod";
 
 const daySegmentSchema = z.enum(["morning", "afternoon", "evening"]);
 const prioritySchema = z.enum(["low", "normal", "high", "urgent"]);
+const evidenceFields = {
+  capacity_impact: z.array(z.string()).optional(),
+  protected_evidence: z.array(z.string()).optional(),
+  protected_over_capacity: z.boolean().optional(),
+  protected_over_capacity_reason: z.string().optional(),
+};
 
 const moveTaskSchema = z.object({
   type: z.literal("move_task"),
@@ -11,6 +17,7 @@ const moveTaskSchema = z.object({
   to_date: z.string(),
   to_day_segment: daySegmentSchema,
   reason: z.string(),
+  ...evidenceFields,
 });
 
 const splitTaskSchema = z.object({
@@ -24,6 +31,7 @@ const splitTaskSchema = z.object({
     }),
   ),
   reason: z.string(),
+  ...evidenceFields,
 });
 
 const deferTaskSchema = z.object({
@@ -31,12 +39,14 @@ const deferTaskSchema = z.object({
   task_id: z.string(),
   target_week_or_date: z.string(),
   reason: z.string(),
+  ...evidenceFields,
 });
 
 const moveToBacklogSchema = z.object({
   type: z.literal("move_to_backlog"),
   task_id: z.string(),
   reason: z.string(),
+  ...evidenceFields,
 });
 
 const changePrioritySchema = z.object({
@@ -45,6 +55,7 @@ const changePrioritySchema = z.object({
   from_priority: prioritySchema,
   to_priority: prioritySchema,
   reason: z.string(),
+  ...evidenceFields,
 });
 
 const suggestMilestoneChangeSchema = z.object({
@@ -52,6 +63,7 @@ const suggestMilestoneChangeSchema = z.object({
   milestone_id: z.string(),
   proposed_text: z.string(),
   reason: z.string(),
+  ...evidenceFields,
 });
 
 const moveProtectedBlockSchema = z.object({
@@ -85,6 +97,20 @@ export function validatePatchAgainstProtectedBlocks(
     const parsed = moveProtectedBlockSchema.safeParse(operation);
     if (parsed.success && protectedBlockIds.includes(parsed.data.block_id)) {
       throw new Error("Agent patch cannot modify routine or recovery blocks");
+    }
+    if (typeof operation === "object" && operation !== null && !Array.isArray(operation)) {
+      const record = operation as Record<string, unknown>;
+      const protectedBlockId = record.protected_block_id;
+      if (typeof protectedBlockId === "string" && protectedBlockIds.includes(protectedBlockId)) {
+        throw new Error("Agent patch cannot modify routine or recovery blocks");
+      }
+      const protectedBlockIdsValue = record.protected_block_ids;
+      if (
+        Array.isArray(protectedBlockIdsValue) &&
+        protectedBlockIdsValue.some((id) => typeof id === "string" && protectedBlockIds.includes(id))
+      ) {
+        throw new Error("Agent patch cannot modify routine or recovery blocks");
+      }
     }
   }
 

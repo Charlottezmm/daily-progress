@@ -7,8 +7,9 @@ import { readJsonBody } from "@/lib/validation/common";
 
 const applyPatchBodySchema = z.object({
   patchId: z.string().min(1),
-  acceptedOperationIndexes: z.array(z.number().int().nonnegative()).min(1),
-});
+  acceptedOperationIndexes: z.array(z.number().int().nonnegative()).default([]),
+  rejectedOperationIndexes: z.array(z.number().int().nonnegative()).default([]),
+}).refine((value) => value.acceptedOperationIndexes.length > 0 || value.rejectedOperationIndexes.length > 0);
 
 export async function POST(request: Request) {
   const workspaceId = await getWorkspaceIdFromSession();
@@ -26,6 +27,7 @@ export async function POST(request: Request) {
       workspaceId,
       patchId: parsed.data.patchId,
       acceptedOperationIndexes: parsed.data.acceptedOperationIndexes,
+      rejectedOperationIndexes: parsed.data.rejectedOperationIndexes,
     });
     return NextResponse.json(result);
   } catch (error) {

@@ -1,0 +1,216 @@
+import { and, asc, eq, inArray } from "drizzle-orm";
+import { editableTimeBlockKinds, type EditableTimeBlockKind, type TimeBlockInput } from "@/lib/constraints/schema";
+import { changeLogs, courses, plans, timeBlocks } from "@/lib/db/schema";
+
+const editableTimeBlockKindValues = [...editableTimeBlockKinds];
+
+type DbLike = {
+  transaction<T>(callback: (tx: any) => Promise<T>): Promise<T>;
+  select: (...args: any[]) => any;
+  insert: (...args: any[]) => any;
+  update: (...args: any[]) => any;
+  delete: (...args: any[]) => any;
+};
+
+type CourseRow = {
+  id: string;
+  workspaceId: string;
+  name: string;
+  color?: string;
+};
+
+type TimeBlockRow = {
+  id: string;
+  workspaceId: string;
+  title: string;
+  kind: string;
+  startsAt: Date;
+  endsAt: Date;
+  recurrenceRule: string | null;
+  courseId: string | null;
+  movable: boolean;
+};
+
+export class ConstraintsServiceError extends Error {
+  constructor(message: string, public status = 400) {
+    super(message);
+  }
+}
+
+function isEditableKind(kind: string): kind is EditableTimeBlockKind {
+  return editableTimeBlockKinds.includes(kind as EditableTimeBlockKind);
+}
+
+function normalizeNullable(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+function serializeTimeBlock(row: TimeBlockRow, courseNames: Map<string, string>) {
+  return {
+    ...row,
+    courseName: row.courseId ? courseNames.get(row.courseId) ?? null : null,
+    movable: false,
+  };
+}
+
+function serializeCourse(row: CourseRow) {
+  return {
+    id: row.id,
+    name: row.name,
+    color: row.color ?? "#2563eb",
+  };
+}
+
+async function getActivePlanId(tx: DbLike, workspaceId: string) {
+  const [plan] = await tx
+    .select({ id: plans.id })
+    .from(plans)
+    .where(and(eq(plans.workspaceId, workspaceId), eq(plans.status, "active")))
+    .limit(1);
+
+  return (plan?.id as string | undefined) ?? null;
+}
+
+async function findOrCreateCourse(tx: DbLike, workspaceId: string, courseName: string | null) {
+  if (!courseName) return null;
+
+  const [existing] = await tx
+    .select({ id: courses.id })
+    .from(courses)
+    .where(and(eq(courses.workspaceId, workspaceId), eq(courses.name, courseName)))
+    .limit(1);
+
+  if (existing) return existing.id as string;
+
+  const [created] = await tx.insert(courses).values({ workspaceId, name: courseName }).returning();
+  return created.id as string;
+}
+
+async function writeManualChangeLog(
+  tx: DbLike,
+  workspaceId: string,
+  summary: string,
+  detailsJson: Record<string, unknown>,
+) {
+  await tx.insert(changeLogs).values({
+    workspaceId,
+    planId: await getActivePlanId(tx, workspaceId),
+    source: "manual",
+    summary,
+    detailsJson,
+  });
+}
+
+export async function getConstraints(db: DbLike, workspaceId: string) {
+  const [courseRows, rawBlocks] = await Promise.all([
+    db.select().from(courses).where(eq(courses.workspaceId, workspaceId)).orderBy(asc(courses.name)),
+    db
+      .select()
+      .from(timeBlocks)
+      .where(and(eq(timeBlocks.workspaceId, workspaceId), inArray(timeBlocks.kind, editableTimeBlockKindValues)))
+      .orderBy(asc(timeBlocks.startsAt)),
+  ]);
+
+  const courseNames = new Map<string, string>();
+  for (const course of courseRows as CourseRow[]) courseNames.set(course.id, course.name);
+
+  const sortedBlocks = (rawBlocks as TimeBlockRow[])
+    .filter((block) => isEditableKind(block.kind))
+    .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+
+  return {
+    workspaceId,
+    courses: (courseRows as CourseRow[]).map(serializeCourse),
+    timeBlocks: sortedBlocks.map((block) => serializeTimeBlock(block, courseNames)),
+  };
+}
+
+export async function upsertTimeBlock(db: DbLike, workspaceId: string, input: TimeBlockInput) {
+  return db.transaction(async (tx) => {
+    const courseName = input.kind === "course" ? normalizeNullable(input.courseName) : null;
+    const courseId = await findOrCreateCourse(tx, workspaceId, courseName);
+    const course =
+      courseId && courseName
+        ? ({ id: courseId, workspaceId, name: courseName, color: input.color ?? "#2563eb" } satisfies CourseRow)
+        : null;
+    const values = {
+      workspaceId,
+      title: input.title,
+      kind: input.kind,
+      startsAt: input.startsAt,
+      endsAt: input.endsAt,
+      recurrenceRule: normalizeNullable(input.recurrenceRule),
+      courseId,
+      movable: false,
+    };
+
+    let timeBlock: TimeBlockRow;
+    if (input.id) {
+      const [existing] = await tx
+        .select()
+        .from(timeBlocks)
+        .where(and(eq(timeBlocks.id, input.id), eq(timeBlocks.workspaceId, workspaceId)))
+        .limit(1);
+
+      if (!existing) throw new ConstraintsServiceError("Time block not found", 404);
+      if (!isEditableKind(existing.kind)) throw new ConstraintsServiceError("Time block is not editable here", 403);
+
+      const [updated] = await tx
+        .update(timeBlocks)
+        .set(values)
+        .where(and(eq(timeBlocks.id, input.id), eq(timeBlocks.workspaceId, workspaceId)))
+        .returning();
+      timeBlock = updated as TimeBlockRow;
+    } else {
+      const [created] = await tx.insert(timeBlocks).values(values).returning();
+      timeBlock = created as TimeBlockRow;
+    }
+
+    await writeManualChangeLog(tx, workspaceId, "Updated calendar constraint", {
+      action: input.id ? "update_time_block" : "create_time_block",
+      timeBlockId: timeBlock.id,
+      kind: input.kind,
+      title: input.title,
+      courseName,
+    });
+
+    return {
+      timeBlock: {
+        ...timeBlock,
+        courseName,
+        movable: false,
+      },
+      course: course ? serializeCourse(course) : null,
+    };
+  });
+}
+
+export async function deleteTimeBlock(db: DbLike, workspaceId: string, id: string) {
+  return db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select()
+      .from(timeBlocks)
+      .where(and(eq(timeBlocks.id, id), eq(timeBlocks.workspaceId, workspaceId)))
+      .limit(1);
+
+    if (!existing) throw new ConstraintsServiceError("Time block not found", 404);
+    if (!isEditableKind(existing.kind)) throw new ConstraintsServiceError("Time block is not editable here", 403);
+
+    const [deleted] = await tx
+      .delete(timeBlocks)
+      .where(and(eq(timeBlocks.id, id), eq(timeBlocks.workspaceId, workspaceId)))
+      .returning();
+
+    if (!deleted) throw new ConstraintsServiceError("Time block not found", 404);
+
+    await writeManualChangeLog(tx, workspaceId, "Deleted calendar constraint", {
+      action: "delete_time_block",
+      timeBlockId: id,
+      kind: existing.kind,
+      title: existing.title,
+    });
+
+    return { deleted: true };
+  });
+}

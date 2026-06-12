@@ -25,7 +25,7 @@ https://pawplan.charlottezmm.info/api/mcp
 
 在 PawPlan `/settings` 里创建 workspace-scoped MCP token。建议 scheduled automation 使用 `read_write`
 token，因为它需要调用 `propose_patch` 写入 Review preview。只读 token 只能读取 `get_today` / `get_week` /
-`get_month` / `get_checkins` / `get_tasks`。
+`get_month` / `get_constraints` / `get_capacity` / `get_checkins` / `get_tasks`。
 
 Codex config 示例：
 
@@ -83,6 +83,8 @@ npm run mcp
 - `get_today`：读取当前 workspace 今天的任务和 check-in。
 - `get_week`：读取当前 workspace 本周任务，按日期分组。
 - `get_month`：读取当前 workspace 的月度或日期范围任务，按日期分组。
+- `get_constraints`：读取当前 workspace 的课程、routine 和 protected time blocks；只读，不编辑 constraints。
+- `get_capacity`：读取共享 capacity model 输出，包括每天 morning / afternoon / evening 的任务占用、protected 占用、剩余容量和 warning。
 - `get_checkins`：读取最近 daily check-in。
 - `get_tasks`：按状态和日期范围读取任务。
 - `create_inbox_item`：创建 inbox item，并记录 MCP 审计来源。
@@ -105,7 +107,7 @@ npm run mcp
 导入后的后续修改仍然走 Review：
 
 ```text
-用 PawPlan MCP 读取 today、week、month 和最近 check-ins。
+用 PawPlan MCP 读取 today、week、constraints、capacity、month 和最近 check-ins。
 判断当前计划是否需要重排。如果需要，只生成 Review patch，不要直接 apply。
 说明为什么调、影响哪些任务、对本周和本月目标有什么影响。
 ```
@@ -115,6 +117,7 @@ npm run mcp
 所有 scheduled automation prompt 都必须遵守：
 
 - 先读取数据，再判断是否需要 patch。
+- 判断冲突、过载或固定时间时，必须读取 `get_constraints` 和 `get_capacity`，不要凭任务列表猜容量。
 - 需要重排、延期、拆分、改优先级或调整计划时，只能生成 patch 并调用 `propose_patch`。
 - 不得调用 apply。
 - 不得直接改 task date。
@@ -137,12 +140,13 @@ npm run mcp
 
 步骤：
 1. 调用 get_today 读取今天任务、状态和 check-in。
-2. 调用 get_checkins 读取最近 7 天 check-in。
-3. 必要时调用 get_week 读取本周剩余计划。
-4. 如果没有任务、没有 check-in，或数据不足以判断，不要调用 propose_patch；只返回缺少的数据。
-5. 如果需要把未完成任务 rollover、拆分任务、调整明天容量或改变优先级，生成 patch。
-6. 调用 propose_patch，mode 使用 today 或 week，reason 写清楚依据。
-7. 告诉用户去 PawPlan /review 确认。
+2. 调用 get_week 读取本周剩余计划。
+3. 调用 get_constraints 和 get_capacity 读取今天到本周结束的固定约束与共享容量。
+4. 调用 get_checkins 读取最近 7 天 check-in。
+5. 如果没有任务、没有 check-in，或数据不足以判断，不要调用 propose_patch；只返回缺少的数据。
+6. 如果需要把未完成任务 rollover、拆分任务、避开 protected blocks 或改变优先级，生成 patch。
+7. 调用 propose_patch，mode 使用 today 或 week，reason 写清楚依据。
+8. 告诉用户去 PawPlan /review 确认。
 
 限制：
 - 不得调用 apply。
@@ -150,6 +154,7 @@ npm run mcp
 - 不得直接调用 update_task_status 做重排。
 - update_task_status 只允许在用户明确提供事实时使用，例如用户说“任务 X 已完成”。
 - 不覆盖 routine / recovery。
+- 不直接编辑 constraints；constraints/capacity 只用于读取判断。
 - 不伪造已完成。
 ```
 
@@ -166,11 +171,12 @@ npm run mcp
 步骤：
 1. 调用 get_today 读取今天任务。
 2. 调用 get_week 读取本周计划。
-3. 必要时调用 get_tasks 读取 todo / backlog 任务，确认是否有应进入今日但尚未排入的任务。
-4. 如果今天计划可执行，且没有需要用户确认的变更，不要调用 propose_patch。
-5. 如果需要减载、拆分、延期、补 recovery 或调整 priority，生成 patch。
-6. 调用 propose_patch，reason 写明触发条件和影响。
-7. 告诉用户在 PawPlan /review 逐条确认后再 apply。
+3. 调用 get_constraints 和 get_capacity 读取今天和本周的 protected blocks、课程、routine 与剩余容量。
+4. 必要时调用 get_tasks 读取 todo / backlog 任务，确认是否有应进入今日但尚未排入的任务。
+5. 如果今天计划可执行，且没有需要用户确认的变更，不要调用 propose_patch。
+6. 如果需要减载、拆分、延期、补 recovery 或调整 priority，生成 patch。
+7. 调用 propose_patch，reason 写明触发条件和影响。
+8. 告诉用户在 PawPlan /review 逐条确认后再 apply。
 
 限制：
 - 不得调用 apply。
@@ -178,6 +184,7 @@ npm run mcp
 - 不得直接修改状态来制造“进度”。
 - update_task_status 只用于记录用户明确说出的事实。
 - 不覆盖 routine / recovery。
+- 不直接编辑 constraints；constraints/capacity 只用于读取判断。
 - 无数据时不写 patch。
 ```
 
@@ -193,20 +200,22 @@ npm run mcp
 
 步骤：
 1. 调用 get_week 读取本周任务。
-2. 调用 get_checkins，days 使用 14，读取最近两周 check-in。
-3. 调用 get_month，读取覆盖本周和下周的日期范围。
-4. 必要时调用 get_tasks 读取 backlog 和 todo。
-5. 分析完成、跳过、未完成、过载、recovery 缺口和下周风险。
-6. 如果没有足够数据，或没有明确调整建议，不要调用 propose_patch。
-7. 如果需要调整下周重点、拆分大任务、rollover 未完成任务、补 recovery 或改变优先级，生成 patch。
-8. 调用 propose_patch，mode 使用 week，reason 写清楚复盘证据。
-9. 告诉用户在 PawPlan /review 确认。
+2. 调用 get_constraints 和 get_capacity，读取本周到下周可见范围的固定约束与容量。
+3. 调用 get_checkins，days 使用 14，读取最近两周 check-in。
+4. 调用 get_month，读取覆盖本周和下周的日期范围。
+5. 必要时调用 get_tasks 读取 backlog 和 todo。
+6. 分析完成、跳过、未完成、过载、recovery 缺口和下周风险。
+7. 如果没有足够数据，或没有明确调整建议，不要调用 propose_patch。
+8. 如果需要调整下周重点、拆分大任务、rollover 未完成任务、补 recovery 或改变优先级，生成 patch。
+9. 调用 propose_patch，mode 使用 week，reason 写清楚复盘证据。
+10. 告诉用户在 PawPlan /review 确认。
 
 限制：
 - 不得调用 apply。
 - 不得直接改 task date/status 来完成周复盘。
 - update_task_status 只用于记录用户明确给出的事实，不用于计划重排。
 - 不覆盖 routine / recovery。
+- 不直接编辑 constraints；constraints/capacity 只用于读取判断。
 - 不伪造已完成。
 ```
 

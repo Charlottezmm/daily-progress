@@ -34,11 +34,11 @@ const sections: Array<{ title: string; tools: Tool[] }> = [
     title: "约束",
     tools: [
       {
-        href: "/more",
+        href: "/constraints",
         title: "日历与课程",
         text: "课程、固定日程、不可用时间。",
         icon: CalendarDays,
-        active: false,
+        active: true,
       },
       {
         href: "/settings#routines",
@@ -118,7 +118,7 @@ export function MoreView() {
           </section>
         ))}
       </div>
-      <p className="paw-version">PawPlan v0.2</p>
+      <p className="paw-version">PawPlan v0.4</p>
     </div>
   );
 }

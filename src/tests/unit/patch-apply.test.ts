@@ -16,6 +16,7 @@ function createFakeDb(
   patch: PatchRow,
   latestVersionNumber = 0,
   options: {
+    taskSelectResults?: Array<Array<Record<string, unknown>>>;
     taskUpdateResults?: Array<Array<Record<string, unknown>>>;
     agentPatchUpdateResult?: Array<Record<string, unknown>>;
   } = {},
@@ -23,6 +24,7 @@ function createFakeDb(
   const updates: Array<{ table: string; values: Record<string, unknown> }> = [];
   const inserts: Array<{ table: string; values: Record<string, unknown> }> = [];
   const taskUpdateWhereClauses: unknown[] = [];
+  let taskSelectCount = 0;
   let taskUpdateCount = 0;
   let inTransaction = false;
 
@@ -51,6 +53,11 @@ function createFakeDb(
                 limit() {
                   if (tableName(table) === "plan_versions") {
                     return Promise.resolve(latestVersionNumber ? [{ versionNumber: latestVersionNumber }] : []);
+                  }
+                  if (tableName(table) === "tasks") {
+                    const result = options.taskSelectResults?.[taskSelectCount];
+                    taskSelectCount += 1;
+                    return Promise.resolve(result ?? []);
                   }
                   return Promise.resolve([patch]);
                 },
@@ -134,7 +141,7 @@ describe("applyAgentPatch", () => {
     ).rejects.toThrow("Select at least one operation to apply");
   });
 
-  it("applies selected supported operations and records skipped unsupported operations", async () => {
+  it("applies selected supported operations and persists review audit for accepted, rejected, and skipped indexes", async () => {
     const db = createFakeDb({
       id: "patch-1",
       workspaceId: "workspace-1",
@@ -166,29 +173,32 @@ describe("applyAgentPatch", () => {
           },
         ],
       },
-    }, 3);
+    }, 3, {
+      taskSelectResults: [
+        [{ id: "task-move", date: new Date("2026-06-10T00:00:00.000Z"), daySegment: "morning" }],
+      ],
+    });
 
     const result = await applyAgentPatch(db, {
       workspaceId: "workspace-1",
       patchId: "patch-1",
-      acceptedOperationIndexes: [0, 1, 2],
+      acceptedOperationIndexes: [0, 2],
+      rejectedOperationIndexes: [1],
     });
 
     expect(db.wasInTransaction()).toBe(true);
-    expect(result.applied.map((operation) => operation.type)).toEqual(["move_task", "change_priority"]);
+    expect(result.status).toBe("applied");
+    expect(result.applied.map((operation) => operation.type)).toEqual(["move_task"]);
     expect(result.skipped).toEqual([{ index: 2, type: "split_task", reason: "Unsupported operation for apply v0.1" }]);
+    expect(result.conflicts).toEqual([]);
     expect(db.updates).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           table: "tasks",
           values: expect.objectContaining({
-            date: new Date("2026-06-11T00:00:00.000Z"),
+            date: new Date("2026-06-10T16:00:00.000Z"),
             daySegment: "afternoon",
           }),
-        }),
-        expect.objectContaining({
-          table: "tasks",
-          values: expect.objectContaining({ priority: "high" }),
         }),
         expect.objectContaining({
           table: "plans",
@@ -219,9 +229,22 @@ describe("applyAgentPatch", () => {
             source: "agent_patch",
             detailsJson: expect.objectContaining({
               patchId: "patch-1",
-              acceptedOperationIndexes: [0, 1, 2],
+              acceptedOperationIndexes: [0, 2],
+              rejectedOperationIndexes: [1],
               skipped: [{ index: 2, type: "split_task", reason: "Unsupported operation for apply v0.1" }],
             }),
+          }),
+        }),
+        expect.objectContaining({
+          table: "agent_patch_reviews",
+          values: expect.objectContaining({
+            workspaceId: "workspace-1",
+            planId: "plan-1",
+            patchId: "patch-1",
+            acceptedOperationIndexes: [0, 2],
+            rejectedOperationIndexes: [1],
+            skippedJson: [{ index: 2, type: "split_task", reason: "Unsupported operation for apply v0.1" }],
+            conflictJson: [],
           }),
         }),
       ]),
@@ -257,7 +280,13 @@ describe("applyAgentPatch", () => {
         },
       },
       3,
-      { taskUpdateResults: [[], [{ id: "task-priority" }]] },
+      {
+        taskSelectResults: [
+          [{ id: "task-missing", date: new Date("2026-06-10T00:00:00.000Z"), daySegment: "morning" }],
+          [{ id: "task-priority", priority: "normal" }],
+        ],
+        taskUpdateResults: [[], [{ id: "task-priority" }]],
+      },
     );
 
     const result = await applyAgentPatch(db, {
@@ -295,7 +324,206 @@ describe("applyAgentPatch", () => {
     );
   });
 
-  it("rejects selected operations when none can be applied without writing apply records", async () => {
+  it("persists review audit and returns conflicts when a selected move_task is stale", async () => {
+    const db = createFakeDb({
+      id: "patch-1",
+      workspaceId: "workspace-1",
+      planId: "plan-1",
+      status: "draft",
+      patchJson: {
+        operations: [
+          {
+            type: "move_task",
+            task_id: "task-stale",
+            from_date: "2026-06-10",
+            from_day_segment: "morning",
+            to_date: "2026-06-11",
+            to_day_segment: "afternoon",
+            reason: "Move it out of a full morning.",
+          },
+        ],
+      },
+    }, 3, {
+      taskSelectResults: [
+        [{ id: "task-stale", date: new Date("2026-06-12T00:00:00.000Z"), daySegment: "evening" }],
+      ],
+    });
+
+    const result = await applyAgentPatch(db, {
+      workspaceId: "workspace-1",
+      patchId: "patch-1",
+      acceptedOperationIndexes: [0],
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(result.applied).toEqual([]);
+    expect(result.skipped).toEqual([{ index: 0, type: "move_task", reason: "Task changed since patch was proposed" }]);
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        index: 0,
+        type: "move_task",
+        reason: "Task changed since patch was proposed",
+        expected: { date: "2026-06-10", daySegment: "morning" },
+        actual: { date: "2026-06-12", daySegment: "evening" },
+      }),
+    ]);
+    expect(db.inserts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: "agent_patch_reviews",
+          values: expect.objectContaining({
+            acceptedOperationIndexes: [0],
+            rejectedOperationIndexes: [],
+            skippedJson: result.skipped,
+            conflictJson: result.conflicts,
+          }),
+        }),
+      ]),
+    );
+    expect(db.inserts.filter((insert) => insert.table === "plan_versions" || insert.table === "change_logs")).toEqual([]);
+    expect(db.updates.filter((update) => update.table === "plans" || update.table === "agent_patches")).toEqual([]);
+  });
+
+  it("returns conflicts when a selected change_priority is stale", async () => {
+    const db = createFakeDb({
+      id: "patch-1",
+      workspaceId: "workspace-1",
+      planId: "plan-1",
+      status: "draft",
+      patchJson: {
+        operations: [
+          {
+            type: "change_priority",
+            task_id: "task-priority",
+            from_priority: "normal",
+            to_priority: "high",
+            reason: "Deadline moved earlier.",
+          },
+        ],
+      },
+    }, 3, {
+      taskSelectResults: [[{ id: "task-priority", priority: "urgent" }]],
+    });
+
+    const result = await applyAgentPatch(db, {
+      workspaceId: "workspace-1",
+      patchId: "patch-1",
+      acceptedOperationIndexes: [0],
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(result.skipped).toEqual([{ index: 0, type: "change_priority", reason: "Task priority changed since patch was proposed" }]);
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        index: 0,
+        type: "change_priority",
+        expected: { priority: "normal" },
+        actual: { priority: "urgent" },
+      }),
+    ]);
+  });
+
+  it("skips accepted operations marked as protected over-capacity conflicts", async () => {
+    const db = createFakeDb({
+      id: "patch-1",
+      workspaceId: "workspace-1",
+      planId: "plan-1",
+      status: "draft",
+      patchJson: {
+        operations: [
+          {
+            type: "move_task",
+            task_id: "task-1",
+            from_date: "2026-06-10",
+            from_day_segment: "morning",
+            to_date: "2026-06-10",
+            to_day_segment: "afternoon",
+            protected_over_capacity: true,
+            protected_over_capacity_reason: "Afternoon is already over capacity because of protected blocks.",
+            reason: "Try to move it later.",
+          },
+        ],
+      },
+    }, 3);
+
+    const result = await applyAgentPatch(db, {
+      workspaceId: "workspace-1",
+      patchId: "patch-1",
+      acceptedOperationIndexes: [0],
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(result.skipped).toEqual([
+      {
+        index: 0,
+        type: "move_task",
+        reason: "Afternoon is already over capacity because of protected blocks.",
+      },
+    ]);
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        index: 0,
+        type: "move_task",
+        actual: { protectedOverCapacity: true },
+      }),
+    ]);
+    expect(db.updates.filter((update) => update.table === "tasks")).toEqual([]);
+    expect(db.inserts.filter((insert) => insert.table === "agent_patch_reviews")).toHaveLength(1);
+  });
+
+  it("marks a patch rejected and writes review audit when all operations are explicitly rejected", async () => {
+    const db = createFakeDb({
+      id: "patch-1",
+      workspaceId: "workspace-1",
+      planId: "plan-1",
+      status: "draft",
+      patchJson: {
+        operations: [
+          {
+            type: "change_priority",
+            task_id: "task-priority",
+            from_priority: "normal",
+            to_priority: "high",
+            reason: "Deadline moved earlier.",
+          },
+        ],
+      },
+    }, 3);
+
+    const result = await applyAgentPatch(db, {
+      workspaceId: "workspace-1",
+      patchId: "patch-1",
+      acceptedOperationIndexes: [],
+      rejectedOperationIndexes: [0],
+    });
+
+    expect(result.status).toBe("rejected");
+    expect(result.applied).toEqual([]);
+    expect(db.inserts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: "agent_patch_reviews",
+          values: expect.objectContaining({
+            acceptedOperationIndexes: [],
+            rejectedOperationIndexes: [0],
+            skippedJson: [],
+            conflictJson: [],
+          }),
+        }),
+      ]),
+    );
+    expect(db.updates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: "agent_patches",
+          values: expect.objectContaining({ status: "rejected" }),
+        }),
+      ]),
+    );
+    expect(db.inserts.filter((insert) => insert.table === "plan_versions" || insert.table === "change_logs")).toEqual([]);
+  });
+
+  it("returns conflicted review when selected operations cannot be applied without writing plan versions", async () => {
     const db = createFakeDb({
       id: "patch-1",
       workspaceId: "workspace-1",
@@ -314,16 +542,17 @@ describe("applyAgentPatch", () => {
           },
         ],
       },
-    }, 3, { taskUpdateResults: [[]] });
+    }, 3, { taskSelectResults: [[]] });
 
-    await expect(
-      applyAgentPatch(db, {
-        workspaceId: "workspace-1",
-        patchId: "patch-1",
-        acceptedOperationIndexes: [0],
-      }),
-    ).rejects.toMatchObject({ message: "No selected operations could be applied", status: 400 });
+    const result = await applyAgentPatch(db, {
+      workspaceId: "workspace-1",
+      patchId: "patch-1",
+      acceptedOperationIndexes: [0],
+    });
 
+    expect(result.status).toBe("conflicted");
+    expect(result.skipped).toEqual([{ index: 0, type: "move_task", reason: "Task not found" }]);
+    expect(db.inserts.filter((insert) => insert.table === "agent_patch_reviews")).toHaveLength(1);
     expect(db.inserts.filter((insert) => insert.table === "plan_versions" || insert.table === "change_logs")).toEqual([]);
     expect(db.updates.filter((update) => update.table === "plans" || update.table === "agent_patches")).toEqual([]);
   });
@@ -348,7 +577,7 @@ describe("applyAgentPatch", () => {
         },
       },
       3,
-      { agentPatchUpdateResult: [] },
+      { taskSelectResults: [[{ id: "task-priority", priority: "normal" }]], agentPatchUpdateResult: [] },
     );
 
     await expect(
@@ -360,7 +589,7 @@ describe("applyAgentPatch", () => {
     ).rejects.toMatchObject({ message: "Draft patch not found", status: 404 });
   });
 
-  it("rejects impossible calendar dates when no selected operations can be applied", async () => {
+  it("persists a conflicted review for impossible calendar dates without writing plan versions", async () => {
     const db = createFakeDb({
       id: "patch-1",
       workspaceId: "workspace-1",
@@ -381,14 +610,15 @@ describe("applyAgentPatch", () => {
       },
     }, 3);
 
-    await expect(
-      applyAgentPatch(db, {
-        workspaceId: "workspace-1",
-        patchId: "patch-1",
-        acceptedOperationIndexes: [0],
-      }),
-    ).rejects.toMatchObject({ message: "No selected operations could be applied", status: 400 });
+    const result = await applyAgentPatch(db, {
+      workspaceId: "workspace-1",
+      patchId: "patch-1",
+      acceptedOperationIndexes: [0],
+    });
 
+    expect(result.status).toBe("conflicted");
+    expect(result.skipped).toEqual([{ index: 0, type: "move_task", reason: "Invalid target date" }]);
+    expect(db.inserts.filter((insert) => insert.table === "agent_patch_reviews")).toHaveLength(1);
     expect(db.inserts.filter((insert) => insert.table === "plan_versions" || insert.table === "change_logs")).toEqual([]);
     expect(db.updates.filter((update) => update.table === "plans" || update.table === "agent_patches")).toEqual([]);
   });

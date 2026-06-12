@@ -28,6 +28,7 @@ function createFakeDb(options: FakeDbOptions = {}) {
 
   function rowsFor(table: unknown) {
     const name = tableName(table);
+    if (options.selectRows?.[name]) return options.selectRows[name];
     if (name === "plans") {
       return options.activePlanId === null ? [] : [{ id: options.activePlanId ?? "plan-1" }];
     }
@@ -141,10 +142,16 @@ describe("MCP planning tools", () => {
       "get_today",
       "get_week",
       "get_month",
+      "get_constraints",
+      "get_capacity",
+      "get_decisions",
+      "get_conversations",
       "get_checkins",
       "get_tasks",
     ]);
     expect(allowedPawPlanToolNames("read_write")).toContain("import_plan_bundle");
+    expect(allowedPawPlanToolNames("read_write")).toContain("save_conversation_summary");
+    expect(allowedPawPlanToolNames("read_write")).toContain("record_decision");
   });
 
   it("reads tasks scoped to the requested workspace", async () => {
@@ -368,6 +375,223 @@ describe("MCP planning tools", () => {
     const result = await runPawPlanTool(db, "workspace-1", "get_tasks", {}, "read_only");
 
     expect(result).toEqual({ workspaceId: "workspace-1", filters: {}, tasks: [] });
+  });
+
+  it("denies conversation write tools for read-only tokens", async () => {
+    const db = createFakeDb();
+
+    await expect(
+      runPawPlanTool(
+        db,
+        "workspace-1",
+        "record_decision",
+        {
+          topic: "Scope",
+          context: "MCP tool writes are permissioned.",
+          options_considered: ["Read-only writes", "Require read-write"],
+          chosen: "Require read-write",
+          rationale: "Decision records mutate workspace data.",
+          tradeoffs_accepted: "Read-only agents need a separate handoff.",
+          status: "active",
+        },
+        "read_only",
+      ),
+    ).rejects.toThrow("MCP token does not allow write tools");
+  });
+
+  it("allows conversation read tools for read-only tokens", async () => {
+    const createdAt = new Date("2026-06-12T09:00:00.000Z");
+    const db = createFakeDb({
+      selectRows: {
+        conversations: [
+          {
+            id: "conversation-1",
+            workspaceId: "workspace-1",
+            topic: "Weekly review",
+            contextType: "weekly_review",
+            summary: "Structured sediment only.",
+            decisionsJson: [],
+            openQuestionsJson: [],
+            createdBy: "codex",
+            createdAt,
+          },
+        ],
+      },
+    });
+
+    const result = await runPawPlanTool(
+      db,
+      "workspace-1",
+      "get_conversations",
+      { context_type: "weekly_review" },
+      "read_only",
+    );
+
+    expect(result).toEqual({
+      workspaceId: "workspace-1",
+      filters: { contextType: "weekly_review", limit: 50 },
+      conversations: [
+        expect.objectContaining({
+          id: "conversation-1",
+          workspaceId: "workspace-1",
+          topic: "Weekly review",
+          contextType: "weekly_review",
+          summary: "Structured sediment only.",
+          createdAt: createdAt.toISOString(),
+        }),
+      ],
+    });
+    expect(db.inserts).toEqual([]);
+    expect(db.updates).toEqual([]);
+  });
+
+  it("reads workspace constraints through a read-only MCP token without writes", async () => {
+    const startsAt = new Date("2026-06-12T01:00:00.000Z");
+    const endsAt = new Date("2026-06-12T02:00:00.000Z");
+    const db = createFakeDb({
+      selectRows: {
+        courses: [{ id: "course-1", workspaceId: "workspace-1", name: "Embodied AI", color: "#2563eb" }],
+        routines: [
+          {
+            id: "routine-1",
+            workspaceId: "workspace-1",
+            title: "Morning walk",
+            defaultTimeSegment: "specific_window",
+            defaultStartTime: "07:30",
+            defaultEndTime: "08:00",
+            weekdayPattern: "1,2,3,4,5",
+            estimatedMinutes: 30,
+            energyLevel: "low",
+            createdAt: startsAt,
+            updatedAt: startsAt,
+          },
+        ],
+        time_blocks: [
+          {
+            id: "block-1",
+            workspaceId: "workspace-1",
+            title: "AI class",
+            kind: "course",
+            startsAt,
+            endsAt,
+            recurrenceRule: null,
+            courseId: "course-1",
+            trackId: null,
+            movable: false,
+            estimatedMinutes: null,
+            energyLevel: null,
+          },
+        ],
+      },
+    });
+
+    const result = await runPawPlanTool(
+      db,
+      "workspace-1",
+      "get_constraints",
+      { date_from: "2026-06-12", date_to: "2026-06-13" },
+      "read_only",
+    );
+
+    expect(result).toEqual({
+      workspaceId: "workspace-1",
+      filters: { date_from: "2026-06-12", date_to: "2026-06-13" },
+      courses: [expect.objectContaining({ id: "course-1", workspaceId: "workspace-1", name: "Embodied AI" })],
+      routines: [expect.objectContaining({ id: "routine-1", workspaceId: "workspace-1", title: "Morning walk" })],
+      timeBlocks: [
+        expect.objectContaining({
+          id: "block-1",
+          workspaceId: "workspace-1",
+          kind: "course",
+          startsAt: startsAt.toISOString(),
+          endsAt: endsAt.toISOString(),
+        }),
+      ],
+      protectedBlocks: [
+        expect.objectContaining({
+          id: "block-1",
+          kind: "course",
+          startsAt: startsAt.toISOString(),
+          endsAt: endsAt.toISOString(),
+        }),
+      ],
+    });
+    expect(db.inserts).toEqual([]);
+    expect(db.updates).toEqual([]);
+    expect(db.deletes).toEqual([]);
+  });
+
+  it("reads shared capacity through a read-only MCP token without writes", async () => {
+    const db = createFakeDb({
+      selectRows: {
+        day_capacities: [
+          {
+            date: new Date("2026-06-12T00:00:00.000+08:00"),
+            morningMinutes: 180,
+            afternoonMinutes: 240,
+            eveningMinutes: 120,
+          },
+        ],
+        tasks: [
+          {
+            id: "task-1",
+            title: "Implement capacity",
+            date: new Date("2026-06-12T00:00:00.000+08:00"),
+            daySegment: "morning",
+            estimatedMinutes: 90,
+            status: "todo",
+          },
+          {
+            id: "task-backlog",
+            title: "Later",
+            date: new Date("2026-06-12T00:00:00.000+08:00"),
+            daySegment: "morning",
+            estimatedMinutes: 300,
+            status: "backlog",
+          },
+        ],
+        time_blocks: [
+          {
+            id: "block-1",
+            title: "Unavailable",
+            kind: "unavailable",
+            startsAt: new Date("2026-06-12T09:00:00.000+08:00"),
+            endsAt: new Date("2026-06-12T10:00:00.000+08:00"),
+          },
+        ],
+        routines: [],
+      },
+    });
+
+    const result = await runPawPlanTool(
+      db,
+      "workspace-1",
+      "get_capacity",
+      { date_from: "2026-06-12", date_to: "2026-06-13" },
+      "read_only",
+    );
+
+    expect(result).toEqual({
+      workspaceId: "workspace-1",
+      filters: { date_from: "2026-06-12", date_to: "2026-06-13" },
+      capacity: expect.objectContaining({
+        days: [
+          expect.objectContaining({
+            dateKey: "2026-06-12",
+            segments: expect.objectContaining({
+              morning: expect.objectContaining({
+                taskMinutes: 90,
+                protectedMinutes: 60,
+                remainingMinutes: 30,
+              }),
+            }),
+          }),
+        ],
+      }),
+    });
+    expect(db.inserts).toEqual([]);
+    expect(db.updates).toEqual([]);
+    expect(db.deletes).toEqual([]);
   });
 
   it("imports a bundled plan into real PawPlan tasks", async () => {

@@ -248,6 +248,20 @@ export const agentPatches = pgTable("agent_patches", {
   appliedAt: timestamp("applied_at", { withTimezone: true }),
 });
 
+export const agentPatchReviews = pgTable("agent_patch_reviews", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  patchId: uuid("patch_id").notNull().references(() => agentPatches.id, { onDelete: "cascade" }),
+  planId: uuid("plan_id").notNull().references(() => plans.id, { onDelete: "cascade" }),
+  acceptedOperationIndexes: jsonb("accepted_operation_indexes").notNull(),
+  rejectedOperationIndexes: jsonb("rejected_operation_indexes").notNull(),
+  skippedJson: jsonb("skipped_json").notNull(),
+  conflictJson: jsonb("conflict_json").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  workspacePatchIdx: index("agent_patch_reviews_workspace_patch_idx").on(table.workspaceId, table.patchId),
+}));
+
 export const changeLogs = pgTable("change_logs", {
   id: uuid("id").primaryKey().defaultRandom(),
   workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
@@ -269,6 +283,24 @@ export const mcpTokens = pgTable("mcp_tokens", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   tokenHashIdx: index("mcp_tokens_token_hash_idx").on(table.tokenHash),
+}));
+
+export const mcpUsageEvents = pgTable("mcp_usage_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  tokenId: uuid("token_id").references(() => mcpTokens.id, { onDelete: "set null" }),
+  toolName: varchar("tool_name", { length: 80 }).notNull(),
+  permission: mcpPermission("permission").notNull(),
+  success: boolean("success").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  workspaceCreatedIdx: index("mcp_usage_events_workspace_created_idx").on(table.workspaceId, table.createdAt),
+  workspaceToolCreatedIdx: index("mcp_usage_events_workspace_tool_created_idx").on(
+    table.workspaceId,
+    table.toolName,
+    table.createdAt,
+  ),
+  tokenIdx: index("mcp_usage_events_token_idx").on(table.tokenId),
 }));
 
 export const mcpPlanImports = pgTable("mcp_plan_imports", {

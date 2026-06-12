@@ -68,7 +68,7 @@ test("renders real settings surfaces without fake recovery saves", async ({ cont
   await expect(page.getByRole("heading", { name: "Codex / Claude Cowork 连接配置" })).toBeVisible();
 });
 
-test("renders More with current v0.2 constraint entry points", async ({ context, page }) => {
+test("renders More with opened v0.3 constraint entry points", async ({ context, page }) => {
   await context.addCookies([
     {
       name: "daily_progress_workspace",
@@ -81,8 +81,7 @@ test("renders More with current v0.2 constraint entry points", async ({ context,
   ]);
 
   await page.goto("/more");
-  await expect(page.getByText("PawPlan v0.2")).toBeVisible();
+  await expect(page.getByText("PawPlan v0.4")).toBeVisible();
   await expect(page.locator('a[href="/settings#routines"]').filter({ hasText: "日常事项" })).toBeVisible();
-  await expect(page.getByText("日历与课程")).toBeVisible();
-  await expect(page.getByText("即将开放")).toBeVisible();
+  await expect(page.locator('a[href="/constraints"]').filter({ hasText: "日历与课程" })).toBeVisible();
 });
