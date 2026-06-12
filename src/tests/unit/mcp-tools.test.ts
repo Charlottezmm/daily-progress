@@ -1,6 +1,6 @@
 import { getTableName } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import { runPawPlanTool } from "@/lib/mcp/tools";
+import { allowedPawPlanToolNames, runPawPlanTool } from "@/lib/mcp/tools";
 
 type TableWrite = {
   table: string;
@@ -13,6 +13,7 @@ type FakeDbOptions = {
   protectedBlockIds?: string[];
   selectRows?: Partial<Record<string, Array<Record<string, unknown>>>>;
   taskUpdateResult?: Array<Record<string, unknown>>;
+  latestVersionNumber?: number;
 };
 
 function createFakeDb(options: FakeDbOptions = {}) {
@@ -32,6 +33,9 @@ function createFakeDb(options: FakeDbOptions = {}) {
     }
     if (name === "time_blocks") {
       return (options.protectedBlockIds ?? []).map((id) => ({ id }));
+    }
+    if (name === "plan_versions") {
+      return options.latestVersionNumber ? [{ versionNumber: options.latestVersionNumber }] : [];
     }
     return options.selectRows?.[name] ?? [];
   }
@@ -82,11 +86,19 @@ function createFakeDb(options: FakeDbOptions = {}) {
       },
       insert(table: unknown) {
         return {
-          values(values: Record<string, unknown>) {
-            inserts.push({ table: tableName(table), values, inTransaction });
+          values(values: Record<string, unknown> | Array<Record<string, unknown>>) {
+            const rows = Array.isArray(values) ? values : [values];
+            for (const row of rows) {
+              inserts.push({ table: tableName(table), values: row, inTransaction });
+            }
             return {
               returning() {
-                return Promise.resolve([{ id: `${tableName(table)}-1`, ...values }]);
+                return Promise.resolve(
+                  rows.map((row, index) => ({
+                    id: `${tableName(table)}-${inserts.length - rows.length + index + 1}`,
+                    ...row,
+                  })),
+                );
               },
               onConflictDoUpdate() {
                 return Promise.resolve();
@@ -124,6 +136,17 @@ function createFakeDb(options: FakeDbOptions = {}) {
 }
 
 describe("MCP planning tools", () => {
+  it("filters write tools out for read-only MCP tokens", () => {
+    expect(allowedPawPlanToolNames("read_only")).toEqual([
+      "get_today",
+      "get_week",
+      "get_month",
+      "get_checkins",
+      "get_tasks",
+    ]);
+    expect(allowedPawPlanToolNames("read_write")).toContain("import_plan_bundle");
+  });
+
   it("reads tasks scoped to the requested workspace", async () => {
     const taskDate = new Date("2026-06-10T00:00:00.000Z");
     const db = createFakeDb({
@@ -329,5 +352,58 @@ describe("MCP planning tools", () => {
       }),
     ]);
     expect(db.inserts.filter((write) => write.table === "inbox_items").map((write) => write.values.source)).not.toContain("mcp");
+  });
+
+  it("denies write MCP tools for read-only tokens", async () => {
+    const db = createFakeDb({ activePlanId: "plan-1" });
+
+    await expect(
+      runPawPlanTool(db, "workspace-1", "create_inbox_item", { title: "Blocked write" }, "read_only"),
+    ).rejects.toThrow("MCP token does not allow write tools");
+  });
+
+  it("allows read MCP tools for read-only tokens", async () => {
+    const db = createFakeDb({ selectRows: { tasks: [] } });
+
+    const result = await runPawPlanTool(db, "workspace-1", "get_tasks", {}, "read_only");
+
+    expect(result).toEqual({ workspaceId: "workspace-1", filters: {}, tasks: [] });
+  });
+
+  it("imports a bundled plan into real PawPlan tasks", async () => {
+    const db = createFakeDb({ activePlanId: "plan-1" });
+
+    const result = await runPawPlanTool(db, "workspace-1", "import_plan_bundle", {
+      import_key: "claude-cowork-2026-06-12",
+      created_by: "claude",
+      source_label: "Claude Cowork task progress review",
+      overall_plan: { title: "PawPlan v0.2", summary: "Ship hosted MCP and direct plan import." },
+      daily_tasks: [
+        {
+          title: "Implement hosted MCP endpoint",
+          date: "2026-06-12",
+          day_segment: "afternoon",
+          estimated_minutes: 90,
+          priority: "high",
+          energy_level: "high",
+          project_name: "PawPlan",
+          track_name: "Product",
+        },
+      ],
+      weekly_summary: { week_start: "2026-06-08", focus: "MCP import loop", milestones: ["Hosted MCP"] },
+      monthly_summary: { month: "2026-06", goal: "Usable personal planning loop", milestones: ["MCP import"] },
+    });
+
+    expect(result).toEqual(expect.objectContaining({ imported: true, tasksCreated: 1 }));
+    expect(db.inserts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ table: "tasks" }),
+        expect.objectContaining({ table: "mcp_plan_imports" }),
+        expect.objectContaining({
+          table: "change_logs",
+          values: expect.objectContaining({ source: "mcp", summary: "Imported MCP plan bundle" }),
+        }),
+      ]),
+    );
   });
 });

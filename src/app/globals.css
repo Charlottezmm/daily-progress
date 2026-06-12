@@ -902,6 +902,59 @@ a {
   font-weight: 500;
 }
 
+.paw-mcp-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.paw-mcp-info {
+  min-width: 0;
+  border: 1px solid var(--app-line);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-bg);
+  padding: 12px;
+}
+
+.paw-mcp-value {
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+  color: var(--app-ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.paw-code-block {
+  margin-top: 10px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  border: 1px solid var(--app-line);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-bg);
+  color: var(--app-ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  padding: 12px;
+}
+
+.paw-token-once {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--app-positive);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-positive-soft);
+  padding: 12px;
+}
+
+.paw-token-once code {
+  overflow-wrap: anywhere;
+  color: var(--app-positive);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .paw-goal-progress {
   margin-top: 10px;
 }
@@ -1642,7 +1695,7 @@ a {
     left: 0;
     z-index: 30;
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     min-height: calc(var(--app-bottom-nav-height) + env(safe-area-inset-bottom, 0px));
     border-top: 1px solid var(--app-line);
     background: rgba(255, 254, 251, 0.96);
@@ -1679,7 +1732,13 @@ a {
 
   .floating-cat-root {
     right: 16px;
-    bottom: calc(var(--app-bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 16px);
+    top: calc(env(safe-area-inset-top, 0px) + 14px);
+    bottom: auto;
+    flex-direction: column-reverse;
+  }
+
+  .floating-cat-panel {
+    transform-origin: top right;
   }
 
   .paw-page-header {

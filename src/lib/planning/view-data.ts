@@ -6,6 +6,7 @@ import {
   courses,
   dayCapacities,
   inboxItems,
+  plans,
   projects,
   routineCompletions,
   routines,
@@ -113,6 +114,42 @@ export type WeekViewData = {
   checkins: WeekCheckinView[];
 };
 
+export type MonthImportSummaryView = {
+  overallTitle: string | null;
+  overallSummary: string | null;
+  weekFocus: string | null;
+  monthLabel: string | null;
+  monthGoal: string | null;
+  milestones: string[];
+  importedAt: string | null;
+};
+
+export type MonthWeekBucketView = {
+  label: string;
+  taskCount: number;
+  minutes: string;
+  share: number;
+};
+
+export type MonthCardView = {
+  title: string;
+  text: string;
+  tag: string;
+  progress: number | null;
+};
+
+export type MonthViewData = {
+  dataUnavailable: boolean;
+  taskCount: number;
+  doneCount: number;
+  totalHours: string;
+  completionPercent: number;
+  importSummary: MonthImportSummaryView | null;
+  weeks: MonthWeekBucketView[];
+  cards: MonthCardView[];
+  emptyText: string | null;
+};
+
 export type ReschedulePatchItemView = {
   id: string;
   patchId: string;
@@ -179,6 +216,20 @@ function emptyWeekData(dataUnavailable = false): WeekViewData {
       blocks: [],
     },
     checkins: [],
+  };
+}
+
+function emptyMonthData(dataUnavailable = false): MonthViewData {
+  return {
+    dataUnavailable,
+    taskCount: 0,
+    doneCount: 0,
+    totalHours: "0h",
+    completionPercent: 0,
+    importSummary: null,
+    weeks: [],
+    cards: [],
+    emptyText: dataUnavailable ? "本地数据源未配置，无法读取月度计划。" : "还没有月度计划数据。导入计划或创建本月任务后，这里会显示真实任务分布。",
   };
 }
 
@@ -276,6 +327,92 @@ function statusDone(status: TaskStatus) {
   return status === "done" || status === "skipped";
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function stringValue(value: unknown) {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function stringArray(value: unknown) {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && Boolean(item.trim())) : [];
+}
+
+function readImportSummary(snapshot: unknown): MonthImportSummaryView | null {
+  if (!isRecord(snapshot)) return null;
+  const source = isRecord(snapshot.importSummary) ? snapshot.importSummary : snapshot;
+  const overall = isRecord(source.overall_plan) ? source.overall_plan : isRecord(source.overallPlan) ? source.overallPlan : null;
+  const weekly = isRecord(source.weekly_summary) ? source.weekly_summary : isRecord(source.weeklySummary) ? source.weeklySummary : null;
+  const monthly = isRecord(source.monthly_summary) ? source.monthly_summary : isRecord(source.monthlySummary) ? source.monthlySummary : null;
+
+  const summary = {
+    overallTitle: stringValue(overall?.title) ?? stringValue(source.title),
+    overallSummary: stringValue(overall?.summary) ?? stringValue(source.goal),
+    weekFocus: stringValue(weekly?.focus),
+    monthLabel: stringValue(monthly?.month),
+    monthGoal: stringValue(monthly?.goal),
+    milestones: stringArray(monthly?.milestones).concat(stringArray(weekly?.milestones)),
+    importedAt: stringValue(source.importedAt) ?? stringValue(source.imported_at),
+  };
+
+  if (
+    !summary.overallTitle &&
+    !summary.overallSummary &&
+    !summary.weekFocus &&
+    !summary.monthGoal &&
+    summary.milestones.length === 0
+  ) {
+    return null;
+  }
+  return summary;
+}
+
+function buildMonthCards(input: {
+  taskCount: number;
+  doneCount: number;
+  totalHours: string;
+  completionPercent: number;
+  importSummary: MonthImportSummaryView | null;
+  weeks: MonthWeekBucketView[];
+}): MonthCardView[] {
+  if (input.taskCount === 0 && !input.importSummary) return [];
+
+  const cards: MonthCardView[] = [
+    {
+      title: input.importSummary?.overallTitle ?? "本月任务",
+      text:
+        input.importSummary?.monthGoal ??
+        input.importSummary?.overallSummary ??
+        `本月共 ${input.taskCount} 个任务，预计 ${input.totalHours}。`,
+      tag: input.taskCount > 0 ? `已完成 ${input.doneCount}/${input.taskCount}` : input.importSummary?.monthLabel ?? "Imported",
+      progress: input.taskCount > 0 ? input.completionPercent : null,
+    },
+  ];
+
+  if (input.weeks.length > 0 || input.importSummary?.weekFocus) {
+    cards.push({
+      title: "每周拆分",
+      text:
+        input.importSummary?.weekFocus ??
+        input.weeks.map((week) => `${week.label}: ${week.taskCount} 个 / ${week.minutes}`).join("；"),
+      tag: input.weeks.length > 0 ? `${input.weeks.length} 周有任务` : "Weekly",
+      progress: null,
+    });
+  }
+
+  if (input.importSummary?.milestones.length) {
+    cards.push({
+      title: "重要节点",
+      text: input.importSummary.milestones.join("；"),
+      tag: input.importSummary.monthLabel ?? "Milestones",
+      progress: null,
+    });
+  }
+
+  return cards;
+}
+
 function minutesBetween(start: Date, end: Date) {
   return Math.max(0, Math.round((end.getTime() - start.getTime()) / 60000));
 }
@@ -288,6 +425,22 @@ function dateRangeForToday(now = new Date()) {
 function dateRangeForWeek(now = new Date()) {
   const start = startOfShanghaiWeek(now);
   return { start, end: addDays(start, 7) };
+}
+
+function dateRangeForMonth(now = new Date()) {
+  const { year, month } = shanghaiDateParts(now);
+  const start = new Date(Date.UTC(year, month - 1, 1) - 8 * 60 * 60 * 1000);
+  const end = new Date(Date.UTC(month === 12 ? year + 1 : year, month === 12 ? 0 : month, 1) - 8 * 60 * 60 * 1000);
+  return { start, end, monthKey: `${year}-${String(month).padStart(2, "0")}` };
+}
+
+function weeksInMonth(now = new Date()) {
+  const { start, end } = dateRangeForMonth(now);
+  const weeks = new Set<string>();
+  for (let cursor = start; cursor < end; cursor = addDays(cursor, 1)) {
+    weeks.add(toDateKey(startOfShanghaiWeek(cursor)));
+  }
+  return weeks;
 }
 
 async function loadReferenceMaps(workspaceId: string) {
@@ -564,6 +717,130 @@ export async function getWeekPageData(workspaceId: string): Promise<WeekViewData
     };
   } catch (error) {
     if (isMissingDatabase(error)) return emptyWeekData(true);
+    throw error;
+  }
+}
+
+type MonthTaskInput = {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  date: Date;
+  estimatedMinutes?: number;
+};
+
+export function buildMonthPlanViewData(
+  taskRows: MonthTaskInput[],
+  activePlanSnapshot: unknown,
+  now = new Date(),
+): MonthViewData {
+  const totalMinutes = taskRows.reduce((sum, task) => sum + (task.estimatedMinutes ?? 30), 0);
+  const doneCount = taskRows.filter((task) => statusDone(task.status)).length;
+  const minutesByWeek = new Map<string, number>();
+  const countByWeek = new Map<string, number>();
+
+  for (const task of taskRows) {
+    const key = toDateKey(startOfShanghaiWeek(task.date));
+    minutesByWeek.set(key, (minutesByWeek.get(key) ?? 0) + (task.estimatedMinutes ?? 30));
+    countByWeek.set(key, (countByWeek.get(key) ?? 0) + 1);
+  }
+
+  const weeks = Array.from(countByWeek.keys()).map((key, index) => {
+    const minutes = minutesByWeek.get(key) ?? 0;
+    return {
+      label: `第 ${index + 1} 周`,
+      taskCount: countByWeek.get(key) ?? 0,
+      minutes: hoursLabel(minutes),
+      share: totalMinutes ? Math.round((minutes / totalMinutes) * 100) : 0,
+    };
+  });
+  const importSummary = readImportSummary(activePlanSnapshot);
+  const completionPercent = taskRows.length ? Math.round((doneCount / taskRows.length) * 100) : 0;
+  const cards = buildMonthCards({
+    taskCount: taskRows.length,
+    doneCount,
+    totalHours: hoursLabel(totalMinutes),
+    completionPercent,
+    importSummary,
+    weeks,
+  });
+
+  return {
+    dataUnavailable: false,
+    taskCount: taskRows.length,
+    doneCount,
+    totalHours: hoursLabel(totalMinutes),
+    completionPercent,
+    importSummary,
+    weeks,
+    cards,
+    emptyText: cards.length === 0 ? "还没有月度计划数据。导入计划或创建本月任务后，这里会显示真实任务分布。" : null,
+  };
+}
+
+export async function getMonthPlanData(workspaceId: string): Promise<MonthViewData> {
+  try {
+    const db = getDb();
+    const { start, end } = dateRangeForMonth();
+    const [planRow] = await db
+      .select({ baselineSnapshot: plans.baselineSnapshot })
+      .from(plans)
+      .where(and(eq(plans.workspaceId, workspaceId), eq(plans.status, "active")))
+      .limit(1);
+    const taskRows = await db
+      .select()
+      .from(tasks)
+      .where(and(eq(tasks.workspaceId, workspaceId), gte(tasks.date, start), lt(tasks.date, end)))
+      .orderBy(tasks.date, tasks.createdAt);
+
+    const totalMinutes = taskRows.reduce((sum, task) => sum + task.estimatedMinutes, 0);
+    const doneCount = taskRows.filter((task) => statusDone(task.status)).length;
+    const minutesByWeek = new Map<number, number>();
+    const countByWeek = new Map<number, number>();
+
+    for (const task of taskRows) {
+      const weekIndex = Math.floor((startOfShanghaiDay(task.date).getTime() - start.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
+      minutesByWeek.set(weekIndex, (minutesByWeek.get(weekIndex) ?? 0) + task.estimatedMinutes);
+      countByWeek.set(weekIndex, (countByWeek.get(weekIndex) ?? 0) + 1);
+    }
+
+    const weeks = Array.from(countByWeek.keys())
+      .sort((a, b) => a - b)
+      .map((weekIndex) => {
+        const minutes = minutesByWeek.get(weekIndex) ?? 0;
+        return {
+          label: `第 ${weekIndex} 周`,
+          taskCount: countByWeek.get(weekIndex) ?? 0,
+          minutes: hoursLabel(minutes),
+          share: totalMinutes ? Math.round((minutes / totalMinutes) * 100) : 0,
+        };
+      });
+
+    const importSummary = readImportSummary(planRow?.baselineSnapshot);
+    const completionPercent = taskRows.length ? Math.round((doneCount / taskRows.length) * 100) : 0;
+    const totalHours = hoursLabel(totalMinutes);
+    const cards = buildMonthCards({
+      taskCount: taskRows.length,
+      doneCount,
+      totalHours,
+      completionPercent,
+      importSummary,
+      weeks,
+    });
+
+    return {
+      dataUnavailable: false,
+      taskCount: taskRows.length,
+      doneCount,
+      totalHours,
+      completionPercent,
+      importSummary,
+      weeks,
+      cards,
+      emptyText: cards.length === 0 ? "还没有月度计划数据。导入计划或创建本月任务后，这里会显示真实任务分布。" : null,
+    };
+  } catch (error) {
+    if (isMissingDatabase(error)) return emptyMonthData(true);
     throw error;
   }
 }

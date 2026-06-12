@@ -7,6 +7,7 @@ import {
   proposeAgentPatch,
   updateTaskStatus,
 } from "@/lib/planning/service";
+import { saveMcpPlanImport } from "@/lib/mcp/plan-import";
 
 type PlanningDb = {
   transaction<T>(callback: (tx: any) => Promise<T>): Promise<T>;
@@ -19,6 +20,9 @@ type PlanningDb = {
 type SerializedTask = ReturnType<typeof serializeTask>;
 
 const taskStatusSchema = z.enum(["todo", "done", "skipped", "backlog"]);
+const prioritySchema = z.enum(["low", "normal", "high", "urgent"]);
+const energyLevelSchema = z.enum(["low", "medium", "high"]);
+const daySegmentSchema = z.enum(["morning", "afternoon", "evening"]);
 const dateStringSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 const emptyArgsSchema = z.object({}).strict();
@@ -73,9 +77,55 @@ export const pawPlanToolSchemas = {
       created_by: z.enum(["codex", "claude", "user"]).optional(),
     })
     .strict(),
+  import_plan_bundle: z
+    .object({
+      import_key: z.string().trim().min(1).max(160),
+      created_by: z.enum(["codex", "claude", "user"]).optional(),
+      source_label: z.string().trim().max(120).optional(),
+      overall_plan: z
+        .object({
+          title: z.string().trim().min(1).max(180),
+          summary: z.string().trim().min(1).max(2000),
+        })
+        .strict(),
+      daily_tasks: z
+        .array(
+          z
+            .object({
+              title: z.string().trim().min(1).max(240),
+              date: dateStringSchema,
+              day_segment: daySegmentSchema,
+              estimated_minutes: z.number().int().min(5).max(480),
+              priority: prioritySchema.optional(),
+              energy_level: energyLevelSchema.optional(),
+              notes: z.string().max(2000).optional(),
+              project_name: z.string().trim().max(120).optional(),
+              track_name: z.string().trim().max(120).optional(),
+            })
+            .strict(),
+        )
+        .min(1)
+        .max(200),
+      weekly_summary: z
+        .object({
+          week_start: dateStringSchema,
+          focus: z.string().trim().min(1).max(2000),
+          milestones: z.array(z.string().trim().min(1).max(240)).max(20),
+        })
+        .strict(),
+      monthly_summary: z
+        .object({
+          month: z.string().regex(/^\d{4}-\d{2}$/),
+          goal: z.string().trim().min(1).max(2000),
+          milestones: z.array(z.string().trim().min(1).max(240)).max(30),
+        })
+        .strict(),
+    })
+    .strict(),
 };
 
 export type PawPlanToolName = keyof typeof pawPlanToolSchemas;
+export type McpPermission = "read_only" | "read_write";
 
 export const pawPlanToolNames = Object.keys(pawPlanToolSchemas) as PawPlanToolName[];
 
@@ -89,7 +139,25 @@ export const pawPlanToolDescriptions: Record<PawPlanToolName, string> = {
   create_checkin: "Create or update a daily check-in with MCP source attribution.",
   update_task_status: "Update a task status with MCP source attribution.",
   propose_patch: "Create a preview-only agent patch draft; this never applies the patch.",
+  import_plan_bundle: "Import a trusted structured plan bundle into real PawPlan tasks with MCP provenance.",
 };
+
+const pawPlanToolPermissions: Record<PawPlanToolName, "read" | "write"> = {
+  get_today: "read",
+  get_week: "read",
+  get_month: "read",
+  get_checkins: "read",
+  get_tasks: "read",
+  create_inbox_item: "write",
+  create_checkin: "write",
+  update_task_status: "write",
+  propose_patch: "write",
+  import_plan_bundle: "write",
+};
+
+export function allowedPawPlanToolNames(permission: McpPermission) {
+  return pawPlanToolNames.filter((name) => permission === "read_write" || pawPlanToolPermissions[name] === "read");
+}
 
 function addDays(date: Date, days: number) {
   return new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
@@ -279,11 +347,16 @@ export async function runPawPlanTool(
   workspaceId: string,
   name: string,
   args: unknown = {},
+  permission: McpPermission = "read_write",
 ) {
   if (!workspaceId) throw new Error("PAWPLAN_WORKSPACE_ID is required");
   if (!Object.hasOwn(pawPlanToolSchemas, name)) throw new Error(`Unknown PawPlan MCP tool: ${name}`);
 
   const toolName = name as PawPlanToolName;
+  if (permission !== "read_write" && pawPlanToolPermissions[toolName] === "write") {
+    throw new Error("MCP token does not allow write tools");
+  }
+
   if (toolName === "get_today") {
     pawPlanToolSchemas.get_today.parse(args);
     return readToday(db, workspaceId);
@@ -361,6 +434,34 @@ export async function runPawPlanTool(
           }
         : undefined,
     };
+  }
+
+  if (toolName === "import_plan_bundle") {
+    const parsed = pawPlanToolSchemas.import_plan_bundle.parse(args);
+    return saveMcpPlanImport(db, {
+      workspaceId,
+      importKey: parsed.import_key,
+      createdBy: parsed.created_by ?? "codex",
+      sourceLabel: parsed.source_label,
+      overallPlan: parsed.overall_plan,
+      dailyTasks: parsed.daily_tasks.map((task) => ({
+        title: task.title,
+        date: task.date,
+        daySegment: task.day_segment,
+        estimatedMinutes: task.estimated_minutes,
+        priority: task.priority,
+        energyLevel: task.energy_level,
+        notes: task.notes,
+        projectName: task.project_name,
+        trackName: task.track_name,
+      })),
+      weeklySummary: {
+        weekStart: parsed.weekly_summary.week_start,
+        focus: parsed.weekly_summary.focus,
+        milestones: parsed.weekly_summary.milestones,
+      },
+      monthlySummary: parsed.monthly_summary,
+    });
   }
 
   const parsed = pawPlanToolSchemas.propose_patch.parse(args);

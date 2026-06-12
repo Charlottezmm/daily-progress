@@ -1,6 +1,6 @@
 "use client";
 
-import { KeyRound, Plus, RotateCcw, Save, Settings, ShieldCheck, Trash2, Zap } from "lucide-react";
+import { KeyRound, Plus, RotateCcw, Save, ShieldCheck, Trash2, Zap } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { BackLink } from "./back-link";
 import { CatIcon } from "./cat-icon";
@@ -23,6 +23,34 @@ type Routine = {
 type SegmentEnergySetting = {
   segment: DaySegment;
   energyLevel: EnergyLevel;
+};
+
+type McpPermission = "read_only" | "read_write";
+
+type McpToken = {
+  id: string;
+  name: string;
+  permission: McpPermission;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+};
+
+type McpConnection = {
+  url: string;
+  codexConfig: string;
+};
+
+type McpTokensResponse = {
+  workspaceId: string;
+  tokens: McpToken[];
+  mcp: McpConnection;
+};
+
+type TokenForm = {
+  name: string;
+  permission: McpPermission;
+  expiresInDays: number | null;
 };
 
 type SettingsResponse = {
@@ -72,8 +100,25 @@ const recoveryTarget = {
   source: "system_default" as const,
 };
 
+const emptyTokenForm: TokenForm = {
+  name: "Codex local",
+  permission: "read_write",
+  expiresInDays: null,
+};
+
 function formatHours(minutes: number) {
   return `${Math.round(minutes / 60)} 小时`;
+}
+
+function formatDateTime(value: string | null) {
+  if (!value) return "不过期";
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
 
 function routinePayload(form: RoutineForm) {
@@ -93,6 +138,12 @@ export function SettingsView() {
   const [message, setMessage] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [dataUnavailable, setDataUnavailable] = useState(false);
+  const [mcpWorkspaceId, setMcpWorkspaceId] = useState<string | null>(null);
+  const [mcpConnection, setMcpConnection] = useState<McpConnection | null>(null);
+  const [mcpTokens, setMcpTokens] = useState<McpToken[]>([]);
+  const [tokenForm, setTokenForm] = useState<TokenForm>(emptyTokenForm);
+  const [rawToken, setRawToken] = useState<string | null>(null);
+  const [mcpMessage, setMcpMessage] = useState<string | null>(null);
 
   const isEditing = Boolean(routineForm.id);
   const activeRecoveryTarget = useMemo(() => recoveryTarget, []);
@@ -124,6 +175,33 @@ export function SettingsView() {
     }
 
     void loadSettings();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadMcpTokens() {
+      try {
+        const response = await fetch("/api/mcp-tokens");
+        if (!response.ok) {
+          if (active) setMcpMessage("MCP 连接信息读取失败。");
+          return;
+        }
+        const data = (await response.json()) as McpTokensResponse;
+        if (!active) return;
+        setMcpWorkspaceId(data.workspaceId);
+        setMcpTokens(data.tokens ?? []);
+        setMcpConnection(data.mcp);
+        setMcpMessage(null);
+      } catch {
+        if (active) setMcpMessage("MCP 连接信息读取失败。");
+      }
+    }
+
+    void loadMcpTokens();
     return () => {
       active = false;
     };
@@ -199,6 +277,54 @@ export function SettingsView() {
     setMessage("日常事项已删除。");
   }
 
+  async function createToken(event: React.FormEvent) {
+    event.preventDefault();
+    if (!tokenForm.name.trim()) {
+      setMcpMessage("Token 名称不能为空。");
+      return;
+    }
+
+    setPending("mcp-token");
+    setRawToken(null);
+    const response = await fetch("/api/mcp-tokens", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...tokenForm, name: tokenForm.name.trim() }),
+    });
+    const data = (await response.json()) as { token?: McpToken; rawToken?: string; error?: string };
+    setPending(null);
+
+    if (!response.ok || !data.token || !data.rawToken) {
+      setMcpMessage(data.error ?? "MCP token 创建失败。");
+      return;
+    }
+
+    setMcpTokens((current) => [data.token as McpToken, ...current]);
+    setRawToken(data.rawToken);
+    setTokenForm(emptyTokenForm);
+    setMcpMessage("Token 已创建。raw token 只会显示这一次。");
+  }
+
+  async function revokeToken(token: McpToken) {
+    setPending(token.id);
+    const response = await fetch("/api/mcp-tokens", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "revoke", id: token.id }),
+    });
+    setPending(null);
+
+    if (!response.ok) {
+      setMcpMessage("MCP token 撤销失败。");
+      return;
+    }
+
+    setMcpTokens((current) =>
+      current.map((item) => (item.id === token.id ? { ...item, revokedAt: item.revokedAt ?? new Date().toISOString() } : item)),
+    );
+    setMcpMessage("MCP token 已撤销。");
+  }
+
   return (
     <div className="paw-page">
       <section className="paw-page-header">
@@ -218,32 +344,133 @@ export function SettingsView() {
       <section className="paw-list-card mb-4">
         <div className="paw-list-header">
           <div>
-            <h2 className="paw-list-title">Workspace / MCP 还未开放</h2>
-            <p className="paw-list-subtitle">Workspace 密码、部署信息和 MCP token 仍然只显示状态，不在这里做假配置。</p>
+            <h2 className="paw-list-title">Codex / Claude Cowork 连接配置</h2>
+            <p className="paw-list-subtitle">生成 revocable workspace token，用 hosted MCP 连接 PawPlan。</p>
           </div>
           <span className="paw-more-icon">
             <KeyRound size={18} />
           </span>
         </div>
-        <div className="paw-more-grid mt-4">
-          <div className="paw-more-card disabled">
-            <span className="paw-more-icon">
-              <Settings size={18} />
-            </span>
-            <div>
-              <h3 className="paw-more-label">Workspace</h3>
-              <p className="paw-more-text">登录、密码和部署参数暂不开放编辑。</p>
-            </div>
+
+        <div className="paw-mcp-grid mt-4">
+          <div className="paw-mcp-info">
+            <p className="paw-field-label">Workspace id</p>
+            <p className="paw-mcp-value">{mcpWorkspaceId ?? "读取中"}</p>
           </div>
-          <div className="paw-more-card disabled">
-            <span className="paw-more-icon">
-              <KeyRound size={18} />
-            </span>
-            <div>
-              <h3 className="paw-more-label">MCP 连接</h3>
-              <p className="paw-more-text">MCP token 与权限管理未开放，不生成占位 token。</p>
-            </div>
+          <div className="paw-mcp-info">
+            <p className="paw-field-label">Hosted MCP URL</p>
+            <p className="paw-mcp-value">{mcpConnection?.url ?? "读取中"}</p>
           </div>
+        </div>
+
+        <form onSubmit={createToken} className="mt-4 grid gap-3 border-y border-[var(--app-line)] py-4">
+          <div className="grid gap-3 md:grid-cols-[1fr_180px_160px]">
+            <label>
+              <span className="paw-field-label">Token 名称</span>
+              <input
+                value={tokenForm.name}
+                onChange={(event) => setTokenForm((current) => ({ ...current, name: event.target.value }))}
+                className="paw-input"
+                placeholder="Codex local"
+              />
+            </label>
+            <label>
+              <span className="paw-field-label">权限</span>
+              <select
+                value={tokenForm.permission}
+                onChange={(event) =>
+                  setTokenForm((current) => ({ ...current, permission: event.target.value as McpPermission }))
+                }
+                className="paw-input"
+              >
+                <option value="read_only">只读</option>
+                <option value="read_write">读写</option>
+              </select>
+            </label>
+            <label>
+              <span className="paw-field-label">有效期</span>
+              <select
+                value={tokenForm.expiresInDays ?? "never"}
+                onChange={(event) =>
+                  setTokenForm((current) => ({
+                    ...current,
+                    expiresInDays: event.target.value === "never" ? null : Number(event.target.value),
+                  }))
+                }
+                className="paw-input"
+              >
+                <option value="never">不过期</option>
+                <option value="30">30 天</option>
+                <option value="90">90 天</option>
+              </select>
+            </label>
+          </div>
+          <div className="paw-save-row !mt-0">
+            <button type="submit" disabled={pending === "mcp-token"} className="paw-primary-btn !px-4 !py-2 !text-sm">
+              <KeyRound size={15} />
+              {pending === "mcp-token" ? "创建中" : "创建 token"}
+            </button>
+            {mcpMessage ? <span className="paw-status-pill link">{mcpMessage}</span> : null}
+          </div>
+        </form>
+
+        {rawToken ? (
+          <div className="paw-token-once mt-4" role="status">
+            <div>
+              <h3 className="paw-more-label">Raw token</h3>
+              <p className="paw-more-text">只显示这一次。关闭或刷新页面后，Settings 只保留 token 元数据。</p>
+            </div>
+            <code>{rawToken}</code>
+          </div>
+        ) : null}
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_0.85fr]">
+          <div>
+            <h3 className="paw-more-label">Codex config</h3>
+            <pre className="paw-code-block">{mcpConnection?.codexConfig ?? "读取中"}</pre>
+            <p className="paw-more-text mt-2">本地启动 Codex 前设置环境变量 PAWPLAN_MCP_TOKEN，值使用刚创建的 raw token。</p>
+          </div>
+          <div>
+            <h3 className="paw-more-label">Claude Cowork 说明</h3>
+            <p className="paw-more-text">
+              Claude Cowork 使用同一个 hosted MCP URL 和 bearer token。优先把 token 放在环境变量或 secret 配置里；不要把 raw token
+              写进计划快照或聊天记录。
+            </p>
+          </div>
+        </div>
+
+        <div className="paw-list mt-4">
+          {mcpTokens.length === 0 ? (
+            <div className="paw-empty">
+              <h3>还没有 MCP token</h3>
+              <p>创建 read_write token 后，Codex / Cowork 才能导入计划和写入 check-in。</p>
+            </div>
+          ) : (
+            mcpTokens.map((token) => (
+              <div key={token.id} className="paw-list-row">
+                <div className="min-w-0">
+                  <p className="paw-row-title">{token.name}</p>
+                  <p className="paw-row-meta">
+                    {token.permission === "read_write" ? "读写" : "只读"} · 创建 {formatDateTime(token.createdAt)} · 到期{" "}
+                    {formatDateTime(token.expiresAt)}
+                  </p>
+                </div>
+                <div className="paw-row-actions">
+                  {token.revokedAt ? <span className="paw-status-pill warn">已撤销</span> : null}
+                  <button
+                    type="button"
+                    disabled={Boolean(token.revokedAt) || pending === token.id}
+                    onClick={() => void revokeToken(token)}
+                    aria-label={`撤销 ${token.name}`}
+                    className="paw-secondary-btn !px-3 !py-2 !text-xs text-[var(--app-danger)]"
+                  >
+                    <Trash2 size={13} />
+                    撤销
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </section>
 
@@ -268,7 +495,7 @@ export function SettingsView() {
         </div>
       </section>
 
-      <section className="paw-list-card mb-4">
+      <section id="routines" className="paw-list-card mb-4">
         <div className="paw-list-header">
           <div>
             <h2 className="paw-list-title">日常事项</h2>

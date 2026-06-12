@@ -1,6 +1,7 @@
 import { relations } from "drizzle-orm";
 import {
   boolean,
+  index,
   integer,
   jsonb,
   pgEnum,
@@ -13,7 +14,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 export const planStatus = pgEnum("plan_status", ["active", "archived"]);
-export const planVersionSource = pgEnum("plan_version_source", ["baseline", "manual_edit", "agent_patch"]);
+export const planVersionSource = pgEnum("plan_version_source", ["baseline", "manual_edit", "agent_patch", "mcp"]);
 export const taskStatus = pgEnum("task_status", ["todo", "done", "skipped", "backlog"]);
 export const priority = pgEnum("priority", ["low", "normal", "high", "urgent"]);
 export const energyLevel = pgEnum("energy_level", ["low", "medium", "high"]);
@@ -266,7 +267,29 @@ export const mcpTokens = pgTable("mcp_tokens", {
   expiresAt: timestamp("expires_at", { withTimezone: true }),
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => ({
+  tokenHashIdx: index("mcp_tokens_token_hash_idx").on(table.tokenHash),
+}));
+
+export const mcpPlanImports = pgTable("mcp_plan_imports", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  planId: uuid("plan_id").notNull().references(() => plans.id, { onDelete: "cascade" }),
+  importKey: varchar("import_key", { length: 160 }).notNull(),
+  createdBy: varchar("created_by", { length: 40 }).notNull(),
+  sourceLabel: varchar("source_label", { length: 120 }),
+  taskCount: integer("task_count").notNull(),
+  snapshot: jsonb("snapshot").notNull(),
+  derivedTaskIds: jsonb("derived_task_ids").notNull(),
+  provenanceJson: jsonb("provenance_json").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  uniqueWorkspaceImportKey: uniqueIndex("mcp_plan_imports_workspace_id_import_key_unique").on(
+    table.workspaceId,
+    table.importKey,
+  ),
+  workspacePlanIdx: index("mcp_plan_imports_workspace_id_plan_id_idx").on(table.workspaceId, table.planId),
+}));
 
 export const conversations = pgTable("conversations", {
   id: uuid("id").primaryKey().defaultRandom(),

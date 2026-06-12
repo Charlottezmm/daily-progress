@@ -41,11 +41,11 @@ const sections: Array<{ title: string; tools: Tool[] }> = [
         active: false,
       },
       {
-        href: "/more",
+        href: "/settings#routines",
         title: "日常事项",
         text: "家务、通勤、运动等固定消耗。",
         icon: Clock3,
-        active: false,
+        active: true,
       },
     ],
   },
@@ -118,7 +118,7 @@ export function MoreView() {
           </section>
         ))}
       </div>
-      <p className="paw-version">PawPlan v0.1</p>
+      <p className="paw-version">PawPlan v0.2</p>
     </div>
   );
 }

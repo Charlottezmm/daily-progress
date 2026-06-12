@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { CatIcon } from "./cat-icon";
-import type { TodayViewData, WeekViewData } from "@/lib/planning/view-data";
+import type { MonthViewData, TodayViewData, WeekViewData } from "@/lib/planning/view-data";
 
 type Tab = "day" | "week" | "month";
 
@@ -20,7 +20,7 @@ function loadColor(state: string) {
   return "";
 }
 
-export function PlanView({ today, week }: { today: TodayViewData; week: WeekViewData }) {
+export function PlanView({ today, week, month }: { today: TodayViewData; week: WeekViewData; month: MonthViewData }) {
   const [tab, setTab] = useState<Tab>("day");
 
   return (
@@ -49,7 +49,7 @@ export function PlanView({ today, week }: { today: TodayViewData; week: WeekView
         </div>
       </section>
 
-      {today.dataUnavailable || week.dataUnavailable ? (
+      {today.dataUnavailable || week.dataUnavailable || month.dataUnavailable ? (
         <section className="paw-status-pill warn" role="status">
           当前没有 DATABASE_URL，Plan 会显示为空态；配置数据库后会读取真实计划。
         </section>
@@ -143,18 +143,23 @@ export function PlanView({ today, week }: { today: TodayViewData; week: WeekView
 
       {tab === "month" ? (
         <section className="paw-plan-view paw-month-goals">
-          {[
-            ["本月目标", "由 Agent 根据导入计划拆成每周重点。", "Jun 30"],
-            ["每周拆分", "观察任务是否压到某几周，不手动拖拽。", "Weekly"],
-            ["重要节点", "deadline、考试、课程节点会进入 Review 上下文。", "Calendar"],
-          ].map(([title, text, tag]) => (
-            <article key={title} className="paw-goal-card">
-              <h2 className="paw-goal-title">{title}</h2>
-              <p className="paw-goal-meta">{text}</p>
-              <div className="paw-goal-progress">
-                <div className="paw-goal-progress-fill" style={{ width: title === "本月目标" ? "60%" : title === "每周拆分" ? "45%" : "72%" }} />
-              </div>
-              <span className="paw-deadline-tag">{tag}</span>
+          {month.emptyText ? (
+            <article className="paw-goal-card">
+              <h2 className="paw-goal-title">本月计划</h2>
+              <p className="paw-goal-meta">{month.emptyText}</p>
+              <span className="paw-deadline-tag">No data</span>
+            </article>
+          ) : null}
+          {month.cards.map((card) => (
+            <article key={card.title} className="paw-goal-card">
+              <h2 className="paw-goal-title">{card.title}</h2>
+              <p className="paw-goal-meta">{card.text}</p>
+              {card.progress === null ? null : (
+                <div className="paw-goal-progress">
+                  <div className="paw-goal-progress-fill" style={{ width: `${Math.min(card.progress, 100)}%` }} />
+                </div>
+              )}
+              <span className="paw-deadline-tag">{card.tag}</span>
             </article>
           ))}
         </section>
