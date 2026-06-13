@@ -182,6 +182,48 @@ describe("hosted MCP route", () => {
     );
   });
 
+  it("records JSON-RPC error responses as failed usage even when HTTP status is 200", async () => {
+    const { recordHostedMcpUsage } = await import("@/lib/mcp/usage");
+    const { verifyMcpBearerToken } = await import("@/lib/mcp/tokens");
+    vi.mocked(verifyMcpBearerToken).mockResolvedValue({
+      workspaceId: "workspace-1",
+      permission: "read_write",
+      tokenId: "token-1",
+    });
+    handleRequestMock.mockResolvedValue(
+      Response.json({
+        jsonrpc: "2.0",
+        id: 1,
+        error: { code: -32603, message: "Tool failed" },
+      }),
+    );
+    const { POST } = await import("@/app/api/mcp/route");
+
+    await POST(
+      new Request("https://pawplan.test/api/mcp", {
+        method: "POST",
+        headers: { Authorization: "Bearer pwp_live_secret" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/call",
+          params: { name: "create_checkin", arguments: { completed_text: "Will fail." } },
+        }),
+      }),
+    );
+
+    expect(recordHostedMcpUsage).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({
+        workspaceId: "workspace-1",
+        tokenId: "token-1",
+        toolName: "create_checkin",
+        permission: "read_write",
+        success: false,
+      }),
+    );
+  });
+
   it("accepts OAuth connector access tokens and builds the shared MCP server with workspace permission", async () => {
     const { createPawPlanMcpServer } = await import("@/lib/mcp/server-builder");
     const { verifyMcpBearerToken } = await import("@/lib/mcp/tokens");

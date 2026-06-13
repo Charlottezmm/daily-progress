@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { getTableConfig } from "drizzle-orm/pg-core";
 import {
   changeLogs,
   checkinTasks,
@@ -44,5 +45,13 @@ describe("schema shape", () => {
   it("supports specific-window routines and one check-in per workspace day", () => {
     expect(routines.defaultTimeSegment).toBeDefined();
     expect(checkins.date).toBeDefined();
+  });
+
+  it("keeps check-ins unique by workspace and date for upsert conflict handling", () => {
+    const config = getTableConfig(checkins);
+    const index = config.indexes.find((candidate) => candidate.config.name === "checkins_workspace_id_date_unique");
+
+    expect(index?.config.unique).toBe(true);
+    expect(index?.config.columns.map((column) => column.name)).toEqual(["workspace_id", "date"]);
   });
 });

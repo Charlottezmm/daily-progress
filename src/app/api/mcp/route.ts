@@ -64,6 +64,27 @@ async function requestToolName(request: Request) {
   }
 }
 
+function hasJsonRpcError(payload: unknown): boolean {
+  if (Array.isArray(payload)) {
+    return payload.some((item) => hasJsonRpcError(item));
+  }
+  return Boolean(
+    payload &&
+      typeof payload === "object" &&
+      "error" in payload &&
+      (payload as Record<string, unknown>).error,
+  );
+}
+
+async function responseSucceeded(response: Response) {
+  if (response.status >= 400) return false;
+  try {
+    return !hasJsonRpcError(await response.clone().json());
+  } catch {
+    return true;
+  }
+}
+
 async function handle(request: Request) {
   const db = getDb();
   try {
@@ -96,7 +117,7 @@ async function handle(request: Request) {
           clientId: auth.tokenId,
         },
       });
-      await recordHostedMcpUsage(db, { ...usageInput, success: response.status < 400 });
+      await recordHostedMcpUsage(db, { ...usageInput, success: await responseSucceeded(response) });
       return response;
     } catch (error) {
       await recordHostedMcpUsage(db, { ...usageInput, success: false });

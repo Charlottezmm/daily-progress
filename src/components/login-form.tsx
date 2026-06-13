@@ -48,7 +48,7 @@ export function LoginForm({ nextPath = "/today" }: { nextPath?: string }) {
             PawPlan
           </h1>
           <p className="paw-login-copy">
-            已有 workspace 可直接登录；Public Beta 新 workspace 需要 invite code。
+            已有 workspace 可直接登录；Public Beta 新 workspace 需要 invite code。当前没有密码找回，密码丢了就进不去。
           </p>
         </div>
         <div className="paw-login-fields">
@@ -97,6 +97,11 @@ export function LoginForm({ nextPath = "/today" }: { nextPath?: string }) {
               className="paw-input"
             />
           ) : null}
+          <p className="text-xs font-semibold leading-relaxed text-[var(--app-ink-soft)]">
+            {mode === "create"
+              ? "创建前请保存好 workspace 名称和密码；当前没有邮箱或找回入口。"
+              : "如果忘记 workspace 密码，目前没有自助找回或重置入口。"}
+          </p>
           <button disabled={pending} className="paw-primary-btn">
             {pending ? "处理中…" : mode === "login" ? "进入" : "创建并进入"}
           </button>

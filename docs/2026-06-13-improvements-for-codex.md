@@ -18,12 +18,13 @@
 - C2 数据层：today/week view-data 已暴露 `timelineItems`，包含 task/course/meeting/unavailable/routine/recovery 的 `startsAt/endsAt/minutes/protected`。
 - C1/C2/B1 UI：Plan 日视图已用 `timelineItems` 画真实时间轴；Plan 月视图已显示月度指标/目标/milestones/每周分布；Constraints 表单已支持 `routine|recovery`。
 - C3 数据层：`tasks.blocked` 已加 schema + migration，`PATCH /api/tasks` 已支持 `{ blocked: boolean }` 并写 manual changelog；`TodayTaskView.blocked` 已透出。
-- G 后端：beta workspace 撞名时自动创建 `名称 2`；并发唯一冲突返回明确错误。
+- G 后端：beta workspace 撞名时自动创建 `名称 2`；并发唯一冲突返回明确错误；登录/创建流程已补“当前无密码找回”风险文案。
+- Check-in 幂等：已确认 `checkins_workspace_id_date_unique` 覆盖 `(workspace_id,date)`，并补 schema 回归测试保护 `createDailyCheckin` 的 upsert 目标。
+- MCP usage：已改为按 JSON-RPC response body 是否含 `error` 判定 success，避免 HTTP 200 的工具失败被计成成功。
 
 仍待拆分处理：
 - Claude UI：today “卡住”把初始态接 `task.blocked`，点击时 PATCH `{ blocked: true|false }`。
-- 远期：登录/创建流程的密码找回或无找回风险文案仍是前端/产品项；本轮未引入账号邮箱或 recovery 机制。
-- 确认点：`createDailyCheckin` 的 `(workspace_id,date)` 唯一索引、`recordHostedMcpUsage` 成功/失败口径需要单独审计；本轮未改。
+- 远期：真正的密码找回/重置机制仍未做；当前只是明确告知无找回。
 
 ---
 
@@ -119,7 +120,7 @@
 ## G〔P1〕邀请流程加固 —— Codex 后端
 - 工作区名全局唯一（`workspaces_name_unique`）撞名报错差 → 自动加后缀或放宽唯一性约束范围。
 - 无密码找回（无账号/邮箱）→ 至少在 /login + 创建流程文案里讲清"密码丢了进不去"，或加一个 recovery 机制（远期）。
-- 状态：后端撞名已自动加 ` 2` 后缀；无密码找回文案/机制仍留给前端/产品。
+- 状态：后端撞名已自动加 ` 2` 后缀；登录/创建流程已补无密码找回文案。真正 recovery 机制仍是远期。
 
 ## D. 任务 reschedule（回答"往前排"）
 - 现状：**已支持**。`patch-schema.ts` 的 `propose_patch` 含 `move_task`（任意日期，往前往后皆可）、`defer_task`、`change_priority`、`split_task`、`move_to_backlog`；走 `/review`(`reschedule-preview.tsx`) 逐条确认，apply 前重查任务状态 + 冲突（乐观并发，`patch-apply.ts`）。
@@ -135,10 +136,10 @@
 ### 纯后端项（独立提交，互不混）
 1. **A5** 真实 `DATABASE_URL` driver 的最小事务写集成测试（回归防护）——已完成，默认 gated。
 2. **A1** OAuth refresh_token：发 refresh_token + 加 `refresh_token` grant + token endpoint 支持续期 + metadata 声明——已完成。
-3. **G** 邀请加固：工作区名撞名自动加后缀 / 放宽唯一性；/login + 创建流程文案讲清无密码找回（或加 recovery）——后端撞名已完成，文案/recovery 未做。
+3. **G** 邀请加固：工作区名撞名自动加后缀 / 放宽唯一性；/login + 创建流程文案讲清无密码找回（或加 recovery）——撞名和文案已完成，recovery 机制未做。
 4. **A3** 空 workspace 自动建默认 active plan——已确认已有覆盖。
 5. **A4** `update_task_status.note` / `create_inbox_item.source` 补 schema 落库，或从 API 删字段——已完成。
-6. 确认点：`createDailyCheckin` 的 `(workspace_id,date)` 唯一索引是否存在；`recordHostedMcpUsage` 把失败记成成功的口径——未审计，另拆。
+6. 确认点：`createDailyCheckin` 的 `(workspace_id,date)` 唯一索引是否存在；`recordHostedMcpUsage` 把失败记成成功的口径——已完成并补测试。
 
 ### 数据/UI 准备
 7. **C1 数据/UI**：`getMonthPlanData`（`src/lib/planning/view-data.ts`）返回真实月度数据，Plan 月视图已接入。
