@@ -27,6 +27,11 @@ export const inboxSource = pgEnum("inbox_source", ["manual", "imported"]);
 export const checkinTaskStatus = pgEnum("checkin_task_status", ["done", "not_done", "partial", "skipped"]);
 export const changeLogSource = pgEnum("change_log_source", ["manual", "agent_patch", "import", "mcp"]);
 export const mcpPermission = pgEnum("mcp_permission", ["read_only", "read_write"]);
+export const onboardingEventType = pgEnum("onboarding_event_type", [
+  "schedule_import_skipped",
+  "connector_setup_skipped",
+  "review_opened",
+]);
 export const conversationContextType = pgEnum("conversation_context_type", [
   "weekly_review",
   "decision",
@@ -45,6 +50,38 @@ export const workspaces = pgTable("workspaces", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   uniqueName: uniqueIndex("workspaces_name_unique").on(table.name),
+}));
+
+export const betaInviteCodes = pgTable("beta_invite_codes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  codeHash: text("code_hash").notNull(),
+  label: varchar("label", { length: 120 }).notNull(),
+  maxRedemptions: integer("max_redemptions"),
+  redemptionCount: integer("redemption_count").notNull().default(0),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  disabledAt: timestamp("disabled_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  codeHashUnique: uniqueIndex("beta_invite_codes_code_hash_unique").on(table.codeHash),
+}));
+
+export const workspaceBetaAccess = pgTable("workspace_beta_access", {
+  workspaceId: uuid("workspace_id").primaryKey().references(() => workspaces.id, { onDelete: "cascade" }),
+  inviteCodeId: uuid("invite_code_id").references(() => betaInviteCodes.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const workspaceOnboardingEvents = pgTable("workspace_onboarding_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  eventType: onboardingEventType("event_type").notNull(),
+  metadataJson: jsonb("metadata_json").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  uniqueWorkspaceEvent: uniqueIndex("workspace_onboarding_events_workspace_event_unique").on(
+    table.workspaceId,
+    table.eventType,
+  ),
 }));
 
 export const plans = pgTable("plans", {
@@ -283,6 +320,57 @@ export const mcpTokens = pgTable("mcp_tokens", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   tokenHashIdx: index("mcp_tokens_token_hash_idx").on(table.tokenHash),
+}));
+
+export const oauthClients = pgTable("oauth_clients", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  clientId: varchar("client_id", { length: 160 }).notNull(),
+  clientName: varchar("client_name", { length: 180 }).notNull(),
+  redirectUris: jsonb("redirect_uris").notNull(),
+  grantTypes: jsonb("grant_types").notNull(),
+  responseTypes: jsonb("response_types").notNull(),
+  tokenEndpointAuthMethod: varchar("token_endpoint_auth_method", { length: 40 }).notNull().default("none"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  clientIdUnique: uniqueIndex("oauth_clients_client_id_unique").on(table.clientId),
+}));
+
+export const oauthAuthorizationCodes = pgTable("oauth_authorization_codes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  clientId: varchar("client_id", { length: 160 }).notNull(),
+  codeHash: text("code_hash").notNull(),
+  redirectUri: text("redirect_uri").notNull(),
+  codeChallenge: text("code_challenge").notNull(),
+  codeChallengeMethod: varchar("code_challenge_method", { length: 16 }).notNull(),
+  scope: text("scope").notNull(),
+  permission: mcpPermission("permission").notNull().default("read_write"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  consumedAt: timestamp("consumed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  codeHashIdx: index("oauth_authorization_codes_code_hash_idx").on(table.codeHash),
+  workspaceClientIdx: index("oauth_authorization_codes_workspace_client_idx").on(table.workspaceId, table.clientId),
+}));
+
+export const claudeConnectorAuthorizations = pgTable("claude_connector_authorizations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  clientId: varchar("client_id", { length: 160 }).notNull(),
+  clientName: varchar("client_name", { length: 180 }).notNull().default("Claude"),
+  accessTokenHash: text("access_token_hash").notNull(),
+  permission: mcpPermission("permission").notNull().default("read_write"),
+  scope: text("scope").notNull().default("mcp"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  accessTokenHashIdx: index("claude_connector_authorizations_access_token_hash_idx").on(table.accessTokenHash),
+  workspaceCreatedIdx: index("claude_connector_authorizations_workspace_created_idx").on(
+    table.workspaceId,
+    table.createdAt,
+  ),
 }));
 
 export const mcpUsageEvents = pgTable("mcp_usage_events", {

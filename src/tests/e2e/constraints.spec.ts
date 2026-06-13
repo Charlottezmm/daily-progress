@@ -56,6 +56,21 @@ test("opens constraints from More, saves a course block, and deletes it explicit
           workspaceId,
           courses: [{ id: "course-1", name: "Linear Algebra", color: "#2563eb" }],
           timeBlocks,
+          summary: {
+            courseCount: 1,
+            timeBlockCount: timeBlocks.length,
+            conflictCount: 1,
+            nextStartsAt: "2026-06-12T01:00:00.000Z",
+          },
+          conflicts: [
+            {
+              id: "block-1__block-2",
+              firstTitle: "Linear Algebra",
+              secondTitle: "Studio unavailable",
+              startsAt: "2026-06-12T02:30:00.000Z",
+              endsAt: "2026-06-12T03:00:00.000Z",
+            },
+          ],
         },
       });
       return;
@@ -120,6 +135,9 @@ test("opens constraints from More, saves a course block, and deletes it explicit
   await page.getByRole("link", { name: /日历与课程/ }).click();
   await expect(page).toHaveURL(/\/constraints$/);
   await expect(page.getByRole("heading", { name: "日历与课程" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "导入 timetable.csv" })).toHaveAttribute("href", "/import");
+  await expect(page.getByText("冲突: 1")).toBeVisible();
+  await expect(page.getByText("Linear Algebra overlaps Studio unavailable")).toBeVisible();
   await expect(page.getByText("Linear Algebra", { exact: true })).toBeVisible();
   await expect(page.getByText("Studio unavailable", { exact: true })).toBeVisible();
 

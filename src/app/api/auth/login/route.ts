@@ -4,13 +4,12 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { setWorkspaceSession } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
-import { changeLogs, plans, planVersions, workspaces } from "@/lib/db/schema";
+import { workspaces } from "@/lib/db/schema";
 import { readJsonBody } from "@/lib/validation/common";
-import { buildDefaultPlanValues } from "@/lib/workspaces/default-plan";
 
 const loginSchema = z.object({
-  workspaceName: z.string().trim().min(1),
-  password: z.string().min(8),
+  workspaceName: z.string().trim().min(1).max(120),
+  password: z.string().min(8).max(128),
 });
 
 export async function POST(request: Request) {
@@ -26,23 +25,7 @@ export async function POST(request: Request) {
     .where(eq(workspaces.name, parsed.data.workspaceName))
     .limit(1);
 
-  if (!workspace) {
-    const passwordHash = await bcrypt.hash(parsed.data.password, 12);
-    const [created] = await db
-      .insert(workspaces)
-      .values({ name: parsed.data.workspaceName, passwordHash })
-      .returning();
-    const defaults = buildDefaultPlanValues(created.id);
-    const [plan] = await db.insert(plans).values(defaults.plan).returning();
-    const [version] = await db
-      .insert(planVersions)
-      .values({ ...defaults.version, planId: plan.id })
-      .returning();
-    await db.update(plans).set({ currentVersionId: version.id }).where(eq(plans.id, plan.id));
-    await db.insert(changeLogs).values({ ...defaults.changeLog, planId: plan.id });
-    await setWorkspaceSession(created.id);
-    return NextResponse.json({ workspaceId: created.id, planId: plan.id, created: true });
-  }
+  if (!workspace) return NextResponse.json({ error: "Workspace not found" }, { status: 401 });
 
   const ok = await bcrypt.compare(parsed.data.password, workspace.passwordHash);
   if (!ok) {

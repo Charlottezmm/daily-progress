@@ -8,6 +8,7 @@ import {
   extractMcpUsageToolName,
   recordHostedMcpUsage,
 } from "@/lib/mcp/usage";
+import { verifyConnectorAccessToken } from "@/lib/oauth/connector-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -20,15 +21,38 @@ function bearerToken(request: Request) {
   return token;
 }
 
-function errorResponse(error: unknown) {
+function resourceMetadataUrl(request: Request) {
+  return new URL("/.well-known/oauth-protected-resource/api/mcp", request.url).toString();
+}
+
+function wwwAuthenticate(request: Request, error?: string) {
+  const params = [`resource_metadata="${resourceMetadataUrl(request)}"`];
+  if (error) params.push(`error="${error}"`);
+  return `Bearer ${params.join(", ")}`;
+}
+
+function errorResponse(request: Request, error: unknown) {
   if (error instanceof McpTokenError) {
-    return Response.json({ error: error.message }, { status: error.status });
+    return Response.json(
+      { error: error.message },
+      {
+        status: error.status,
+        headers: { "WWW-Authenticate": wwwAuthenticate(request, error.status === 401 ? "invalid_token" : undefined) },
+      },
+    );
   }
   if (error instanceof McpUsageLimitError) {
     return Response.json({ error: error.message }, { status: error.status });
   }
 
   return Response.json({ error: "MCP request failed" }, { status: 500 });
+}
+
+async function resolveMcpAuth(db: ReturnType<typeof getDb>, token: string) {
+  const mcpAuth = await verifyMcpBearerToken(db, token);
+  if (mcpAuth) return { ...mcpAuth, kind: "mcp_token" as const };
+
+  return verifyConnectorAccessToken(db, token);
 }
 
 async function requestToolName(request: Request) {
@@ -43,12 +67,12 @@ async function requestToolName(request: Request) {
 async function handle(request: Request) {
   const db = getDb();
   try {
-    const auth = await verifyMcpBearerToken(db, bearerToken(request));
+    const auth = await resolveMcpAuth(db, bearerToken(request));
     if (!auth) throw new McpTokenError("Invalid MCP bearer token", 401);
     const toolName = await requestToolName(request);
     const usageInput = {
       workspaceId: auth.workspaceId,
-      tokenId: auth.tokenId,
+      tokenId: auth.kind === "mcp_token" ? auth.tokenId : null,
       toolName,
       permission: auth.permission,
     };
@@ -79,7 +103,7 @@ async function handle(request: Request) {
       throw error;
     }
   } catch (error) {
-    return errorResponse(error);
+    return errorResponse(request, error);
   }
 }
 

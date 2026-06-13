@@ -55,9 +55,37 @@ function parseDateBoundary(value: string) {
   return new Date(`${value}T00:00:00.000+08:00`);
 }
 
+function validDateKey(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = parseDateBoundary(value);
+  if (Number.isNaN(parsed.getTime())) return false;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(parsed);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+  return `${year}-${month}-${day}` === value;
+}
+
 function normalizeName(value?: string) {
   const normalized = value?.trim();
   return normalized || null;
+}
+
+function validateMcpPlanImportInput(input: McpPlanImportInput) {
+  if (!validDateKey(input.weeklySummary.weekStart)) throw new McpPlanImportError("Invalid MCP plan week start", 400);
+  const seenTasks = new Set<string>();
+
+  for (const task of input.dailyTasks) {
+    if (!validDateKey(task.date)) throw new McpPlanImportError("Invalid MCP plan task date", 400);
+    const key = `${task.title.trim().toLowerCase()}|${task.date}|${task.daySegment}`;
+    if (seenTasks.has(key)) throw new McpPlanImportError("Duplicate MCP plan task", 400);
+    seenTasks.add(key);
+  }
 }
 
 function snakePayload(input: McpPlanImportInput) {
@@ -185,6 +213,8 @@ function derivedTaskIdsFromExisting(value: unknown) {
 }
 
 export async function saveMcpPlanImport(db: PlanningDb, input: McpPlanImportInput) {
+  validateMcpPlanImportInput(input);
+
   return db.transaction(async (tx) => {
     const existing = await findExistingImport(tx, input.workspaceId, input.importKey);
     if (existing) {

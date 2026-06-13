@@ -145,6 +145,7 @@ describe("import save services", () => {
 
     const result = await savePlanImport(db, {
       workspaceId: "workspace-1",
+      confirmation: "CONFIRM_PLAN_IMPORT",
       markdown: `Goal: ship PawPlan tomorrow
 
 ## Projects
@@ -193,6 +194,15 @@ describe("import save services", () => {
             planId: "plan-1",
             source: "import",
             summary: "Imported plan.md preview",
+            detailsJson: expect.objectContaining({
+              confirmedBy: "user",
+              confirmation: "CONFIRM_PLAN_IMPORT",
+              preview: expect.objectContaining({
+                timezone: "Asia/Shanghai",
+                warnings: [],
+                conflicts: [],
+              }),
+            }),
           }),
         }),
       ]),
@@ -215,6 +225,7 @@ describe("import save services", () => {
 
     const result = await saveTimetableImport(db, {
       workspaceId: "workspace-1",
+      confirmation: "CONFIRM_TIMETABLE_IMPORT",
       csv: `title,kind,day_of_week,start_time,end_time,starts_on,ends_on,course,recurrence,notes
 Deep Learning Lecture,course,Monday,09:00,11:00,2026-09-01,2026-09-14,Deep Learning,weekly,Room 204
 `,
@@ -261,10 +272,51 @@ Deep Learning Lecture,course,Monday,09:00,11:00,2026-09-01,2026-09-14,Deep Learn
             planId: "plan-1",
             source: "import",
             summary: "Imported timetable.csv preview",
+            detailsJson: expect.objectContaining({
+              confirmedBy: "user",
+              confirmation: "CONFIRM_TIMETABLE_IMPORT",
+              timezone: "Asia/Shanghai",
+              rowsPreviewed: 1,
+              warnings: [],
+              conflicts: [],
+            }),
           }),
         }),
       ]),
     );
+  });
+
+  it("requires explicit confirmation before saving plan or timetable imports", async () => {
+    const db = createFakeDb();
+
+    await expect(
+      savePlanImport(db, {
+        workspaceId: "workspace-1",
+        markdown: `Goal: ship PawPlan tomorrow
+
+## Projects
+- PawPlan Import: save imports by 2026-06-11
+`,
+      }),
+    ).rejects.toMatchObject({
+      message: "Plan import confirmation required",
+      status: 400,
+    });
+
+    await expect(
+      saveTimetableImport(db, {
+        workspaceId: "workspace-1",
+        csv: `title,kind,day_of_week,start_time,end_time,starts_on,ends_on,course,recurrence,notes
+Deep Learning Lecture,course,Monday,09:00,11:00,2026-09-01,2026-09-14,Deep Learning,weekly,Room 204
+`,
+      }),
+    ).rejects.toMatchObject({
+      message: "Timetable import confirmation required",
+      status: 400,
+    });
+
+    expect(db.inserts).toEqual([]);
+    expect(db.updates).toEqual([]);
   });
 
   it("rejects timetable import without an active plan before writing import data", async () => {
@@ -274,6 +326,7 @@ Deep Learning Lecture,course,Monday,09:00,11:00,2026-09-01,2026-09-14,Deep Learn
     try {
       await saveTimetableImport(db, {
         workspaceId: "workspace-1",
+        confirmation: "CONFIRM_TIMETABLE_IMPORT",
         csv: `title,kind,day_of_week,start_time,end_time,starts_on,ends_on,course,recurrence,notes
 Deep Learning Lecture,course,Monday,09:00,11:00,2026-09-01,2026-09-14,Deep Learning,weekly,Room 204
 `,
@@ -297,6 +350,7 @@ Deep Learning Lecture,course,Monday,09:00,11:00,2026-09-01,2026-09-14,Deep Learn
     await expect(
       saveTimetableImport(db, {
         workspaceId: "workspace-1",
+        confirmation: "CONFIRM_TIMETABLE_IMPORT",
         csv: `title,kind,day_of_week,start_time,end_time,starts_on,ends_on,course,recurrence,notes
 Bad Date,meeting,Monday,09:00,10:00,2026-99-01,2026-09-14,,weekly,
 `,
@@ -306,6 +360,7 @@ Bad Date,meeting,Monday,09:00,10:00,2026-99-01,2026-09-14,,weekly,
     await expect(
       saveTimetableImport(db, {
         workspaceId: "workspace-1",
+        confirmation: "CONFIRM_TIMETABLE_IMPORT",
         csv: `title,kind,day_of_week,start_time,end_time,starts_on,ends_on,course,recurrence,notes
 Bad Time,meeting,Monday,10:00,10:00,2026-09-01,2026-09-14,,weekly,
 `,

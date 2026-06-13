@@ -2,7 +2,11 @@ import { and, eq, gt, lt } from "drizzle-orm";
 import { z } from "zod";
 import { agentPatches, timeBlocks } from "@/lib/db/schema";
 import { parseTimetableCsv, type TimetableImportPreviewRow } from "@/lib/imports/timetable-csv";
-import { materializeTimetableRows, type MaterializedTimetableBlock } from "@/lib/imports/timetable-save";
+import {
+  buildTimetableRowsPreview,
+  materializeTimetableRows,
+  type MaterializedTimetableBlock,
+} from "@/lib/imports/timetable-save";
 import { getActivePlanId } from "@/lib/planning/active-plan";
 
 type PlanningDb = {
@@ -96,8 +100,7 @@ export async function findTimetableImportConflicts(
         lt(timeBlocks.startsAt, end),
         gt(timeBlocks.endsAt, start),
       ),
-    )
-    .limit(100);
+    );
 
   const conflicts: string[] = [];
   for (const block of input.blocks) {
@@ -120,11 +123,13 @@ export async function proposeTimetableImport(
   if (!planId) throw new Error("No active plan");
 
   const rows = normalizeRows(args);
+  const preview = buildTimetableRowsPreview(rows);
   const blocks = materializeTimetableRows(rows);
-  const conflicts = await findTimetableImportConflicts(db, { workspaceId, blocks });
+  const conflicts = [...preview.conflicts, ...(await findTimetableImportConflicts(db, { workspaceId, blocks }))];
   const capacityImpact = [
     `将创建 ${blocks.length} 个固定时间块`,
     "不会自动写入，需用户在 Review 确认",
+    ...(preview.warnings.length > 0 ? [`检测到 ${preview.warnings.length} 个导入警告`] : []),
     ...(conflicts.length > 0 ? [`检测到 ${conflicts.length} 个时间冲突`] : []),
   ];
   const patch = {
@@ -135,7 +140,7 @@ export async function proposeTimetableImport(
         rows,
         reason: args.reason,
         capacity_impact: capacityImpact,
-        protected_evidence: conflicts,
+        protected_evidence: [...preview.warnings, ...conflicts],
       },
     ],
   };

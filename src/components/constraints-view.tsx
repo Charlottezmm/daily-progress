@@ -1,6 +1,7 @@
 "use client";
 
-import { CalendarDays, Pencil, Plus, Save, Trash2 } from "lucide-react";
+import { CalendarDays, Pencil, Plus, Save, Table, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { BackLink } from "./back-link";
 import { CatIcon } from "./cat-icon";
@@ -29,6 +30,19 @@ type ConstraintsResponse = {
   workspaceId: string;
   courses: Course[];
   timeBlocks: TimeBlock[];
+  summary?: {
+    courseCount: number;
+    timeBlockCount: number;
+    conflictCount: number;
+    nextStartsAt: string | null;
+  };
+  conflicts?: Array<{
+    id: string;
+    firstTitle: string;
+    secondTitle: string;
+    startsAt: string;
+    endsAt: string;
+  }>;
 };
 
 type UpsertConstraintResponse = {
@@ -104,6 +118,8 @@ export function ConstraintsView() {
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
   const [timeBlocks, setTimeBlocks] = useState<TimeBlock[]>([]);
+  const [summary, setSummary] = useState<ConstraintsResponse["summary"]>(undefined);
+  const [conflicts, setConflicts] = useState<NonNullable<ConstraintsResponse["conflicts"]>>([]);
   const [form, setForm] = useState<TimeBlockForm>(emptyForm);
   const [message, setMessage] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
@@ -130,6 +146,8 @@ export function ConstraintsView() {
         setWorkspaceId(data.workspaceId);
         setCourses(data.courses ?? []);
         setTimeBlocks(data.timeBlocks ?? []);
+        setSummary(data.summary);
+        setConflicts(data.conflicts ?? []);
         setDataUnavailable(false);
       } catch {
         if (!active) return;
@@ -250,10 +268,48 @@ export function ConstraintsView() {
         </div>
         <div className="paw-status-pills">
           <span className="paw-status-pill">{workspaceId ? `Workspace: ${workspaceId}` : "Workspace 读取中"}</span>
-          <span className="paw-status-pill">Editable: course / meeting / unavailable</span>
+          <span className="paw-status-pill">课程: {summary?.courseCount ?? courses.length}</span>
+          <span className="paw-status-pill">固定块: {summary?.timeBlockCount ?? timeBlocks.length}</span>
+          <span className={conflicts.length > 0 ? "paw-status-pill warn" : "paw-status-pill"}>冲突: {summary?.conflictCount ?? conflicts.length}</span>
           {dataUnavailable ? <span className="paw-status-pill warn">数据源不可用</span> : null}
           {message ? <span className="paw-status-pill link">{message}</span> : null}
         </div>
+      </section>
+
+      <section className="paw-list-card mb-4">
+        <div className="paw-list-header">
+          <div>
+            <h2 className="paw-list-title">固定日程概览</h2>
+            <p className="paw-list-subtitle">只读扫描，不支持拖拽；批量课程表请先导入 timetable.csv。</p>
+          </div>
+          <Link href="/import" className="paw-secondary-btn !px-4 !py-2 !text-sm" aria-label="导入 timetable.csv">
+            <Table size={15} />
+            导入 timetable.csv
+          </Link>
+        </div>
+        <div className="paw-mcp-grid mt-4">
+          <div className="paw-mcp-info">
+            <p className="paw-field-label">下一个固定块</p>
+            <p className="paw-mcp-value">{summary?.nextStartsAt ? formatDateTime(summary.nextStartsAt) : "暂无"}</p>
+          </div>
+          <div className="paw-mcp-info">
+            <p className="paw-field-label">冲突检查</p>
+            <p className="paw-mcp-value">{conflicts.length > 0 ? `${conflicts.length} 个冲突需处理` : "未发现冲突"}</p>
+          </div>
+        </div>
+        {conflicts.length > 0 ? (
+          <div className="paw-list mt-4">
+            {conflicts.map((conflict) => (
+              <div key={conflict.id} className="paw-list-row">
+                <div className="min-w-0">
+                  <p className="paw-row-title">{conflict.firstTitle} overlaps {conflict.secondTitle}</p>
+                  <p className="paw-row-meta">{formatDateTime(conflict.startsAt)} - {formatDateTime(conflict.endsAt)}</p>
+                </div>
+                <span className="paw-status-pill warn">conflict</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
       </section>
 
       <section className="paw-list-card mb-4">

@@ -9,6 +9,9 @@ type PlanPreview = {
   goal: string | null;
   projects: Array<{ name: string; deadline: string | null }>;
   constraints: string[];
+  timezone: "Asia/Shanghai";
+  warnings: string[];
+  conflicts: string[];
 };
 
 type TimetablePreviewRow = {
@@ -22,6 +25,14 @@ type TimetablePreviewRow = {
   course: string | null;
   recurrence: string | null;
   notes: string | null;
+};
+
+type TimetablePreview = {
+  rows: TimetablePreviewRow[];
+  timezone: "Asia/Shanghai";
+  blocksPreviewed: number;
+  warnings: string[];
+  conflicts: string[];
 };
 
 type RequestState = "idle" | "previewing" | "saving";
@@ -53,12 +64,14 @@ async function postJson<T>(url: string, body: Record<string, string>): Promise<T
 export function ImportView() {
   const [planMarkdown, setPlanMarkdown] = useState(planExample);
   const [planPreview, setPlanPreview] = useState<PlanPreview | null>(null);
+  const [planPreviewToken, setPlanPreviewToken] = useState<string | null>(null);
   const [planState, setPlanState] = useState<RequestState>("idle");
   const [planMessage, setPlanMessage] = useState<string | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
 
   const [timetableCsv, setTimetableCsv] = useState(timetableExample);
-  const [timetablePreview, setTimetablePreview] = useState<TimetablePreviewRow[] | null>(null);
+  const [timetablePreview, setTimetablePreview] = useState<TimetablePreview | null>(null);
+  const [timetablePreviewToken, setTimetablePreviewToken] = useState<string | null>(null);
   const [timetableState, setTimetableState] = useState<RequestState>("idle");
   const [timetableMessage, setTimetableMessage] = useState<string | null>(null);
   const [timetableError, setTimetableError] = useState<string | null>(null);
@@ -68,10 +81,12 @@ export function ImportView() {
     setPlanError(null);
     setPlanMessage(null);
     try {
-      const payload = await postJson<{ preview: PlanPreview }>("/api/imports/plan", { markdown: planMarkdown });
+      const payload = await postJson<{ preview: PlanPreview; previewToken: string }>("/api/imports/plan", { markdown: planMarkdown });
       setPlanPreview(payload.preview);
+      setPlanPreviewToken(payload.previewToken);
     } catch (error) {
       setPlanPreview(null);
+      setPlanPreviewToken(null);
       setPlanError(error instanceof Error ? error.message : "Plan preview failed");
     } finally {
       setPlanState("idle");
@@ -79,11 +94,19 @@ export function ImportView() {
   }
 
   async function savePlan() {
+    if (!planPreviewToken) {
+      setPlanError("请先预览 plan.md。");
+      return;
+    }
     setPlanState("saving");
     setPlanError(null);
     setPlanMessage(null);
     try {
-      const payload = await postJson<{ message: string }>("/api/imports/plan/save", { markdown: planMarkdown });
+      const payload = await postJson<{ message: string }>("/api/imports/plan/save", {
+        markdown: planMarkdown,
+        confirmation: "CONFIRM_PLAN_IMPORT",
+        previewToken: planPreviewToken,
+      });
       setPlanMessage(payload.message);
     } catch (error) {
       setPlanError(error instanceof Error ? error.message : "Plan save failed");
@@ -97,10 +120,12 @@ export function ImportView() {
     setTimetableError(null);
     setTimetableMessage(null);
     try {
-      const payload = await postJson<{ preview: TimetablePreviewRow[] }>("/api/imports/timetable", { csv: timetableCsv });
+      const payload = await postJson<{ preview: TimetablePreview; previewToken: string }>("/api/imports/timetable", { csv: timetableCsv });
       setTimetablePreview(payload.preview);
+      setTimetablePreviewToken(payload.previewToken);
     } catch (error) {
       setTimetablePreview(null);
+      setTimetablePreviewToken(null);
       setTimetableError(error instanceof Error ? error.message : "Timetable preview failed");
     } finally {
       setTimetableState("idle");
@@ -108,11 +133,19 @@ export function ImportView() {
   }
 
   async function saveTimetable() {
+    if (!timetablePreviewToken) {
+      setTimetableError("请先预览 timetable.csv。");
+      return;
+    }
     setTimetableState("saving");
     setTimetableError(null);
     setTimetableMessage(null);
     try {
-      const payload = await postJson<{ message: string }>("/api/imports/timetable/save", { csv: timetableCsv });
+      const payload = await postJson<{ message: string }>("/api/imports/timetable/save", {
+        csv: timetableCsv,
+        confirmation: "CONFIRM_TIMETABLE_IMPORT",
+        previewToken: timetablePreviewToken,
+      });
       setTimetableMessage(payload.message);
     } catch (error) {
       setTimetableError(error instanceof Error ? error.message : "Timetable save failed");
@@ -153,6 +186,7 @@ export function ImportView() {
             onChange={(event) => {
               setPlanMarkdown(event.target.value);
               setPlanPreview(null);
+              setPlanPreviewToken(null);
               setPlanMessage(null);
             }}
           />
@@ -165,7 +199,7 @@ export function ImportView() {
               className="paw-primary-btn"
               type="button"
               onClick={savePlan}
-              disabled={planState !== "idle" || !planPreview}
+              disabled={planState !== "idle" || !planPreview || !planPreviewToken}
             >
               <Save size={16} />
               {planState === "saving" ? "正在保存" : "保存"}
@@ -176,7 +210,31 @@ export function ImportView() {
           {planPreview ? (
             <div className="paw-import-preview">
               <p className="paw-row-title">Goal: {planPreview.goal ?? "未识别"}</p>
-              <p className="paw-row-meta">Projects: {planPreview.projects.length}</p>
+              <p className="paw-row-meta">Projects: {planPreview.projects.length} · Timezone: {planPreview.timezone}</p>
+              {planPreview.warnings.length > 0 ? (
+                <div>
+                  <p className="paw-row-title">Warnings</p>
+                  <ul className="paw-list">
+                    {planPreview.warnings.map((warning) => (
+                      <li className="paw-list-row" key={warning}>
+                        <span className="paw-row-meta">{warning}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {planPreview.conflicts.length > 0 ? (
+                <div>
+                  <p className="paw-row-title">Conflicts</p>
+                  <ul className="paw-list">
+                    {planPreview.conflicts.map((conflict) => (
+                      <li className="paw-list-row" key={conflict}>
+                        <span className="paw-row-meta">{conflict}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
               <ul className="paw-list">
                 {planPreview.projects.map((project) => (
                   <li className="paw-list-row" key={`${project.name}-${project.deadline ?? "none"}`}>
@@ -209,6 +267,7 @@ export function ImportView() {
             onChange={(event) => {
               setTimetableCsv(event.target.value);
               setTimetablePreview(null);
+              setTimetablePreviewToken(null);
               setTimetableMessage(null);
             }}
           />
@@ -221,7 +280,7 @@ export function ImportView() {
               className="paw-primary-btn"
               type="button"
               onClick={saveTimetable}
-              disabled={timetableState !== "idle" || !timetablePreview}
+              disabled={timetableState !== "idle" || !timetablePreview || !timetablePreviewToken}
             >
               <Save size={16} />
               {timetableState === "saving" ? "正在保存" : "保存"}
@@ -231,9 +290,35 @@ export function ImportView() {
           {timetableMessage ? <p className="paw-toast">{timetableMessage}</p> : null}
           {timetablePreview ? (
             <div className="paw-import-preview">
-              <p className="paw-row-meta">Preview rows: {timetablePreview.length}</p>
+              <p className="paw-row-meta">
+                Preview rows: {timetablePreview.rows.length} · Blocks: {timetablePreview.blocksPreviewed} · Timezone: {timetablePreview.timezone}
+              </p>
+              {timetablePreview.warnings.length > 0 ? (
+                <div>
+                  <p className="paw-row-title">Warnings</p>
+                  <ul className="paw-list">
+                    {timetablePreview.warnings.map((warning) => (
+                      <li className="paw-list-row" key={warning}>
+                        <span className="paw-row-meta">{warning}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {timetablePreview.conflicts.length > 0 ? (
+                <div>
+                  <p className="paw-row-title">Conflicts</p>
+                  <ul className="paw-list">
+                    {timetablePreview.conflicts.map((conflict) => (
+                      <li className="paw-list-row" key={conflict}>
+                        <span className="paw-row-meta">{conflict}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
               <ul className="paw-list">
-                {timetablePreview.map((row, index) => (
+                {timetablePreview.rows.map((row, index) => (
                   <li className="paw-list-row" key={`${row.title}-${index}`}>
                     <span className="paw-row-title">{row.title}</span>
                     <span className="paw-row-meta">

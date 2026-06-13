@@ -43,6 +43,27 @@
       "when": 1781249814674,
       "tag": "0005_fixed_dark_beast",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781283342206,
+      "tag": "0006_amazing_rafael_vega",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1781284904238,
+      "tag": "0007_lazy_thunderbolt_ross",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1781338137567,
+      "tag": "0008_cultured_omega_sentinel",
+      "breakpoints": true
     }
   ]
 }

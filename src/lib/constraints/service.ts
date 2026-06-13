@@ -62,6 +62,43 @@ function serializeCourse(row: CourseRow) {
   };
 }
 
+function blockOverlaps(first: TimeBlockRow, second: TimeBlockRow) {
+  return first.startsAt < second.endsAt && first.endsAt > second.startsAt;
+}
+
+function overlapWindow(first: TimeBlockRow, second: TimeBlockRow) {
+  return {
+    startsAt: new Date(Math.max(first.startsAt.getTime(), second.startsAt.getTime())).toISOString(),
+    endsAt: new Date(Math.min(first.endsAt.getTime(), second.endsAt.getTime())).toISOString(),
+  };
+}
+
+function buildConstraintConflicts(blocks: TimeBlockRow[]) {
+  const conflicts: Array<{
+    id: string;
+    firstTitle: string;
+    secondTitle: string;
+    startsAt: string;
+    endsAt: string;
+  }> = [];
+
+  for (let index = 0; index < blocks.length; index += 1) {
+    for (let compareIndex = index + 1; compareIndex < blocks.length; compareIndex += 1) {
+      const first = blocks[index];
+      const second = blocks[compareIndex];
+      if (!blockOverlaps(first, second)) continue;
+      conflicts.push({
+        id: `${first.id}__${second.id}`,
+        firstTitle: first.title,
+        secondTitle: second.title,
+        ...overlapWindow(first, second),
+      });
+    }
+  }
+
+  return conflicts;
+}
+
 async function getActivePlanId(tx: DbLike, workspaceId: string) {
   const [plan] = await tx
     .select({ id: plans.id })
@@ -118,11 +155,19 @@ export async function getConstraints(db: DbLike, workspaceId: string) {
   const sortedBlocks = (rawBlocks as TimeBlockRow[])
     .filter((block) => isEditableKind(block.kind))
     .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+  const conflicts = buildConstraintConflicts(sortedBlocks);
 
   return {
     workspaceId,
     courses: (courseRows as CourseRow[]).map(serializeCourse),
     timeBlocks: sortedBlocks.map((block) => serializeTimeBlock(block, courseNames)),
+    summary: {
+      courseCount: courseRows.length,
+      timeBlockCount: sortedBlocks.length,
+      conflictCount: conflicts.length,
+      nextStartsAt: sortedBlocks[0]?.startsAt.toISOString() ?? null,
+    },
+    conflicts,
   };
 }
 

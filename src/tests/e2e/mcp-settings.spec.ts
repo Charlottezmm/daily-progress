@@ -90,13 +90,70 @@ test("creates, shows once, and revokes a hosted MCP token from Settings", async 
     await route.fallback();
   });
 
+  const connectorAuthorizations = [
+    {
+      id: "authorization-1",
+      clientName: "Claude",
+      permission: "read_write",
+      scope: "mcp",
+      createdAt: "2026-06-13T00:00:00.000Z",
+      expiresAt: null,
+      revokedAt: null,
+    },
+  ];
+  const metadataFetches = {
+    protectedResource: 0,
+    authorizationServer: 0,
+  };
+
+  await page.route("**/api/oauth/authorizations", async (route) => {
+    await route.fulfill({
+      json: {
+        mcpUrl,
+        protectedResourceMetadataUrl: "https://pawplan.example/.well-known/oauth-protected-resource/api/mcp",
+        authorizationServerMetadataUrl: "https://pawplan.example/.well-known/oauth-authorization-server",
+        authorizations: connectorAuthorizations,
+      },
+    });
+  });
+
+  await page.route("**/api/oauth/revoke", async (route) => {
+    const body = route.request().postDataJSON() as { token?: string; authorizationId?: string };
+    const authorization = connectorAuthorizations.find((item) => item.id === body.authorizationId);
+    if (authorization) authorization.revokedAt = "2026-06-13T01:00:00.000Z";
+    await route.fulfill({ json: { ok: true } });
+  });
+  await page.route("https://pawplan.example/.well-known/oauth-protected-resource/api/mcp", async (route) => {
+    metadataFetches.protectedResource += 1;
+    await route.fulfill({ json: { resource: mcpUrl, authorization_servers: ["https://pawplan.example"] } });
+  });
+  await page.route("https://pawplan.example/.well-known/oauth-authorization-server", async (route) => {
+    metadataFetches.authorizationServer += 1;
+    await route.fulfill({
+      json: {
+        issuer: "https://pawplan.example",
+        authorization_endpoint: "https://pawplan.example/api/oauth/authorize",
+        token_endpoint: "https://pawplan.example/api/oauth/token",
+        scopes_supported: ["mcp"],
+      },
+    });
+  });
+
   await page.goto("/settings");
 
-  await expect(page.getByRole("heading", { name: "Codex / Claude Cowork 连接配置" })).toBeVisible();
+  const codexSection = page.locator("section").filter({ has: page.getByRole("heading", { name: "Codex bearer token 连接配置" }) });
+  const claudeSection = page.locator("section").filter({ has: page.getByRole("heading", { name: "Claude Custom Connector" }) });
+
+  await expect(codexSection.getByRole("heading", { name: "Codex bearer token 连接配置" })).toBeVisible();
   await expect(page.getByText(workspaceId)).toBeVisible();
-  await expect(page.getByText(mcpUrl, { exact: true })).toBeVisible();
-  await expect(page.getByText("[mcp_servers.pawplan]")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Claude Cowork 说明" })).toBeVisible();
+  await expect(codexSection.getByText(mcpUrl, { exact: true })).toBeVisible();
+  await expect(codexSection.getByText("[mcp_servers.pawplan]")).toBeVisible();
+  await expect(claudeSection.getByRole("heading", { name: "Claude Custom Connector" })).toBeVisible();
+  await expect(claudeSection.getByText("https://pawplan.example/.well-known/oauth-protected-resource/api/mcp")).toBeVisible();
+  await expect(claudeSection.getByText("Metadata verified", { exact: true })).toHaveCount(2);
+  expect(metadataFetches).toEqual({ protectedResource: 1, authorizationServer: 1 });
+  await expect(claudeSection.getByText("Claude", { exact: true })).toBeVisible();
+  await expect(claudeSection.getByText("已授权", { exact: true })).toHaveCount(2);
 
   await page.getByLabel("Token 名称").fill("Codex e2e");
   await page.getByLabel("权限").selectOption("read_write");
@@ -109,4 +166,7 @@ test("creates, shows once, and revokes a hosted MCP token from Settings", async 
   await expect(page.getByText("pwp_live_test_secret")).toHaveCount(0);
   await page.getByRole("button", { name: "撤销 Codex e2e" }).click();
   await expect(page.getByText("已撤销", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "撤销 Claude" }).click();
+  await expect(page.getByText("Claude connector 已撤销。")).toBeVisible();
 });

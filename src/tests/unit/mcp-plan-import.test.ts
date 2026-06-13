@@ -323,4 +323,29 @@ describe("MCP plan import service", () => {
     expect(db.inserts).toEqual([]);
     expect(db.updates).toEqual([]);
   });
+
+  it("rejects invalid task dates and duplicate imported tasks before writing data", async () => {
+    const db = createFakeDb();
+    const invalidDate = planImportInput();
+    invalidDate.dailyTasks[0] = { ...invalidDate.dailyTasks[0], date: "2026-99-12" };
+
+    await expect(saveMcpPlanImport(db, invalidDate)).rejects.toMatchObject({
+      message: "Invalid MCP plan task date",
+      status: 400,
+    });
+
+    const duplicateTasks = planImportInput();
+    duplicateTasks.dailyTasks[1] = {
+      ...duplicateTasks.dailyTasks[0],
+      estimatedMinutes: 45,
+    };
+
+    await expect(saveMcpPlanImport(db, duplicateTasks)).rejects.toMatchObject({
+      message: "Duplicate MCP plan task",
+      status: 400,
+    });
+
+    expect(db.inserts).toEqual([]);
+    expect(db.updates).toEqual([]);
+  });
 });

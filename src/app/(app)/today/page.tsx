@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { OnboardingChecklist } from "@/components/onboarding-checklist";
 import { TodayView } from "@/components/today-view";
 import { getWorkspaceIdFromSession } from "@/lib/auth/session";
 import { getTodayPageData } from "@/lib/planning/view-data";
@@ -8,5 +9,5 @@ export default async function TodayPage() {
   if (!workspaceId) redirect("/login");
 
   const data = await getTodayPageData(workspaceId);
-  return <TodayView data={data} />;
+  return <TodayView data={data} beforeTasks={<OnboardingChecklist />} />;
 }

@@ -149,8 +149,8 @@ describe("constraints service", () => {
           workspaceId: "workspace-1",
           title: "Study group",
           kind: "meeting",
-          startsAt: new Date("2026-06-13T03:00:00.000Z"),
-          endsAt: new Date("2026-06-13T04:00:00.000Z"),
+          startsAt: new Date("2026-06-12T02:30:00.000Z"),
+          endsAt: new Date("2026-06-12T04:00:00.000Z"),
           recurrenceRule: null,
           courseId: null,
           movable: true,
@@ -189,6 +189,21 @@ describe("constraints service", () => {
         courseName: null,
         movable: false,
       }),
+    ]);
+    expect(result.summary).toEqual({
+      courseCount: 2,
+      timeBlockCount: 2,
+      conflictCount: 1,
+      nextStartsAt: "2026-06-12T01:00:00.000Z",
+    });
+    expect(result.conflicts).toEqual([
+      {
+        id: "course-block-1__meeting-1",
+        firstTitle: "Robotics lecture",
+        secondTitle: "Study group",
+        startsAt: "2026-06-12T02:30:00.000Z",
+        endsAt: "2026-06-12T03:00:00.000Z",
+      },
     ]);
   });
 

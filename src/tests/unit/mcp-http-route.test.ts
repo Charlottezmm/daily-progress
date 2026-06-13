@@ -21,6 +21,10 @@ vi.mock("@/lib/mcp/tokens", () => ({
   },
 }));
 
+vi.mock("@/lib/oauth/connector-auth", () => ({
+  verifyConnectorAccessToken: vi.fn(),
+}));
+
 vi.mock("@/lib/mcp/server-builder", () => ({
   createPawPlanMcpServer: vi.fn(() => ({
     connect: vi.fn(),
@@ -53,11 +57,16 @@ describe("hosted MCP route", () => {
 
     expect(response.status).toBe(401);
     expect(body).toEqual({ error: "Missing MCP bearer token" });
+    expect(response.headers.get("www-authenticate")).toContain(
+      'resource_metadata="https://pawplan.test/.well-known/oauth-protected-resource/api/mcp"',
+    );
   });
 
   it("rejects invalid bearer tokens", async () => {
     const { verifyMcpBearerToken } = await import("@/lib/mcp/tokens");
+    const { verifyConnectorAccessToken } = await import("@/lib/oauth/connector-auth");
     vi.mocked(verifyMcpBearerToken).mockResolvedValue(null);
+    vi.mocked(verifyConnectorAccessToken).mockResolvedValue(null);
     const { POST } = await import("@/app/api/mcp/route");
 
     const response = await POST(
@@ -69,6 +78,7 @@ describe("hosted MCP route", () => {
     );
 
     expect(response.status).toBe(401);
+    expect(response.headers.get("www-authenticate")).toContain('error="invalid_token"');
   });
 
   it("resolves bearer token before building MCP server", async () => {
@@ -166,6 +176,62 @@ describe("hosted MCP route", () => {
         workspaceId: "workspace-1",
         tokenId: "token-1",
         toolName: "tools/list",
+        permission: "read_only",
+        success: true,
+      }),
+    );
+  });
+
+  it("accepts OAuth connector access tokens and builds the shared MCP server with workspace permission", async () => {
+    const { createPawPlanMcpServer } = await import("@/lib/mcp/server-builder");
+    const { verifyMcpBearerToken } = await import("@/lib/mcp/tokens");
+    const { verifyConnectorAccessToken } = await import("@/lib/oauth/connector-auth");
+    vi.mocked(verifyMcpBearerToken).mockResolvedValue(null);
+    vi.mocked(verifyConnectorAccessToken).mockResolvedValue({
+      workspaceId: "workspace-1",
+      permission: "read_write",
+      tokenId: "authorization-1",
+      kind: "oauth_connector",
+    });
+    const { POST } = await import("@/app/api/mcp/route");
+
+    await POST(
+      new Request("https://pawplan.test/api/mcp", {
+        method: "POST",
+        headers: { Authorization: "Bearer pwp_oauth_access_secret" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
+      }),
+    );
+
+    expect(createPawPlanMcpServer).toHaveBeenCalledWith({ workspaceId: "workspace-1", permission: "read_write" });
+  });
+
+  it("keeps connector usage audit without writing a connector id into the MCP token foreign key", async () => {
+    const { recordHostedMcpUsage } = await import("@/lib/mcp/usage");
+    const { verifyMcpBearerToken } = await import("@/lib/mcp/tokens");
+    const { verifyConnectorAccessToken } = await import("@/lib/oauth/connector-auth");
+    vi.mocked(verifyMcpBearerToken).mockResolvedValue(null);
+    vi.mocked(verifyConnectorAccessToken).mockResolvedValue({
+      workspaceId: "workspace-1",
+      permission: "read_only",
+      tokenId: "authorization-1",
+      kind: "oauth_connector",
+    });
+    const { POST } = await import("@/app/api/mcp/route");
+
+    await POST(
+      new Request("https://pawplan.test/api/mcp", {
+        method: "POST",
+        headers: { Authorization: "Bearer pwp_oauth_access_secret" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
+      }),
+    );
+
+    expect(recordHostedMcpUsage).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({
+        workspaceId: "workspace-1",
+        tokenId: null,
         permission: "read_only",
         success: true,
       }),

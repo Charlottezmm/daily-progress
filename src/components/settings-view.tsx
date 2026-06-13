@@ -47,6 +47,25 @@ type McpTokensResponse = {
   mcp: McpConnection;
 };
 
+type ClaudeConnectorAuthorization = {
+  id: string;
+  clientName: string;
+  permission: McpPermission;
+  scope: string;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+};
+
+type ClaudeConnectorResponse = {
+  mcpUrl: string;
+  protectedResourceMetadataUrl: string;
+  authorizationServerMetadataUrl: string;
+  authorizations: ClaudeConnectorAuthorization[];
+};
+
+type MetadataStatus = "idle" | "verified" | "failed";
+
 type TokenForm = {
   name: string;
   permission: McpPermission;
@@ -138,6 +157,12 @@ function routinePayload(form: RoutineForm) {
   };
 }
 
+function metadataStatusLabel(status: MetadataStatus) {
+  if (status === "verified") return "Metadata verified";
+  if (status === "failed") return "Metadata failed";
+  return "Checking metadata";
+}
+
 export function SettingsView() {
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [energySettings, setEnergySettings] = useState<SegmentEnergySetting[]>(defaultEnergySettings);
@@ -151,6 +176,12 @@ export function SettingsView() {
   const [tokenForm, setTokenForm] = useState<TokenForm>(emptyTokenForm);
   const [rawToken, setRawToken] = useState<string | null>(null);
   const [mcpMessage, setMcpMessage] = useState<string | null>(null);
+  const [claudeConnector, setClaudeConnector] = useState<ClaudeConnectorResponse | null>(null);
+  const [claudeConnectorMessage, setClaudeConnectorMessage] = useState<string | null>(null);
+  const [metadataStatus, setMetadataStatus] = useState<{
+    protectedResource: MetadataStatus;
+    authorizationServer: MetadataStatus;
+  }>({ protectedResource: "idle", authorizationServer: "idle" });
   const [workspaceName, setWorkspaceName] = useState("");
   const [workspaceDeleteConfirmation, setWorkspaceDeleteConfirmation] = useState("");
   const [workspaceDeleteMessage, setWorkspaceDeleteMessage] = useState<string | null>(null);
@@ -162,6 +193,7 @@ export function SettingsView() {
   const expectedWorkspaceDeleteConfirmation = trimmedWorkspaceName ? `DELETE ${trimmedWorkspaceName}` : "";
   const canDeleteWorkspace =
     Boolean(expectedWorkspaceDeleteConfirmation) && workspaceDeleteConfirmation === expectedWorkspaceDeleteConfirmation;
+  const activeClaudeAuthorizations = claudeConnector?.authorizations.filter((authorization) => !authorization.revokedAt) ?? [];
 
   useEffect(() => {
     let active = true;
@@ -190,6 +222,63 @@ export function SettingsView() {
     }
 
     void loadSettings();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!claudeConnector) return;
+    const connector = claudeConnector;
+    let active = true;
+
+    async function verifyMetadata() {
+      setMetadataStatus({ protectedResource: "idle", authorizationServer: "idle" });
+      const [protectedResource, authorizationServer] = await Promise.all([
+        fetch(connector.protectedResourceMetadataUrl)
+          .then(async (response) => {
+            if (!response.ok) return "failed" as const;
+            const body = (await response.json()) as { resource?: string };
+            return body.resource === connector.mcpUrl ? ("verified" as const) : ("failed" as const);
+          })
+          .catch(() => "failed" as const),
+        fetch(connector.authorizationServerMetadataUrl)
+          .then(async (response) => {
+            if (!response.ok) return "failed" as const;
+            const body = (await response.json()) as { scopes_supported?: string[] };
+            return body.scopes_supported?.includes("mcp") ? ("verified" as const) : ("failed" as const);
+          })
+          .catch(() => "failed" as const),
+      ]);
+      if (active) setMetadataStatus({ protectedResource, authorizationServer });
+    }
+
+    void verifyMetadata();
+    return () => {
+      active = false;
+    };
+  }, [claudeConnector]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadClaudeConnector() {
+      try {
+        const response = await fetch("/api/oauth/authorizations");
+        if (!response.ok) {
+          if (active) setClaudeConnectorMessage("Claude connector 状态读取失败。");
+          return;
+        }
+        const data = (await response.json()) as ClaudeConnectorResponse;
+        if (!active) return;
+        setClaudeConnector(data);
+        setClaudeConnectorMessage(null);
+      } catch {
+        if (active) setClaudeConnectorMessage("Claude connector 状态读取失败。");
+      }
+    }
+
+    void loadClaudeConnector();
     return () => {
       active = false;
     };
@@ -340,6 +429,32 @@ export function SettingsView() {
     setMcpMessage("MCP token 已撤销。");
   }
 
+  async function revokeClaudeAuthorization(authorization: ClaudeConnectorAuthorization) {
+    setPending(authorization.id);
+    const response = await fetch("/api/oauth/revoke", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ authorizationId: authorization.id }),
+    });
+    setPending(null);
+
+    if (!response.ok) {
+      setClaudeConnectorMessage("Claude connector 撤销失败。");
+      return;
+    }
+
+    setClaudeConnector((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        authorizations: current.authorizations.map((item) =>
+          item.id === authorization.id ? { ...item, revokedAt: item.revokedAt ?? new Date().toISOString() } : item,
+        ),
+      };
+    });
+    setClaudeConnectorMessage("Claude connector 已撤销。");
+  }
+
   async function exportTemplate() {
     setPending("template-export");
     setTemplateMessage(null);
@@ -472,7 +587,7 @@ export function SettingsView() {
       <section className="paw-list-card mb-4">
         <div className="paw-list-header">
           <div>
-            <h2 className="paw-list-title">Codex / Claude Cowork 连接配置</h2>
+            <h2 className="paw-list-title">Codex bearer token 连接配置</h2>
             <p className="paw-list-subtitle">生成 revocable workspace token，用 hosted MCP 连接 PawPlan。</p>
           </div>
           <span className="paw-more-icon">
@@ -559,10 +674,10 @@ export function SettingsView() {
             <p className="paw-more-text mt-2">本地启动 Codex 前设置环境变量 PAWPLAN_MCP_TOKEN，值使用刚创建的 raw token。</p>
           </div>
           <div>
-            <h3 className="paw-more-label">Claude Cowork 说明</h3>
+            <h3 className="paw-more-label">Bearer token 边界</h3>
             <p className="paw-more-text">
-              Claude Cowork 使用同一个 hosted MCP URL 和 bearer token。优先把 token 放在环境变量或 secret 配置里；不要把 raw token
-              写进计划快照或聊天记录。
+              这里的 raw token 只给 Codex/local MCP secret 使用。Claude Custom Connector 使用下面的 OAuth connector，不要把 raw token
+              放进 URL、query 或聊天记录。
             </p>
           </div>
         </div>
@@ -590,6 +705,82 @@ export function SettingsView() {
                     disabled={Boolean(token.revokedAt) || pending === token.id}
                     onClick={() => void revokeToken(token)}
                     aria-label={`撤销 ${token.name}`}
+                    className="paw-secondary-btn !px-3 !py-2 !text-xs text-[var(--app-danger)]"
+                  >
+                    <Trash2 size={13} />
+                    撤销
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
+
+      <section className="paw-list-card mb-4">
+        <div className="paw-list-header">
+          <div>
+            <h2 className="paw-list-title">Claude Custom Connector</h2>
+            <p className="paw-list-subtitle">Claude 通过 OAuth authorization code + PKCE 授权，不需要复制 raw bearer token。</p>
+          </div>
+          <span className="paw-more-icon">
+            <KeyRound size={18} />
+          </span>
+        </div>
+
+        <div className="paw-mcp-grid mt-4">
+          <div className="paw-mcp-info">
+            <p className="paw-field-label">Claude Connector URL</p>
+            <p className="paw-mcp-value">{claudeConnector?.mcpUrl ?? "读取中"}</p>
+          </div>
+          <div className="paw-mcp-info">
+            <p className="paw-field-label">OAuth 状态</p>
+            <p className="paw-mcp-value">{activeClaudeAuthorizations.length > 0 ? "已授权" : "未授权"}</p>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div>
+            <h3 className="paw-more-label">Protected resource metadata</h3>
+            <p className="paw-mcp-value">{claudeConnector?.protectedResourceMetadataUrl ?? "读取中"}</p>
+            <span className={metadataStatus.protectedResource === "failed" ? "paw-status-pill warn" : "paw-status-pill link"}>
+              {metadataStatusLabel(metadataStatus.protectedResource)}
+            </span>
+          </div>
+          <div>
+            <h3 className="paw-more-label">Authorization server metadata</h3>
+            <p className="paw-mcp-value">{claudeConnector?.authorizationServerMetadataUrl ?? "读取中"}</p>
+            <span className={metadataStatus.authorizationServer === "failed" ? "paw-status-pill warn" : "paw-status-pill link"}>
+              {metadataStatusLabel(metadataStatus.authorizationServer)}
+            </span>
+          </div>
+        </div>
+
+        {claudeConnectorMessage ? <span className="paw-status-pill link mt-4">{claudeConnectorMessage}</span> : null}
+
+        <div className="paw-list mt-4">
+          {activeClaudeAuthorizations.length === 0 ? (
+            <div className="paw-empty">
+              <h3>还没有 Claude connector 授权</h3>
+              <p>在 Claude Custom Connector 中使用 Connector URL 后，完成浏览器授权才会出现在这里。</p>
+            </div>
+          ) : (
+            activeClaudeAuthorizations.map((authorization) => (
+              <div key={authorization.id} className="paw-list-row">
+                <div className="min-w-0">
+                  <p className="paw-row-title">{authorization.clientName}</p>
+                  <p className="paw-row-meta">
+                    {authorization.permission === "read_write" ? "读写" : "只读"} · scope {authorization.scope} · 创建{" "}
+                    {formatDateTime(authorization.createdAt)} · 到期 {formatDateTime(authorization.expiresAt)}
+                  </p>
+                </div>
+                <div className="paw-row-actions">
+                  <span className="paw-status-pill link">已授权</span>
+                  <button
+                    type="button"
+                    disabled={pending === authorization.id}
+                    onClick={() => void revokeClaudeAuthorization(authorization)}
+                    aria-label={`撤销 ${authorization.clientName}`}
                     className="paw-secondary-btn !px-3 !py-2 !text-xs text-[var(--app-danger)]"
                   >
                     <Trash2 size={13} />

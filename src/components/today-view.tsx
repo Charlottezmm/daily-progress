@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertTriangle, Check, Clock3, RotateCcw } from "lucide-react";
+import type { ReactNode } from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { CatIcon } from "./cat-icon";
@@ -28,7 +29,7 @@ function statusClass(status: DisplayStatus) {
   return "";
 }
 
-export function TodayView({ data }: { data: TodayViewData }) {
+export function TodayView({ data, beforeTasks }: { data: TodayViewData; beforeTasks?: ReactNode }) {
   const [tasks, setTasks] = useState<Array<Task & { displayStatus: DisplayStatus }>>(
     data.tasks.map((task) => ({ ...task, displayStatus: task.status })),
   );
@@ -156,6 +157,8 @@ export function TodayView({ data }: { data: TodayViewData }) {
           当前没有 DATABASE_URL，Today 显示为空态；配置数据库后会读取真实计划。
         </section>
       ) : null}
+
+      {beforeTasks}
 
       <section>
         <div className="paw-section-label">今日任务 · 完成 {doneCount}/{tasks.length}</div>

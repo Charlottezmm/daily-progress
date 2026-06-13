@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseTimetableCsv } from "@/lib/imports/timetable-csv";
+import { buildTimetableImportPreview } from "@/lib/imports/timetable-save";
 
 describe("timetable csv parser", () => {
   it("extracts fixed weekly blocks with camelCase fields", () => {
@@ -42,5 +43,68 @@ Office Hours,meeting,Tuesday,14:00,15:00,2026-09-01,2026-12-20,,weekly,
 Errand,personal,Monday,09:00,10:00,2026-09-01,2026-12-20,,weekly,
 `),
     ).toThrow();
+  });
+
+  it("builds a public beta preview with duplicate warnings and Asia/Shanghai time blocks", () => {
+    const result = buildTimetableImportPreview(`title,kind,day_of_week,start_time,end_time,starts_on,ends_on,course,recurrence,notes
+Deep Learning Lecture,course,Monday,09:00,11:00,2026-09-01,2026-09-14,Deep Learning,weekly,Room 204
+Deep Learning Lecture,course,Monday,09:00,11:00,2026-09-01,2026-09-14,Deep Learning,weekly,Room 204
+`);
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        timezone: "Asia/Shanghai",
+        rows: expect.any(Array),
+        blocksPreviewed: 4,
+        warnings: ["Duplicate timetable row: Deep Learning Lecture Monday 09:00-11:00"],
+        conflicts: expect.arrayContaining([
+          "Duplicate imported time block: Deep Learning Lecture on 2026-09-07 09:00-11:00",
+        ]),
+      }),
+    );
+  });
+
+  it("rejects invalid dates, invalid times, end-before-start blocks, and too-long fields", () => {
+    expect(() =>
+      buildTimetableImportPreview(`title,kind,day_of_week,start_time,end_time,starts_on,ends_on,course,recurrence,notes
+Bad Date,meeting,Monday,09:00,10:00,2026-99-01,2026-09-14,,weekly,
+`),
+    ).toThrow("Invalid timetable date");
+
+    expect(() =>
+      buildTimetableImportPreview(`title,kind,day_of_week,start_time,end_time,starts_on,ends_on,course,recurrence,notes
+Bad Time,meeting,Monday,24:00,25:00,2026-09-01,2026-09-14,,weekly,
+`),
+    ).toThrow("Invalid timetable time");
+
+    expect(() =>
+      buildTimetableImportPreview(`title,kind,day_of_week,start_time,end_time,starts_on,ends_on,course,recurrence,notes
+Overnight,meeting,Monday,23:00,01:00,2026-09-01,2026-09-14,,weekly,
+`),
+    ).toThrow("end_time must be after start_time");
+
+    expect(() =>
+      buildTimetableImportPreview(`title,kind,day_of_week,start_time,end_time,starts_on,ends_on,course,recurrence,notes
+${"x".repeat(181)},meeting,Monday,09:00,10:00,2026-09-01,2026-09-14,,weekly,
+`),
+    ).toThrow();
+  });
+
+  it("rejects imports that would materialize too many fixed blocks", () => {
+    const rows = Array.from({ length: 201 }, (_, index) =>
+      `Block ${index + 1},meeting,Monday,09:00,10:00,2026-09-01,2026-09-01,,,`,
+    );
+
+    expect(() =>
+      buildTimetableImportPreview(`title,kind,day_of_week,start_time,end_time,starts_on,ends_on,course,recurrence,notes
+${rows.join("\n")}
+`),
+    ).toThrow("Timetable import has too many rows");
+
+    expect(() =>
+      buildTimetableImportPreview(`title,kind,day_of_week,start_time,end_time,starts_on,ends_on,course,recurrence,notes
+Long Range,meeting,Monday,09:00,10:00,2026-01-01,2036-01-01,,weekly,
+`),
+    ).toThrow("Timetable import date range is too long");
   });
 });

@@ -26,6 +26,9 @@ export function ReviewPreview({ data }: { data: RescheduleViewData }) {
   const accepted = actionable.filter((item) => decisions[item.id] === "accepted").length;
   const rejected = actionable.filter((item) => decisions[item.id] === "rejected").length;
   const pending = actionable.length - accepted - rejected;
+  const taskChangeCount = visiblePatchItems.filter((item) => item.operationType !== "import_timetable").length;
+  const timetableImportCount = visiblePatchItems.filter((item) => item.operationType === "import_timetable").length;
+  const blockedCount = visiblePatchItems.filter((item) => item.protected || item.skipped || item.conflict).length;
 
   function decide(id: string, decision: Decision) {
     setDecisions((current) => {
@@ -134,6 +137,22 @@ export function ReviewPreview({ data }: { data: RescheduleViewData }) {
       ) : null}
 
       <div className="paw-trust-banner">Routine 和 Recovery 受保护；Agent 可以提任务调整或日程导入草稿，但只有你确认后才会写入。</div>
+
+      <section className="paw-list-card mb-4">
+        <div className="paw-list-header">
+          <div>
+            <h2 className="paw-list-title">Review queue</h2>
+            <p className="paw-list-subtitle">提交前会重查任务状态和固定日程冲突。</p>
+          </div>
+          <span className="paw-status-pill">{visiblePatchItems.length} drafts</span>
+        </div>
+        <div className="paw-status-pills mt-4">
+          <span className="paw-status-pill">任务调整 {taskChangeCount}</span>
+          <span className="paw-status-pill">日程导入 {timetableImportCount}</span>
+          <span className={blockedCount > 0 ? "paw-status-pill warn" : "paw-status-pill"}>冲突/阻止 {blockedCount}</span>
+          <span className="paw-status-pill">用户确认后才写入</span>
+        </div>
+      </section>
 
       {applyError ? (
         <section className="paw-status-pill warn" role="status">

@@ -4,13 +4,15 @@ Open-source schedule-first MCP-native planning app.
 
 The old static May dashboard prototype is preserved at `docs/legacy/index-static-dashboard.html`.
 
-## v0.1 Direction
+## v1.0 Public Beta Direction
 
 - Web + PWA
 - Next.js + Postgres
-- Workspace password login
+- Controlled public beta with invite-code workspace creation
+- Workspace password login for existing workspaces
 - MCP-native data boundary
-- Agent-generated patch preview, confirmed in the app
+- Codex bearer-token MCP and Claude Custom Connector OAuth adapter
+- Agent-generated Review drafts, confirmed in the app before apply
 
 ## Development
 
@@ -72,11 +74,44 @@ npm run build
 npm run test:e2e
 ```
 
+## Public Beta Smoke
+
+Before sharing an invite, run the local gate and manual smoke checklist:
+
+```text
+docs/public-beta/2026-06-13-public-beta-smoke-checklist.md
+```
+
+Daily Claude/Codex agent loop prompts live at:
+
+```text
+docs/public-beta/2026-06-13-daily-agent-loop-prompts.md
+```
+
 ## Product Boundary
 
-This stage keeps PawPlan focused on the Next.js + Postgres planning surface, MCP access, and Review-confirmed agent patches. Hosted Lite public onboarding, template gallery, OAuth, billing, team workspaces, public sharing, and conversation sediment UI are not part of this stage.
+This stage keeps PawPlan focused on the Next.js + Postgres planning surface, controlled public beta access, MCP access, and Review-confirmed agent patches.
 
-The app may expose MCP tools and Review patch application, but it must not own scheduled automation. Codex / Cowork scheduled automation triggers the agent externally; the agent reads through MCP, calls `propose_patch`, and waits for the user to confirm in `/review`.
+Included:
+
+- Invite-code workspace creation.
+- First-run onboarding.
+- Hosted MCP for Codex bearer tokens.
+- Claude Custom Connector OAuth adapter.
+- Plan and timetable import.
+- Lightweight Calendar & Constraints UI.
+- Review-confirmed task changes and timetable imports.
+
+Not included:
+
+- Billing.
+- Team collaboration.
+- Full drag-and-drop calendar editing.
+- Google/Apple/Outlook Calendar two-way sync.
+- App-owned LLM calls or embedded AI chat.
+- Automatic patch apply.
+
+The app may expose MCP tools and Review patch application, but it must not own scheduled automation. Codex / Cowork / Claude scheduled automation triggers the agent externally; the agent reads through MCP, calls `propose_patch` or `propose_timetable_import`, and waits for the user to confirm in `/review`.
 
 ## License
 

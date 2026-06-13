@@ -52,6 +52,7 @@ function createFakeDb(
                   return this;
                 },
                 limit() {
+                  const limitValue = arguments[0] as number | undefined;
                   if (tableName(table) === "plan_versions") {
                     return Promise.resolve(latestVersionNumber ? [{ versionNumber: latestVersionNumber }] : []);
                   }
@@ -61,9 +62,14 @@ function createFakeDb(
                     return Promise.resolve(result ?? []);
                   }
                   if (options.selectRows?.[tableName(table)]) {
-                    return Promise.resolve(options.selectRows[tableName(table)]);
+                    const rows = options.selectRows[tableName(table)] ?? [];
+                    return Promise.resolve(typeof limitValue === "number" ? rows.slice(0, limitValue) : rows);
                   }
                   return Promise.resolve([patch]);
+                },
+                then(resolve: (value: Array<Record<string, unknown>>) => unknown, reject?: (reason: unknown) => unknown) {
+                  const rows = options.selectRows?.[tableName(table)] ?? [patch];
+                  return Promise.resolve(rows).then(resolve, reject);
                 },
               };
             },
@@ -728,5 +734,149 @@ describe("applyAgentPatch", () => {
         }),
       ]),
     );
+  });
+
+  it("persists a conflicted review for overlapping timetable imports without writing constraints", async () => {
+    const db = createFakeDb(
+      {
+        id: "patch-timetable",
+        workspaceId: "workspace-1",
+        planId: "plan-1",
+        status: "draft",
+        patchJson: {
+          operations: [
+            {
+              type: "import_timetable",
+              source_label: "summer timetable",
+              rows: [
+                {
+                  title: "Embodied AI seminar",
+                  kind: "course",
+                  dayOfWeek: "monday",
+                  startTime: "09:00",
+                  endTime: "10:30",
+                  startsOn: "2026-06-15",
+                  endsOn: "2026-06-15",
+                  course: "Embodied AI",
+                  recurrence: null,
+                  notes: null,
+                },
+              ],
+              reason: "Import course constraints after user review.",
+            },
+          ],
+        },
+      },
+      4,
+      {
+        selectRows: {
+          time_blocks: [
+            {
+              title: "Existing block",
+              startsAt: new Date("2026-06-15T01:30:00.000Z"),
+              endsAt: new Date("2026-06-15T02:00:00.000Z"),
+            },
+          ],
+          courses: [],
+        },
+      },
+    );
+
+    const result = await applyAgentPatch(db, {
+      workspaceId: "workspace-1",
+      patchId: "patch-timetable",
+      acceptedOperationIndexes: [0],
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        index: 0,
+        type: "import_timetable",
+        reason: "Timetable import overlaps existing blocks",
+        actual: expect.objectContaining({ overlapCount: 1 }),
+      }),
+    ]);
+    expect(db.inserts).toEqual([
+      expect.objectContaining({
+        table: "agent_patch_reviews",
+        values: expect.objectContaining({
+          workspaceId: "workspace-1",
+          patchId: "patch-timetable",
+          acceptedOperationIndexes: [0],
+        }),
+      }),
+    ]);
+    expect(db.inserts.filter((insert) => insert.table === "courses" || insert.table === "time_blocks")).toEqual([]);
+    expect(db.inserts.filter((insert) => insert.table === "plan_versions" || insert.table === "change_logs")).toEqual([]);
+    expect(db.updates.filter((update) => update.table === "plans" || update.table === "agent_patches")).toEqual([]);
+  });
+
+  it("checks timetable import overlaps beyond the first 100 existing blocks before writing constraints", async () => {
+    const nonOverlappingBlocks = Array.from({ length: 100 }, (_, index) => ({
+      title: `Existing block ${index + 1}`,
+      startsAt: new Date(`2026-06-16T${String(index % 10).padStart(2, "0")}:00:00.000Z`),
+      endsAt: new Date(`2026-06-16T${String(index % 10).padStart(2, "0")}:30:00.000Z`),
+    }));
+    const db = createFakeDb(
+      {
+        id: "patch-timetable",
+        workspaceId: "workspace-1",
+        planId: "plan-1",
+        status: "draft",
+        patchJson: {
+          operations: [
+            {
+              type: "import_timetable",
+              source_label: "summer timetable",
+              rows: [
+                {
+                  title: "Embodied AI seminar",
+                  kind: "course",
+                  dayOfWeek: "monday",
+                  startTime: "09:00",
+                  endTime: "10:30",
+                  startsOn: "2026-06-15",
+                  endsOn: "2026-06-15",
+                  course: "Embodied AI",
+                  recurrence: null,
+                  notes: null,
+                },
+              ],
+              reason: "Import course constraints after user review.",
+            },
+          ],
+        },
+      },
+      4,
+      {
+        selectRows: {
+          time_blocks: [
+            ...nonOverlappingBlocks,
+            {
+              title: "Existing block 101",
+              startsAt: new Date("2026-06-15T01:30:00.000Z"),
+              endsAt: new Date("2026-06-15T02:00:00.000Z"),
+            },
+          ],
+          courses: [],
+        },
+      },
+    );
+
+    const result = await applyAgentPatch(db, {
+      workspaceId: "workspace-1",
+      patchId: "patch-timetable",
+      acceptedOperationIndexes: [0],
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(result.conflicts[0]).toEqual(
+      expect.objectContaining({
+        reason: "Timetable import overlaps existing blocks",
+        actual: expect.objectContaining({ overlapCount: 1 }),
+      }),
+    );
+    expect(db.inserts.filter((insert) => insert.table === "courses" || insert.table === "time_blocks")).toEqual([]);
   });
 });

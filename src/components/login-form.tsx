@@ -2,14 +2,19 @@
 
 import { useState } from "react";
 import { CatIcon } from "./cat-icon";
+import { safeRelativeNextPath } from "@/lib/auth/next-url";
 
 type LoginResponse = {
   error?: string;
 };
 
-export function LoginForm() {
+type LoginMode = "login" | "create";
+
+export function LoginForm({ nextPath = "/today" }: { nextPath?: string }) {
+  const [mode, setMode] = useState<LoginMode>("login");
   const [workspaceName, setWorkspaceName] = useState("");
   const [password, setPassword] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -18,10 +23,10 @@ export function LoginForm() {
     setPending(true);
     setMessage(null);
 
-    const response = await fetch("/api/auth/login", {
+    const response = await fetch(mode === "login" ? "/api/auth/login" : "/api/beta/workspaces", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ workspaceName, password }),
+      body: JSON.stringify(mode === "login" ? { workspaceName, password } : { workspaceName, password, inviteCode }),
     });
     const data = (await response.json()) as LoginResponse;
     setPending(false);
@@ -31,7 +36,7 @@ export function LoginForm() {
       return;
     }
 
-    window.location.href = "/today";
+    window.location.href = safeRelativeNextPath(nextPath);
   }
 
   return (
@@ -42,9 +47,35 @@ export function LoginForm() {
             <CatIcon size={38} />
             PawPlan
           </h1>
-          <p className="paw-login-copy">输入名字和密码就能进入；新名字会自动创建一个属于你的空间。</p>
+          <p className="paw-login-copy">
+            已有 workspace 可直接登录；Public Beta 新 workspace 需要 invite code。
+          </p>
         </div>
         <div className="paw-login-fields">
+          <div className="paw-login-mode" aria-label="登录模式">
+            <button
+              type="button"
+              className={mode === "login" ? "paw-login-mode-btn is-active" : "paw-login-mode-btn"}
+              aria-pressed={mode === "login"}
+              onClick={() => {
+                setMode("login");
+                setMessage(null);
+              }}
+            >
+              登录已有 workspace
+            </button>
+            <button
+              type="button"
+              className={mode === "create" ? "paw-login-mode-btn is-active" : "paw-login-mode-btn"}
+              aria-pressed={mode === "create"}
+              onClick={() => {
+                setMode("create");
+                setMessage(null);
+              }}
+            >
+              使用 invite code 创建
+            </button>
+          </div>
           <input
             value={workspaceName}
             onChange={(event) => setWorkspaceName(event.target.value)}
@@ -58,8 +89,16 @@ export function LoginForm() {
             type="password"
             className="paw-input"
           />
+          {mode === "create" ? (
+            <input
+              value={inviteCode}
+              onChange={(event) => setInviteCode(event.target.value)}
+              placeholder="Invite code"
+              className="paw-input"
+            />
+          ) : null}
           <button disabled={pending} className="paw-primary-btn">
-            {pending ? "进入中…" : "进入"}
+            {pending ? "处理中…" : mode === "login" ? "进入" : "创建并进入"}
           </button>
           {message ? <p className="paw-error">{message}</p> : null}
         </div>

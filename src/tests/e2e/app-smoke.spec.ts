@@ -58,6 +58,34 @@ test("renders real settings surfaces without fake recovery saves", async ({ cont
       },
     });
   });
+  await page.route("**/api/oauth/authorizations", async (route) => {
+    await route.fulfill({
+      json: {
+        mcpUrl: "https://pawplan.example/api/mcp",
+        protectedResourceMetadataUrl: "https://pawplan.example/.well-known/oauth-protected-resource/api/mcp",
+        authorizationServerMetadataUrl: "https://pawplan.example/.well-known/oauth-authorization-server",
+        authorizations: [],
+      },
+    });
+  });
+  await page.route("https://pawplan.example/.well-known/oauth-protected-resource/api/mcp", async (route) => {
+    await route.fulfill({
+      json: {
+        resource: "https://pawplan.example/api/mcp",
+        authorization_servers: ["https://pawplan.example"],
+      },
+    });
+  });
+  await page.route("https://pawplan.example/.well-known/oauth-authorization-server", async (route) => {
+    await route.fulfill({
+      json: {
+        issuer: "https://pawplan.example",
+        authorization_endpoint: "https://pawplan.example/api/oauth/authorize",
+        token_endpoint: "https://pawplan.example/api/oauth/token",
+        scopes_supported: ["mcp"],
+      },
+    });
+  });
 
   await page.goto("/settings");
   await expect(page.getByRole("heading", { name: "设置" })).toBeVisible();
@@ -65,7 +93,9 @@ test("renders real settings surfaces without fake recovery saves", async ({ cont
   await expect(page.getByText("系统默认 8 小时", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "日常事项", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "能量规则", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Codex / Claude Cowork 连接配置" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Codex bearer token 连接配置" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Claude Custom Connector" })).toBeVisible();
+  await expect(page.getByText("Metadata verified", { exact: true })).toHaveCount(2);
 });
 
 test("renders More with opened v0.3 constraint entry points", async ({ context, page }) => {

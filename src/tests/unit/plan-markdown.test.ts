@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parsePlanMarkdown } from "@/lib/imports/plan-markdown";
+import { buildPlanImportPreview, parsePlanMarkdown } from "@/lib/imports/plan-markdown";
 
 describe("plan markdown parser", () => {
   it("extracts goal, projects with deadlines, and protect constraints", () => {
@@ -44,5 +44,41 @@ Goal: finish planning MVP
 
     expect(result.projects).toEqual([{ name: "Daily Progress", deadline: "2026-06-30" }]);
     expect(result.constraints).toEqual(["protect morning deep work"]);
+  });
+
+  it("builds a public beta preview with timezone semantics and duplicate warnings", () => {
+    const result = buildPlanImportPreview(`Goal: finish planning MVP
+
+## Projects
+- Daily Progress: ship v0.1 by 2026-06-30
+- Daily Progress: verify import by 2026-07-01
+
+## Constraints
+- protect morning deep work
+`);
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        goal: "finish planning MVP",
+        timezone: "Asia/Shanghai",
+        warnings: ["Duplicate project name: Daily Progress"],
+        conflicts: ["Project Daily Progress appears 2 times in this import"],
+      }),
+    );
+  });
+
+  it("rejects impossible project deadlines and overly long imported fields", () => {
+    expect(() =>
+      buildPlanImportPreview(`Goal: finish planning MVP
+
+## Projects
+- Daily Progress: ship v0.1 by 2026-99-30
+`),
+    ).toThrow("Invalid project deadline");
+
+    expect(() =>
+      buildPlanImportPreview(`Goal: ${"x".repeat(2001)}
+`),
+    ).toThrow("Goal is too long");
   });
 });

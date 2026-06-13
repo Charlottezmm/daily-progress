@@ -1,6 +1,10 @@
 import { and, desc, eq } from "drizzle-orm";
 import { changeLogs, planVersions, plans, projects } from "@/lib/db/schema";
-import { parsePlanMarkdown, type PlanImportPreview } from "@/lib/imports/plan-markdown";
+import {
+  buildPlanImportPreview,
+  type PlanImportPublicBetaPreview,
+  type PlanImportPreview,
+} from "@/lib/imports/plan-markdown";
 
 type ImportDb = {
   transaction<T>(callback: (tx: any) => Promise<T>): Promise<T>;
@@ -77,9 +81,19 @@ export async function savePlanImport(
   input: {
     workspaceId: string;
     markdown: string;
+    confirmation?: string;
   },
 ) {
-  const preview = parsePlanMarkdown(input.markdown);
+  if (input.confirmation !== "CONFIRM_PLAN_IMPORT") {
+    throw new ImportSaveError("Plan import confirmation required", 400);
+  }
+
+  let preview: PlanImportPublicBetaPreview;
+  try {
+    preview = buildPlanImportPreview(input.markdown);
+  } catch (error) {
+    throw new ImportSaveError(error instanceof Error ? error.message : "Invalid plan markdown", 400);
+  }
 
   return db.transaction(async (tx) => {
     const plan = await requireActivePlan(tx, input.workspaceId);
@@ -121,6 +135,8 @@ export async function savePlanImport(
       detailsJson: {
         format: "plan.md",
         preview,
+        confirmedBy: "user",
+        confirmation: "CONFIRM_PLAN_IMPORT",
         projectsCreated: projectResult.created,
         projectsReused: projectResult.reused,
         versionId: version.id,

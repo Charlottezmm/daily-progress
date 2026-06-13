@@ -2,16 +2,16 @@ import Papa from "papaparse";
 import { z } from "zod";
 
 const rowSchema = z.object({
-  title: z.string().trim().min(1),
+  title: z.string().trim().min(1).max(180),
   kind: z.enum(["course", "meeting", "unavailable", "routine", "recovery"]),
-  day_of_week: z.string().trim().optional(),
+  day_of_week: z.string().trim().max(20).optional(),
   start_time: z.string().trim().regex(/^\d{2}:\d{2}$/),
   end_time: z.string().trim().regex(/^\d{2}:\d{2}$/),
-  starts_on: z.string().trim().min(1),
-  ends_on: z.string().trim().min(1),
-  course: z.string().optional(),
-  recurrence: z.string().optional(),
-  notes: z.string().optional(),
+  starts_on: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/),
+  ends_on: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/),
+  course: z.string().trim().max(120).optional(),
+  recurrence: z.string().trim().max(240).optional(),
+  notes: z.string().trim().max(1000).optional(),
 });
 
 export type TimetableImportPreviewRow = {
