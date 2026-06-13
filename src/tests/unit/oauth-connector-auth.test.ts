@@ -546,4 +546,37 @@ describe("OAuth connector auth", () => {
     expect(location.searchParams.get("code")).toMatch(/^pwp_oauth_code_/);
     expect(location.searchParams.get("state")).toBe("abc");
   });
+
+  it("allows Claude to use PawPlan's static public OAuth client id", async () => {
+    const db = createFakeDb({ selectRows: [] });
+    const { getDb } = await import("@/lib/db/client");
+    const { staticClaudeOAuthClientId } = await import("@/lib/oauth/connector-auth");
+    vi.mocked(getDb).mockReturnValue(db);
+    const { GET } = await import("@/app/api/oauth/authorize/route");
+
+    const response = await GET(
+      new Request(
+        `https://pawplan.test/api/oauth/authorize?response_type=code&client_id=${staticClaudeOAuthClientId}&redirect_uri=https%3A%2F%2Fclaude.ai%2Fapi%2Fmcp%2Fauth_callback&code_challenge=challenge&code_challenge_method=S256&state=abc`,
+        {
+          headers: {
+            Cookie: `${workspaceSessionCookieName}=${createWorkspaceSessionValue("workspace-1")}`,
+          },
+        },
+      ),
+    );
+
+    const location = new URL(response.headers.get("location") ?? "");
+    expect(response.status).toBe(302);
+    expect(location.origin + location.pathname).toBe("https://claude.ai/api/mcp/auth_callback");
+    expect(location.searchParams.get("code")).toMatch(/^pwp_oauth_code_/);
+    expect(db.inserts).toEqual([
+      expect.objectContaining({
+        table: "oauth_authorization_codes",
+        values: expect.objectContaining({
+          clientId: staticClaudeOAuthClientId,
+          redirectUri: "https://claude.ai/api/mcp/auth_callback",
+        }),
+      }),
+    ]);
+  });
 });

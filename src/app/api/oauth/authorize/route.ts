@@ -5,6 +5,7 @@ import {
   createAuthorizationCode,
   findOAuthClient,
   isAllowedClaudeRedirectUri,
+  isStaticClaudeOAuthClientId,
   OAuthConnectorError,
 } from "@/lib/oauth/connector-auth";
 
@@ -59,7 +60,7 @@ export async function GET(request: Request) {
   const client = await findOAuthClient(db, clientId);
   if (!client) return invalidRequest("Unknown client_id");
   if (!isAllowedClaudeRedirectUri(redirectUri)) return invalidRequest("redirect_uri is not allowed");
-  if (!client.redirectUris.includes(redirectUri)) {
+  if (!isStaticClaudeOAuthClientId(clientId) && !client.redirectUris.includes(redirectUri)) {
     return invalidRequest("redirect_uri is not registered");
   }
 

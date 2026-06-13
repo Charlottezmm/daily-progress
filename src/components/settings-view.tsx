@@ -64,6 +64,8 @@ type ClaudeConnectorResponse = {
   authorizations: ClaudeConnectorAuthorization[];
 };
 
+const staticClaudeOAuthClientId = "pawplan_claude_custom_connector";
+
 type MetadataStatus = "idle" | "verified" | "failed";
 
 type TokenForm = {
@@ -732,6 +734,10 @@ export function SettingsView() {
           <div className="paw-mcp-info">
             <p className="paw-field-label">Claude Connector URL</p>
             <p className="paw-mcp-value">{claudeConnector?.mcpUrl ?? "读取中"}</p>
+          </div>
+          <div className="paw-mcp-info">
+            <p className="paw-field-label">OAuth Client ID</p>
+            <p className="paw-mcp-value">{staticClaudeOAuthClientId}</p>
           </div>
           <div className="paw-mcp-info">
             <p className="paw-field-label">OAuth 状态</p>

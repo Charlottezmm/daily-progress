@@ -57,6 +57,11 @@ export class OAuthConnectorError extends Error {
 // Claude's connector callback paths may change; v1 keeps this conservative by requiring HTTPS
 // and one of Claude's first-party hosts, rather than accepting arbitrary dynamic redirects.
 const allowedClaudeRedirectHosts = new Set(["claude.ai", "www.claude.ai", "claude.com", "www.claude.com"]);
+export const staticClaudeOAuthClientId = "pawplan_claude_custom_connector";
+
+export function isStaticClaudeOAuthClientId(clientId: string) {
+  return clientId === staticClaudeOAuthClientId;
+}
 
 function randomToken(prefix: string) {
   return `${prefix}${randomBytes(32).toString("base64url")}`;
@@ -128,6 +133,14 @@ export async function registerOAuthClient(
 }
 
 export async function findOAuthClient(db: DbLike, clientId: string) {
+  if (isStaticClaudeOAuthClientId(clientId)) {
+    return {
+      clientId: staticClaudeOAuthClientId,
+      clientName: "Claude",
+      redirectUris: [],
+    } satisfies ClientRow;
+  }
+
   const rows = await db.select().from(oauthClients).where(eq(oauthClients.clientId, clientId)).limit(1);
   return ((rows as ClientRow[])[0] ?? null) as ClientRow | null;
 }
