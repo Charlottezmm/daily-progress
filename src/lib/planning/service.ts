@@ -14,6 +14,7 @@ type PlanningDb = {
 
 type ChangeSource = "manual" | "mcp";
 type TaskStatus = "todo" | "done" | "skipped" | "backlog";
+type DaySegment = "morning" | "afternoon" | "evening";
 type InboxAction = "task" | "routine" | "delete";
 type InboxSource = "manual" | "imported";
 type PatchMode = "today" | "week";
@@ -58,6 +59,21 @@ function shanghaiDateParts(date: Date) {
 function startOfShanghaiDay(date: Date) {
   const { year, month, day } = shanghaiDateParts(date);
   return new Date(Date.UTC(year, month - 1, day) - 8 * 60 * 60 * 1000);
+}
+
+function shanghaiDateKey(date: Date) {
+  const { year, month, day } = shanghaiDateParts(date);
+  if (!year || !month || !day) return null;
+  return `${year.toString().padStart(4, "0")}-${month.toString().padStart(2, "0")}-${day
+    .toString()
+    .padStart(2, "0")}`;
+}
+
+function dateFromDateKey(dateKey: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return null;
+  const date = new Date(`${dateKey}T00:00:00.000+08:00`);
+  if (Number.isNaN(date.getTime()) || shanghaiDateKey(date) !== dateKey) return null;
+  return date;
 }
 
 function normalizeCheckinDate(date?: Date | string) {
@@ -116,6 +132,64 @@ export async function updateTaskStatus(
         taskId: input.taskId,
         status: input.status,
       },
+    });
+
+    return task;
+  });
+}
+
+export async function updateTaskSchedule(
+  db: PlanningDb,
+  input: {
+    workspaceId: string;
+    taskId: string;
+    status?: TaskStatus;
+    date?: string;
+    daySegment?: DaySegment;
+    source?: ChangeSource;
+  },
+) {
+  if (!input.date && !input.daySegment) throw new PlanningServiceError("Task schedule update required", 400);
+
+  const values: { status?: TaskStatus; date?: Date; daySegment?: DaySegment; updatedAt: Date } = {
+    updatedAt: new Date(),
+  };
+  const detailsJson: { taskId: string; status?: TaskStatus; date?: string; daySegment?: DaySegment } = {
+    taskId: input.taskId,
+  };
+
+  if (input.status) {
+    values.status = input.status;
+    detailsJson.status = input.status;
+  }
+
+  if (input.date) {
+    const date = dateFromDateKey(input.date);
+    if (!date) throw new PlanningServiceError("Invalid task date", 400);
+    values.date = date;
+    detailsJson.date = input.date;
+  }
+
+  if (input.daySegment) {
+    values.daySegment = input.daySegment;
+    detailsJson.daySegment = input.daySegment;
+  }
+
+  return db.transaction(async (tx) => {
+    const [task] = await tx
+      .update(tasks)
+      .set(values)
+      .where(and(eq(tasks.id, input.taskId), eq(tasks.workspaceId, input.workspaceId)))
+      .returning();
+
+    if (!task) return null;
+
+    await tx.insert(changeLogs).values({
+      workspaceId: input.workspaceId,
+      planId: task.planId,
+      source: input.source ?? "manual",
+      summary: "Updated task schedule",
+      detailsJson,
     });
 
     return task;

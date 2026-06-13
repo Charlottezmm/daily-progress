@@ -5,6 +5,7 @@ import {
   createDailyCheckin,
   processInboxItem,
   proposeAgentPatch,
+  updateTaskSchedule,
   updateTaskStatus,
 } from "@/lib/planning/service";
 
@@ -163,6 +164,66 @@ describe("planning service", () => {
         }),
       }),
     ]);
+  });
+
+  it("updates task schedule and writes a manual change log", async () => {
+    const scheduledDate = new Date("2026-06-16T16:00:00.000Z");
+    const db = createFakeDb({
+      taskUpdateResult: [{ id: "task-1", planId: "plan-1", date: scheduledDate, daySegment: "afternoon" }],
+    });
+
+    const task = await updateTaskSchedule(db, {
+      workspaceId: "workspace-1",
+      taskId: "task-1",
+      date: "2026-06-17",
+      daySegment: "afternoon",
+      source: "manual",
+    });
+
+    expect(db.wasInTransaction()).toBe(true);
+    expect(task).toEqual({ id: "task-1", planId: "plan-1", date: scheduledDate, daySegment: "afternoon" });
+    expect(db.updates).toEqual([
+      expect.objectContaining({
+        table: "tasks",
+        values: expect.objectContaining({
+          date: scheduledDate,
+          daySegment: "afternoon",
+          updatedAt: expect.any(Date),
+        }),
+      }),
+    ]);
+    expect(db.inserts).toEqual([
+      expect.objectContaining({
+        table: "change_logs",
+        values: expect.objectContaining({
+          workspaceId: "workspace-1",
+          planId: "plan-1",
+          source: "manual",
+          summary: "Updated task schedule",
+          detailsJson: expect.objectContaining({
+            taskId: "task-1",
+            date: "2026-06-17",
+            daySegment: "afternoon",
+          }),
+        }),
+      }),
+    ]);
+    expect(db.inserts.filter((write) => write.table === "agent_patches")).toEqual([]);
+  });
+
+  it("rejects invalid task schedule dates", async () => {
+    const db = createFakeDb();
+
+    await expect(
+      updateTaskSchedule(db, {
+        workspaceId: "workspace-1",
+        taskId: "task-1",
+        date: "2026-02-31",
+        source: "manual",
+      }),
+    ).rejects.toThrow("Invalid task date");
+    expect(db.updates).toEqual([]);
+    expect(db.inserts).toEqual([]);
   });
 
   it("creates a daily check-in using an explicit date", async () => {
