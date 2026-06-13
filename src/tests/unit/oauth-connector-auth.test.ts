@@ -161,6 +161,42 @@ describe("OAuth connector auth", () => {
     expect(db.inserts).toHaveLength(0);
   });
 
+  it("accepts Claude dynamic registration with standard extra client metadata", async () => {
+    const db = createFakeDb();
+    const { getDb } = await import("@/lib/db/client");
+    vi.mocked(getDb).mockReturnValue(db);
+    const { POST } = await import("@/app/api/oauth/register/route");
+
+    const response = await POST(
+      new Request("https://pawplan.test/api/oauth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          client_name: "Claude",
+          redirect_uris: ["https://claude.ai/api/mcp/auth_callback"],
+          grant_types: ["authorization_code"],
+          response_types: ["code"],
+          token_endpoint_auth_method: "none",
+          scope: "mcp",
+          client_uri: "https://claude.ai",
+          logo_uri: "https://claude.ai/favicon.ico",
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(body).toEqual(
+      expect.objectContaining({
+        client_id: expect.stringMatching(/^pwp_oauth_client_/),
+        client_name: "Claude",
+        redirect_uris: ["https://claude.ai/api/mcp/auth_callback"],
+        token_endpoint_auth_method: "none",
+      }),
+    );
+    expect(db.inserts).toHaveLength(1);
+  });
+
   it("stores only an authorization code hash", async () => {
     const db = createFakeDb();
     const { createAuthorizationCode } = await import("@/lib/oauth/connector-auth");

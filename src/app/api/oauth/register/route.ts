@@ -13,8 +13,16 @@ const registerSchema = z
     grant_types: z.array(z.string()).optional(),
     response_types: z.array(z.string()).optional(),
     token_endpoint_auth_method: z.literal("none").optional(),
+    scope: z.string().optional(),
+    client_uri: z.string().url().optional(),
+    logo_uri: z.string().url().optional(),
+    tos_uri: z.string().url().optional(),
+    policy_uri: z.string().url().optional(),
+    contacts: z.array(z.string()).optional(),
+    software_id: z.string().optional(),
+    software_version: z.string().optional(),
   })
-  .strict();
+  .passthrough();
 
 function isUnsupportedMetadata(input: z.infer<typeof registerSchema>) {
   return (
