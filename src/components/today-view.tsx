@@ -31,7 +31,10 @@ function statusClass(status: DisplayStatus) {
 
 export function TodayView({ data, beforeTasks }: { data: TodayViewData; beforeTasks?: ReactNode }) {
   const [tasks, setTasks] = useState<Array<Task & { displayStatus: DisplayStatus }>>(
-    data.tasks.map((task) => ({ ...task, displayStatus: task.status })),
+    data.tasks.map((task) => ({
+      ...task,
+      displayStatus: task.blocked && task.status === "todo" ? "blocked" : task.status,
+    })),
   );
 
   const doneCount = tasks.filter((task) => task.displayStatus === "done").length;
@@ -96,33 +99,46 @@ export function TodayView({ data, beforeTasks }: { data: TodayViewData; beforeTa
     catMsg = `已完成 ${doneCount}/${tasks.length}，节奏不错，继续。`;
   }
 
-  async function persistStatus(id: string, status: PersistedStatus) {
+  async function patchTask(id: string, body: { status?: PersistedStatus; blocked?: boolean }) {
     await fetch("/api/tasks", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, status }),
+      body: JSON.stringify({ id, ...body }),
     });
   }
 
   function setTaskStatus(id: string, status: DisplayStatus) {
-    setTasks((current) =>
-      current.map((task) => {
-        if (task.id !== id) return task;
-        const nextStatus = task.displayStatus === status ? "todo" : status;
-        return {
-          ...task,
-          displayStatus: nextStatus,
-          status: nextStatus === "blocked" ? task.status : nextStatus,
-          done: nextStatus === "done" || nextStatus === "skipped",
-        };
-      }),
-    );
+    const currentTask = tasks.find((task) => task.id === id);
+    if (!currentTask) return;
 
-    if (status !== "blocked") {
-      const currentTask = tasks.find((task) => task.id === id);
-      const nextStatus = currentTask?.displayStatus === status ? "todo" : status;
-      void persistStatus(id, nextStatus);
+    // 卡住：独立于 status 的持久化标记
+    if (status === "blocked") {
+      const nextBlocked = currentTask.displayStatus !== "blocked";
+      setTasks((current) =>
+        current.map((task) =>
+          task.id === id ? { ...task, displayStatus: nextBlocked ? "blocked" : "todo" } : task,
+        ),
+      );
+      void patchTask(id, { blocked: nextBlocked });
+      return;
     }
+
+    const nextStatus = currentTask.displayStatus === status ? "todo" : status;
+    const wasBlocked = currentTask.displayStatus === "blocked";
+    setTasks((current) =>
+      current.map((task) =>
+        task.id === id
+          ? {
+              ...task,
+              displayStatus: nextStatus,
+              status: nextStatus,
+              done: nextStatus === "done" || nextStatus === "skipped",
+            }
+          : task,
+      ),
+    );
+    // 设真实状态时，若此前被标卡住，一并清掉 blocked
+    void patchTask(id, wasBlocked ? { status: nextStatus, blocked: false } : { status: nextStatus });
   }
 
   return (
