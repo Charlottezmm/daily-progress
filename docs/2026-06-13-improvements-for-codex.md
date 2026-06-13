@@ -16,11 +16,12 @@
 - B1 数据层：`POST /api/constraints` 已接受 `routine|recovery`，service 读写/删除权限和测试已同步。
 - C1 数据层：`getMonthPlanData` 已返回真实月度任务/周分布/import summary 数据，当前属于已有覆盖。
 - C2 数据层：today/week view-data 已暴露 `timelineItems`，包含 task/course/meeting/unavailable/routine/recovery 的 `startsAt/endsAt/minutes/protected`。
-- C3 数据层：`tasks.blocked` 已加 schema + migration，`PATCH /api/tasks` 已支持 `{ blocked: boolean }` 并写 manual changelog。
+- C1/C2/B1 UI：Plan 日视图已用 `timelineItems` 画真实时间轴；Plan 月视图已显示月度指标/目标/milestones/每周分布；Constraints 表单已支持 `routine|recovery`。
+- C3 数据层：`tasks.blocked` 已加 schema + migration，`PATCH /api/tasks` 已支持 `{ blocked: boolean }` 并写 manual changelog；`TodayTaskView.blocked` 已透出。
 - G 后端：beta workspace 撞名时自动创建 `名称 2`；并发唯一冲突返回明确错误。
 
 仍待拆分处理：
-- Claude UI：Month 视图、day/week 时间轴、today “卡住”接 `blocked`、constraints 表单加入 `routine|recovery`。
+- Claude UI：today “卡住”把初始态接 `task.blocked`，点击时 PATCH `{ blocked: true|false }`。
 - 远期：登录/创建流程的密码找回或无找回风险文案仍是前端/产品项；本轮未引入账号邮箱或 recovery 机制。
 - 确认点：`createDailyCheckin` 的 `(workspace_id,date)` 唯一索引、`recordHostedMcpUsage` 成功/失败口径需要单独审计；本轮未改。
 
@@ -62,7 +63,7 @@
 - 后果：用户想自己加"运动时间""家务""每周 recovery"无入口。
 - 改：把 `routine` / `recovery` 加进 `EditableKind` + 表单（含 recurrence、weekday 多选）。可考虑给 `routine` 加细分标签（学习/工作/家务/运动）方便战线统计。
 - 注：数据层已支持全部 5 种 kind（course/meeting/unavailable/routine/recovery），实测 course+routine 均可落库，纯前端缺口。
-- 状态：API/service 数据层已确认支持 `routine|recovery`；前端表单仍交给 Claude。
+- 状态：API/service 数据层已确认支持 `routine|recovery`；前端表单已支持这两类。
 
 ### B2〔P2〕routine 多日重复输入繁琐
 - 现状：导入时"周一到周六同一时段"要拆 6 行（每行一个 weekday）。
@@ -76,18 +77,18 @@
 - 现状：`month-view.tsx` 仅 10 行，只有标题占位，无任何内容；`get_month` 也注明"no full month planner contract"。
 - 后果：用户跑 4 个月计划、有月度 milestone，月视图完全空白。
 - 改：做月度视图——按周/按 track 的任务分布、月度 milestone 进度、baseline vs current 对比（占位文案已暗示要做这些）。
-- 状态：数据层已有 `getMonthPlanData` 真实数据；UI 仍交给 Claude。
+- 状态：数据层已有 `getMonthPlanData` 真实数据；Plan 月视图已接入月度指标、目标、milestones 和每周分布。
 
 ### C2〔P1〕缺时间轴 / 日历网格
 - 现状：week = 容量条，today = 任务列表（把固定安排压成一个总分钟数 `fixedMinutes`），全工具没有"一天/一周的时段排布"可视化。
 - 后果：用户看不到 5-7 学习、9-12、13-18 工作、家务、运动、课程长在哪；想要的"课程表/日程表"没有载体。
 - 改：加一个 day/week 时间轴视图，把 routine/course/recovery 时间块 + 当天任务按时段画在网格上（只读即可，不必拖拽，符合现有边界）。
-- 状态：数据层已新增 `timelineItems`；UI 仍交给 Claude。
+- 状态：数据层已新增 `timelineItems`；Plan 日视图已按起止时间渲染时间轴。
 
 ### C3〔P2〕today "卡住"状态不持久化
 - 现状：`today-view.tsx` `blocked` 只在前端 state，不 PATCH 落库，刷新即丢。
 - 改：要么持久化一个 `blocked`/`stuck` 标记，要么明确它是临时态并在 UI 注明。
-- 状态：数据层已加 `tasks.blocked` + `PATCH /api/tasks` 支持；UI 仍交给 Claude。
+- 状态：数据层已加 `tasks.blocked` + `PATCH /api/tasks` 支持，并已在 `TodayTaskView` 透出；Today UI 初始态和 PATCH 接线仍待 Claude。
 
 ### C4〔P2〕in-app chat（按需，可不做）
 - 现状：产品边界明确"No embedded AI chat"，用户靠 Cowork/Codex 连接器驱动。
@@ -127,10 +128,9 @@
 
 ---
 
-## 本轮 Codex 范围（只做后端 / 数据层 / schema / API / 测试，别碰前端 .tsx）
+## 本轮后续范围与状态
 
-> 边界硬约束：Codex **只动** `src/lib/**`、`src/app/api/**`、`src/lib/db/schema` + migration、`src/tests/**`。
-> **不要动** `src/components/**` 和 `src/app/(app)/**/page.tsx` 里的任何 `.tsx` UI——Month 视图、时间轴、constraints 表单、改期、登出这些 UI 由 Claude 写。Codex 已做的 E（PATCH /api/tasks）就是这么分的。
+> 原始分工：Codex 做后端/data/API/schema/test；Claude 做 UI。当前本地收尾已经包含 Claude 的 C1/C2/B1 前端改动，Codex 只补了 C3 的 `TodayTaskView.blocked` 数据字段并负责 commit/deploy。
 
 ### 纯后端项（独立提交，互不混）
 1. **A5** 真实 `DATABASE_URL` driver 的最小事务写集成测试（回归防护）——已完成，默认 gated。
@@ -140,12 +140,12 @@
 5. **A4** `update_task_status.note` / `create_inbox_item.source` 补 schema 落库，或从 API 删字段——已完成。
 6. 确认点：`createDailyCheckin` 的 `(workspace_id,date)` 唯一索引是否存在；`recordHostedMcpUsage` 把失败记成成功的口径——未审计，另拆。
 
-### 数据层准备（给 Claude 的前端铺路，只改 view-data / api / schema，不画 UI）
-7. **C1 数据**：`getMonthPlanData`（`src/lib/planning/view-data.ts`）返回真实月度数据——已确认已有覆盖；Claude 随后写 `month-view.tsx`。
-8. **C2 数据**：在 day/week 的 view-data 里暴露带 **起止时间** 的时间块（routine/course/recovery）+ 当天任务，供时间轴渲染——已完成；Claude 随后写时间轴 UI。
-9. **B1 数据**：确保 `POST /api/constraints` 接受 `kind: routine | recovery`——已完成；Claude 随后把这两类加进 constraints 表单。
-10. **C3 数据**：tasks 加一个可持久化的 `blocked`/`stuck` 字段（schema + migration + PATCH 支持）——已完成；Claude 随后把 today 的"卡住"接上。
+### 数据/UI 准备
+7. **C1 数据/UI**：`getMonthPlanData`（`src/lib/planning/view-data.ts`）返回真实月度数据，Plan 月视图已接入。
+8. **C2 数据/UI**：day/week view-data 暴露带 **起止时间** 的时间块（routine/course/recovery）+ 当天任务，Plan 日视图已接入。
+9. **B1 数据/UI**：`POST /api/constraints` 接受 `kind: routine | recovery`，Constraints 表单已接入。
+10. **C3 数据**：tasks 加一个可持久化的 `blocked`/`stuck` 字段（schema + migration + PATCH 支持）并透出 `TodayTaskView.blocked`；Today UI 接线待 Claude。
 
 ### 交接顺序
 - Codex 后端/data 侧已完成并验证，待 push + 部署。
-- 部署后告诉 Claude「数据层好了」，Claude 接 C1/C2/B1/C3 的 UI + 小文案（Plan 头部"去 Review 确认"已过时）。
+- 部署后告诉 Claude「C3 的 `TodayTaskView.blocked` 已好了」，Claude 只需接 today 卡住初始态和 PATCH。

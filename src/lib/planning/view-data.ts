@@ -52,6 +52,7 @@ export type TodayTaskView = {
   minutes: number;
   energy: "低" | "中" | "高";
   status: TaskStatus;
+  blocked: boolean;
   done: boolean;
 };
 
@@ -816,6 +817,7 @@ export async function getTodayPageData(workspaceId: string): Promise<TodayViewDa
           minutes: task.estimatedMinutes,
           energy: energyLabel(task.energyLevel),
           status: task.status,
+          blocked: task.blocked,
           done: statusDone(task.status),
         };
       }),

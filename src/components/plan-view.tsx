@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { CatIcon } from "./cat-icon";
 import { RescheduleList } from "./reschedule-list";
-import type { MonthViewData, TodayViewData, WeekViewData } from "@/lib/planning/view-data";
+import type { MonthViewData, TimelineItemView, TodayViewData, WeekViewData } from "@/lib/planning/view-data";
 
 type Tab = "day" | "week" | "month" | "reschedule";
 
@@ -21,6 +21,37 @@ function loadColor(state: string) {
   return "";
 }
 
+function clock(iso: string) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(iso));
+}
+
+const timelineKindClass: Record<TimelineItemView["kind"], string> = {
+  task: "task",
+  course: "routine",
+  meeting: "routine",
+  unavailable: "routine",
+  routine: "routine",
+  recovery: "recovery",
+};
+
+const timelineKindLabel: Record<TimelineItemView["kind"], string> = {
+  task: "任务",
+  course: "课程",
+  meeting: "日程",
+  unavailable: "不可用",
+  routine: "固定",
+  recovery: "恢复",
+};
+
+function sortByStart(items: TimelineItemView[]) {
+  return [...items].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+}
+
 export function PlanView({ today, week, month }: { today: TodayViewData; week: WeekViewData; month: MonthViewData }) {
   const [tab, setTab] = useState<Tab>("day");
 
@@ -30,7 +61,7 @@ export function PlanView({ today, week, month }: { today: TodayViewData; week: W
         <h1 className="paw-page-date">计划</h1>
         <div className="paw-agent-row">
           <CatIcon size={40} mood="think" />
-          <p className="paw-agent-msg">日、周、月的安排都在这里。想调整的话，去 Review 里确认。</p>
+          <p className="paw-agent-msg">日、周、月的安排都在这里。想改任务日期，去「改期」自己调；Agent 的建议在 Review 里确认。</p>
         </div>
         <div className="paw-sub-tabs">
           {[
@@ -60,32 +91,26 @@ export function PlanView({ today, week, month }: { today: TodayViewData; week: W
       {tab === "day" ? (
         <section className="paw-plan-view">
           <div className="paw-timeline">
-              {today.routines.map((routine) => (
-                <div key={routine.id} className="paw-time-block">
-                  <span className="paw-time-label">{minutesLabel(routine.minutes)}</span>
-                  <div className="paw-time-bar routine">{routine.title}</div>
-                </div>
-              ))}
-              {today.tasks.map((task) => (
-                <div key={task.id} className="paw-time-block">
-                  <span className="paw-time-label">{minutesLabel(task.minutes)}</span>
-                  <div className="paw-time-bar task">
-                    {task.title}
+            {today.timelineItems.length === 0 ? (
+              <div className="paw-time-block">
+                <span className="paw-time-label">--</span>
+                <div className="paw-time-bar empty">今天还没有可展示的安排。</div>
+              </div>
+            ) : (
+              sortByStart(today.timelineItems).map((item) => (
+                <div key={item.id} className="paw-time-block">
+                  <span className="paw-time-label">
+                    {clock(item.startsAt)}–{clock(item.endsAt)}
+                  </span>
+                  <div className={`paw-time-bar ${timelineKindClass[item.kind]}`}>
+                    <span>{item.title}</span>
+                    <span className="ml-2 text-xs opacity-70">
+                      {timelineKindLabel[item.kind]} · {minutesLabel(item.minutes)}
+                    </span>
                   </div>
                 </div>
-              ))}
-              {today.recoveryBlocks.map((block) => (
-                <div key={block.id} className="paw-time-block">
-                  <span className="paw-time-label">{block.time}</span>
-                  <div className="paw-time-bar recovery">{block.title}</div>
-                </div>
-              ))}
-              {today.tasks.length === 0 && today.routines.length === 0 && today.recoveryBlocks.length === 0 ? (
-                <div className="paw-time-block">
-                  <span className="paw-time-label">--</span>
-                  <div className="paw-time-bar empty">今天还没有可展示的安排。</div>
-                </div>
-              ) : null}
+              ))
+            )}
           </div>
         </section>
       ) : null}
@@ -144,26 +169,90 @@ export function PlanView({ today, week, month }: { today: TodayViewData; week: W
       ) : null}
 
       {tab === "month" ? (
-        <section className="paw-plan-view paw-month-goals">
+        <section className="paw-plan-view">
           {month.emptyText ? (
             <article className="paw-goal-card">
               <h2 className="paw-goal-title">本月计划</h2>
               <p className="paw-goal-meta">{month.emptyText}</p>
               <span className="paw-deadline-tag">No data</span>
             </article>
-          ) : null}
-          {month.cards.map((card) => (
-            <article key={card.title} className="paw-goal-card">
-              <h2 className="paw-goal-title">{card.title}</h2>
-              <p className="paw-goal-meta">{card.text}</p>
-              {card.progress === null ? null : (
-                <div className="paw-goal-progress">
-                  <div className="paw-goal-progress-fill" style={{ width: `${Math.min(card.progress, 100)}%` }} />
+          ) : (
+            <>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="paw-goal-card text-center">
+                  <p className="text-2xl font-bold text-[var(--app-ink)]">
+                    {month.doneCount}/{month.taskCount}
+                  </p>
+                  <p className="paw-goal-meta">已完成任务</p>
                 </div>
-              )}
-              <span className="paw-deadline-tag">{card.tag}</span>
-            </article>
-          ))}
+                <div className="paw-goal-card text-center">
+                  <p className="text-2xl font-bold text-[var(--app-ink)]">{month.completionPercent}%</p>
+                  <p className="paw-goal-meta">完成度</p>
+                </div>
+                <div className="paw-goal-card text-center">
+                  <p className="text-2xl font-bold text-[var(--app-ink)]">{month.totalHours}</p>
+                  <p className="paw-goal-meta">总工时</p>
+                </div>
+              </div>
+
+              {month.importSummary ? (
+                <article className="paw-goal-card mt-3">
+                  <h2 className="paw-goal-title">
+                    {month.importSummary.monthLabel ?? month.importSummary.overallTitle ?? "本月目标"}
+                  </h2>
+                  {month.importSummary.monthGoal ? (
+                    <p className="paw-goal-meta">{month.importSummary.monthGoal}</p>
+                  ) : null}
+                  {month.importSummary.milestones.length > 0 ? (
+                    <ul className="mt-3 space-y-1">
+                      {month.importSummary.milestones.map((m, i) => (
+                        <li key={i} className="flex gap-2 text-sm text-[var(--app-ink-soft)]">
+                          <span className="text-[var(--app-accent-dark)]">·</span>
+                          <span>{m}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </article>
+              ) : null}
+
+              {month.weeks.length > 0 ? (
+                <article className="paw-goal-card mt-3">
+                  <h2 className="paw-goal-title">每周任务分布</h2>
+                  <div className="mt-4 grid gap-3">
+                    {month.weeks.map((w) => (
+                      <div key={w.label} className="grid grid-cols-[88px_1fr_auto] items-center gap-3 text-sm">
+                        <span className="font-semibold text-[var(--app-ink)]">{w.label}</span>
+                        <div className="paw-goal-progress">
+                          <div className="paw-goal-progress-fill" style={{ width: `${Math.min(w.share, 100)}%` }} />
+                        </div>
+                        <span className="text-right text-xs font-semibold text-[var(--app-ink-soft)]">
+                          {w.taskCount} 项 · {w.minutes}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              ) : null}
+
+              {month.cards.length > 0 ? (
+                <div className="paw-month-goals mt-3">
+                  {month.cards.map((card) => (
+                    <article key={card.title} className="paw-goal-card">
+                      <h2 className="paw-goal-title">{card.title}</h2>
+                      <p className="paw-goal-meta">{card.text}</p>
+                      {card.progress === null ? null : (
+                        <div className="paw-goal-progress">
+                          <div className="paw-goal-progress-fill" style={{ width: `${Math.min(card.progress, 100)}%` }} />
+                        </div>
+                      )}
+                      <span className="paw-deadline-tag">{card.tag}</span>
+                    </article>
+                  ))}
+                </div>
+              ) : null}
+            </>
+          )}
         </section>
       ) : null}
 

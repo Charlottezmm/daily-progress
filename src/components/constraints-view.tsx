@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { BackLink } from "./back-link";
 import { CatIcon } from "./cat-icon";
 
-type EditableKind = "course" | "meeting" | "unavailable";
+type EditableKind = "course" | "meeting" | "unavailable" | "routine" | "recovery";
 
 type Course = {
   id: string;
@@ -77,6 +77,8 @@ const kindLabels: Record<EditableKind, string> = {
   course: "课程",
   meeting: "会议",
   unavailable: "不可用",
+  routine: "日常事项",
+  recovery: "恢复 / 休息",
 };
 
 function shanghaiDateTime(date: string, time: string) {
@@ -332,9 +334,11 @@ export function ConstraintsView() {
                 onChange={(event) => setForm((current) => ({ ...current, kind: event.target.value as EditableKind }))}
                 className="paw-input"
               >
-                <option value="course">课程</option>
-                <option value="meeting">会议</option>
-                <option value="unavailable">不可用</option>
+                {(Object.keys(kindLabels) as EditableKind[]).map((kind) => (
+                  <option key={kind} value={kind}>
+                    {kindLabels[kind]}
+                  </option>
+                ))}
               </select>
             </label>
             <label>
