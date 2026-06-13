@@ -111,7 +111,7 @@ test("renders More with opened v0.3 constraint entry points", async ({ context, 
   ]);
 
   await page.goto("/more");
-  await expect(page.getByText("PawPlan v0.4")).toBeVisible();
+  await expect(page.getByText("PawPlan v1.0 public beta")).toBeVisible();
   await expect(page.locator('a[href="/settings#routines"]').filter({ hasText: "日常事项" })).toBeVisible();
   await expect(page.locator('a[href="/constraints"]').filter({ hasText: "日历与课程" })).toBeVisible();
 });
