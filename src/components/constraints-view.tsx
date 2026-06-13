@@ -177,6 +177,16 @@ type ConstraintGroup = {
   blocks: TimeBlock[];
 };
 
+type ConstraintTimelineRow = {
+  key: string;
+  title: string;
+  kind: EditableKind;
+  courseName: string | null;
+  startTime: string;
+  endTime: string;
+  instanceCount: number;
+};
+
 function weekdaySummary(days: WeekdayKey[]) {
   if (days.length === 7) return "每天";
   if (days.length === 6 && days.every((day) => day !== "sun")) return "周一到周六";
@@ -230,6 +240,21 @@ export function buildConstraintGroups(blocks: TimeBlock[]): ConstraintGroup[] {
   ));
 }
 
+export function buildConstraintTimelineRows(groups: ConstraintGroup[], day: WeekdayKey): ConstraintTimelineRow[] {
+  return groups
+    .filter((group) => group.weekdays.includes(day))
+    .map((group) => ({
+      key: group.key,
+      title: group.title,
+      kind: group.kind,
+      courseName: group.courseName,
+      startTime: group.startTime,
+      endTime: group.endTime,
+      instanceCount: group.blocks.filter((block) => weekdayKey(block.startsAt) === day).length,
+    }))
+    .sort((a, b) => a.startTime.localeCompare(b.startTime) || a.title.localeCompare(b.title));
+}
+
 export function ConstraintsView() {
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -244,9 +269,9 @@ export function ConstraintsView() {
 
   const visibleBlocks = useMemo(() => sortedBlocks(timeBlocks), [timeBlocks]);
   const constraintGroups = useMemo(() => buildConstraintGroups(visibleBlocks), [visibleBlocks]);
-  const timelineBlocks = useMemo(
-    () => visibleBlocks.filter((block) => weekdayKey(block.startsAt) === timelineDay),
-    [timelineDay, visibleBlocks],
+  const timelineRows = useMemo(
+    () => buildConstraintTimelineRows(constraintGroups, timelineDay),
+    [constraintGroups, timelineDay],
   );
 
   useEffect(() => {
@@ -425,21 +450,22 @@ export function ConstraintsView() {
         </div>
 
         <div className="paw-constraint-timeline mt-4">
-          {timelineBlocks.length === 0 ? (
+          {timelineRows.length === 0 ? (
             <div className="paw-time-block">
               <span className="paw-time-label">--</span>
               <div className="paw-time-bar empty">这一天还没有固定安排。</div>
             </div>
           ) : (
-            timelineBlocks.map((block) => (
-              <div key={block.id} className="paw-time-block">
+            timelineRows.map((row) => (
+              <div key={row.key} className="paw-time-block">
                 <span className="paw-time-label">
-                  {formatTime(block.startsAt)}–{formatTime(block.endsAt)}
+                  {row.startTime}–{row.endTime}
                 </span>
-                <div className={`paw-time-bar ${block.kind}`}>
-                  <span>{block.title}</span>
+                <div className={`paw-time-bar ${row.kind}`}>
+                  <span>{row.title}</span>
                   <span className="ml-2 text-xs opacity-70">
-                    {kindLabels[block.kind]}{block.courseName ? ` · ${block.courseName}` : ""}
+                    {kindLabels[row.kind]}{row.courseName ? ` · ${row.courseName}` : ""}
+                    {row.instanceCount > 1 ? ` · ${row.instanceCount} 个日期` : ""}
                   </span>
                 </div>
               </div>
