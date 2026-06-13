@@ -932,6 +932,21 @@ a {
   color: var(--app-accent-dark);
 }
 
+.paw-time-bar.course {
+  background: #e8f1fb;
+  color: #356b9b;
+}
+
+.paw-time-bar.meeting {
+  background: #f0ecff;
+  color: #6551a3;
+}
+
+.paw-time-bar.unavailable {
+  background: #f7e8e8;
+  color: #9a4949;
+}
+
 .paw-time-bar.fixed {
   background: #efeaf7;
   color: #6f5aa8;
@@ -958,6 +973,82 @@ a {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 12px;
+}
+
+.paw-weekday-tabs {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.paw-weekday-tab {
+  border: 1px solid var(--app-line);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-bg);
+  color: var(--app-ink-soft);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 10px 8px;
+}
+
+.paw-weekday-tab.active {
+  border-color: var(--app-accent);
+  background: var(--app-accent-soft);
+  color: var(--app-accent-dark);
+}
+
+.paw-constraint-timeline {
+  display: flex;
+  max-width: 760px;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.paw-constraint-form {
+  display: grid;
+  gap: 12px;
+}
+
+.paw-constraint-form-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.paw-constraint-form-grid.first {
+  grid-template-columns: 160px minmax(0, 1fr);
+}
+
+.paw-constraint-form-grid.time {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.paw-constraint-form-grid.last {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.paw-constraint-group {
+  border-bottom: 1px solid var(--app-line);
+  padding: 16px 0;
+}
+
+.paw-constraint-group:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.paw-constraint-instances {
+  margin-top: 10px;
+}
+
+.paw-constraint-instances summary {
+  cursor: pointer;
+  color: var(--app-accent-dark);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.paw-list-row.compact {
+  padding: 10px 0;
 }
 
 .paw-week-day {
@@ -1984,6 +2075,46 @@ a {
 
   .paw-sub-tab {
     padding-inline: 10px;
+  }
+
+  .paw-weekday-tabs {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .paw-weekday-tab {
+    padding: 9px 6px;
+  }
+
+  .paw-time-block {
+    gap: 8px;
+  }
+
+  .paw-time-label {
+    width: 48px;
+    font-size: 11px;
+  }
+
+  .paw-time-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    border-radius: var(--app-radius-sm);
+    font-size: 13px;
+    padding: 10px 12px;
+  }
+
+  .paw-constraint-form-grid.first,
+  .paw-constraint-form-grid.time,
+  .paw-constraint-form-grid.last {
+    grid-template-columns: 1fr;
+  }
+
+  .paw-constraint-form .paw-save-row {
+    margin-top: 0;
+  }
+
+  .paw-constraint-instances .paw-list-row {
+    gap: 10px;
   }
 
   .paw-more-grid {

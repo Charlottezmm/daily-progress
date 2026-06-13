@@ -7,6 +7,7 @@ import { BackLink } from "./back-link";
 import { CatIcon } from "./cat-icon";
 
 type EditableKind = "course" | "meeting" | "unavailable" | "routine" | "recovery";
+type WeekdayKey = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 
 type Course = {
   id: string;
@@ -81,6 +82,27 @@ const kindLabels: Record<EditableKind, string> = {
   recovery: "恢复 / 休息",
 };
 
+const weekdayOrder: WeekdayKey[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+const weekdayLabels: Record<WeekdayKey, string> = {
+  mon: "周一",
+  tue: "周二",
+  wed: "周三",
+  thu: "周四",
+  fri: "周五",
+  sat: "周六",
+  sun: "周日",
+};
+
+const weekdayLookup: Record<string, WeekdayKey> = {
+  mon: "mon",
+  tue: "tue",
+  wed: "wed",
+  thu: "thu",
+  fri: "fri",
+  sat: "sat",
+  sun: "sun",
+};
+
 function shanghaiDateTime(date: string, time: string) {
   return `${date}T${time}:00.000+08:00`;
 }
@@ -93,6 +115,31 @@ function formatDateTime(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(value));
+}
+
+function formatTime(value: string) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(value));
+}
+
+function weekdayKey(value: string): WeekdayKey {
+  const weekday = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Shanghai",
+    weekday: "short",
+  }).format(new Date(value)).toLowerCase();
+  return weekdayLookup[weekday] ?? "mon";
 }
 
 function shanghaiInputParts(value: string) {
@@ -116,6 +163,73 @@ function sortedBlocks(blocks: TimeBlock[]) {
   return [...blocks].sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
 }
 
+type ConstraintGroup = {
+  key: string;
+  title: string;
+  kind: EditableKind;
+  courseName: string | null;
+  recurrenceRule: string | null;
+  startTime: string;
+  endTime: string;
+  firstDate: string;
+  lastDate: string;
+  weekdays: WeekdayKey[];
+  blocks: TimeBlock[];
+};
+
+function weekdaySummary(days: WeekdayKey[]) {
+  if (days.length === 7) return "每天";
+  if (days.length === 6 && days.every((day) => day !== "sun")) return "周一到周六";
+  if (days.length === 5 && days.every((day) => day !== "sat" && day !== "sun")) return "工作日";
+  return days.map((day) => weekdayLabels[day]).join(" / ");
+}
+
+export function buildConstraintGroups(blocks: TimeBlock[]): ConstraintGroup[] {
+  const groups = new Map<string, ConstraintGroup>();
+
+  for (const block of sortedBlocks(blocks)) {
+    const startTime = formatTime(block.startsAt);
+    const endTime = formatTime(block.endsAt);
+    const key = [
+      block.kind,
+      block.title.trim().toLowerCase(),
+      block.courseName?.trim().toLowerCase() ?? "",
+      block.recurrenceRule?.trim().toLowerCase() ?? "",
+      startTime,
+      endTime,
+    ].join("|");
+    const day = weekdayKey(block.startsAt);
+    const existing = groups.get(key);
+    if (existing) {
+      existing.blocks.push(block);
+      existing.lastDate = block.startsAt;
+      if (!existing.weekdays.includes(day)) existing.weekdays.push(day);
+      existing.weekdays.sort((a, b) => weekdayOrder.indexOf(a) - weekdayOrder.indexOf(b));
+      continue;
+    }
+
+    groups.set(key, {
+      key,
+      title: block.title,
+      kind: block.kind,
+      courseName: block.courseName,
+      recurrenceRule: block.recurrenceRule,
+      startTime,
+      endTime,
+      firstDate: block.startsAt,
+      lastDate: block.startsAt,
+      weekdays: [day],
+      blocks: [block],
+    });
+  }
+
+  return [...groups.values()].sort((a, b) => (
+    a.startTime.localeCompare(b.startTime) ||
+    a.title.localeCompare(b.title) ||
+    weekdayOrder.indexOf(a.weekdays[0]) - weekdayOrder.indexOf(b.weekdays[0])
+  ));
+}
+
 export function ConstraintsView() {
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -126,8 +240,14 @@ export function ConstraintsView() {
   const [message, setMessage] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [dataUnavailable, setDataUnavailable] = useState(false);
+  const [timelineDay, setTimelineDay] = useState<WeekdayKey>("mon");
 
   const visibleBlocks = useMemo(() => sortedBlocks(timeBlocks), [timeBlocks]);
+  const constraintGroups = useMemo(() => buildConstraintGroups(visibleBlocks), [visibleBlocks]);
+  const timelineBlocks = useMemo(
+    () => visibleBlocks.filter((block) => weekdayKey(block.startsAt) === timelineDay),
+    [timelineDay, visibleBlocks],
+  );
 
   useEffect(() => {
     let active = true;
@@ -266,12 +386,13 @@ export function ConstraintsView() {
         <h1 className="paw-page-date">日历与课程</h1>
         <div className="paw-agent-row">
           <CatIcon size={40} mood="think" />
-          <p className="paw-agent-msg">这里只维护课程、会议和不可用时间；日常事项和恢复时间仍在设置规则里处理。</p>
+          <p className="paw-agent-msg">这里看每天的固定结构：课程、日常事项、恢复时间都按时间线排开；重复实例会折叠成周循环摘要。</p>
         </div>
         <div className="paw-status-pills">
           <span className="paw-status-pill">{workspaceId ? `Workspace: ${workspaceId}` : "Workspace 读取中"}</span>
           <span className="paw-status-pill">课程: {summary?.courseCount ?? courses.length}</span>
-          <span className="paw-status-pill">固定块: {summary?.timeBlockCount ?? timeBlocks.length}</span>
+          <span className="paw-status-pill">循环: {constraintGroups.length}</span>
+          <span className="paw-status-pill">实例: {summary?.timeBlockCount ?? timeBlocks.length}</span>
           <span className={conflicts.length > 0 ? "paw-status-pill warn" : "paw-status-pill"}>冲突: {summary?.conflictCount ?? conflicts.length}</span>
           {dataUnavailable ? <span className="paw-status-pill warn">数据源不可用</span> : null}
           {message ? <span className="paw-status-pill link">{message}</span> : null}
@@ -281,14 +402,51 @@ export function ConstraintsView() {
       <section className="paw-list-card mb-4">
         <div className="paw-list-header">
           <div>
-            <h2 className="paw-list-title">固定日程概览</h2>
-            <p className="paw-list-subtitle">只读扫描，不支持拖拽；批量课程表请先导入 timetable.csv。</p>
+            <h2 className="paw-list-title">日时间线</h2>
+            <p className="paw-list-subtitle">按星期查看一天怎么排；这里展示课程、日常事项、恢复和不可用时间。</p>
           </div>
           <Link href="/import" className="paw-secondary-btn !px-4 !py-2 !text-sm" aria-label="导入 timetable.csv">
             <Table size={15} />
             导入 timetable.csv
           </Link>
         </div>
+
+        <div className="paw-weekday-tabs mt-4" role="tablist" aria-label="选择星期">
+          {weekdayOrder.map((day) => (
+            <button
+              key={day}
+              type="button"
+              className={`paw-weekday-tab ${timelineDay === day ? "active" : ""}`}
+              onClick={() => setTimelineDay(day)}
+            >
+              {weekdayLabels[day]}
+            </button>
+          ))}
+        </div>
+
+        <div className="paw-constraint-timeline mt-4">
+          {timelineBlocks.length === 0 ? (
+            <div className="paw-time-block">
+              <span className="paw-time-label">--</span>
+              <div className="paw-time-bar empty">这一天还没有固定安排。</div>
+            </div>
+          ) : (
+            timelineBlocks.map((block) => (
+              <div key={block.id} className="paw-time-block">
+                <span className="paw-time-label">
+                  {formatTime(block.startsAt)}–{formatTime(block.endsAt)}
+                </span>
+                <div className={`paw-time-bar ${block.kind}`}>
+                  <span>{block.title}</span>
+                  <span className="ml-2 text-xs opacity-70">
+                    {kindLabels[block.kind]}{block.courseName ? ` · ${block.courseName}` : ""}
+                  </span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
         <div className="paw-mcp-grid mt-4">
           <div className="paw-mcp-info">
             <p className="paw-field-label">下一个固定块</p>
@@ -325,8 +483,8 @@ export function ConstraintsView() {
           </span>
         </div>
 
-        <form onSubmit={saveTimeBlock} className="grid gap-3 border-t border-[var(--app-line)] pt-4">
-          <div className="grid gap-3 md:grid-cols-[160px_1fr]">
+        <form onSubmit={saveTimeBlock} className="paw-constraint-form border-t border-[var(--app-line)] pt-4">
+          <div className="paw-constraint-form-grid first">
             <label>
               <span className="paw-field-label">类型</span>
               <select
@@ -353,7 +511,7 @@ export function ConstraintsView() {
             </label>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-4">
+          <div className="paw-constraint-form-grid time">
             <label>
               <span className="paw-field-label">日期</span>
               <input
@@ -392,7 +550,7 @@ export function ConstraintsView() {
             </label>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+          <div className="paw-constraint-form-grid last">
             <label>
               <span className="paw-field-label">课程名</span>
               <input
@@ -426,10 +584,10 @@ export function ConstraintsView() {
       <section className="paw-list-card">
         <div className="paw-list-header">
           <div>
-            <h2 className="paw-list-title">固定约束</h2>
-            <p className="paw-list-subtitle">按开始时间排序；routine / recovery 不会出现在这里。</p>
+            <h2 className="paw-list-title">周循环摘要</h2>
+            <p className="paw-list-subtitle">同名同时间的实例已折叠；展开后可以编辑或删除具体日期。</p>
           </div>
-          <span className="paw-status-pill">{visibleBlocks.length} 条</span>
+          <span className="paw-status-pill">{constraintGroups.length} 组 / {visibleBlocks.length} 个实例</span>
         </div>
 
         {visibleBlocks.length === 0 ? (
@@ -439,39 +597,56 @@ export function ConstraintsView() {
           </div>
         ) : (
           <div className="paw-list mt-4">
-            {visibleBlocks.map((block) => (
-              <div key={block.id} className="paw-list-row">
+            {constraintGroups.map((group) => (
+              <div key={group.key} className="paw-constraint-group">
                 <div className="min-w-0">
-                  <p className="paw-row-title">{block.title}</p>
+                  <p className="paw-row-title">{group.title}</p>
                   <p className="paw-row-meta">
-                    {kindLabels[block.kind]} · {formatDateTime(block.startsAt)} - {formatDateTime(block.endsAt)}
-                    {block.courseName ? ` · ${block.courseName}` : ""}
-                    {block.recurrenceRule ? ` · ${block.recurrenceRule}` : ""}
+                    {kindLabels[group.kind]} · {group.startTime}–{group.endTime} · {weekdaySummary(group.weekdays)}
+                    {group.courseName ? ` · ${group.courseName}` : ""}
+                    {group.recurrenceRule ? ` · ${group.recurrenceRule}` : ""}
+                  </p>
+                  <p className="paw-row-meta">
+                    {formatDate(group.firstDate)} - {formatDate(group.lastDate)} · {group.blocks.length} 个实例
                   </p>
                 </div>
-                <div className="paw-row-actions">
-                  <span className="paw-status-pill">movable: false</span>
-                  <button
-                    type="button"
-                    disabled={pending === block.id}
-                    onClick={() => editExistingTimeBlock(block)}
-                    aria-label={`编辑 ${block.title}`}
-                    className="paw-secondary-btn !px-3 !py-2 !text-xs"
-                  >
-                    <Pencil size={13} />
-                    编辑
-                  </button>
-                  <button
-                    type="button"
-                    disabled={pending === block.id}
-                    onClick={() => void deleteExistingTimeBlock(block)}
-                    aria-label={`删除 ${block.title}`}
-                    className="paw-secondary-btn !px-3 !py-2 !text-xs text-[var(--app-danger)]"
-                  >
-                    <Trash2 size={13} />
-                    删除
-                  </button>
-                </div>
+                <details className="paw-constraint-instances">
+                  <summary>查看 / 编辑 {group.blocks.length} 个实例</summary>
+                  <div className="paw-list">
+                    {group.blocks.map((block) => (
+                      <div key={block.id} className="paw-list-row compact">
+                        <div className="min-w-0">
+                          <p className="paw-row-title">{formatDateTime(block.startsAt)} - {formatDateTime(block.endsAt)}</p>
+                          <p className="paw-row-meta">
+                            {kindLabels[block.kind]} · movable: false
+                          </p>
+                        </div>
+                        <div className="paw-row-actions">
+                          <button
+                            type="button"
+                            disabled={pending === block.id}
+                            onClick={() => editExistingTimeBlock(block)}
+                            aria-label={`编辑 ${block.title}`}
+                            className="paw-secondary-btn !px-3 !py-2 !text-xs"
+                          >
+                            <Pencil size={13} />
+                            编辑
+                          </button>
+                          <button
+                            type="button"
+                            disabled={pending === block.id}
+                            onClick={() => void deleteExistingTimeBlock(block)}
+                            aria-label={`删除 ${block.title}`}
+                            className="paw-secondary-btn !px-3 !py-2 !text-xs text-[var(--app-danger)]"
+                          >
+                            <Trash2 size={13} />
+                            删除
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </details>
               </div>
             ))}
           </div>

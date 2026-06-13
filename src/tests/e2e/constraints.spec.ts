@@ -152,12 +152,14 @@ test("opens constraints from More, saves a course block, and deletes it explicit
   await expect(page.getByText("约束已保存。")).toBeVisible();
   await expect(page.getByText("Robotics lab", { exact: true })).toBeVisible();
 
+  await page.locator(".paw-constraint-group", { hasText: "Robotics lab" }).getByText("查看 / 编辑 1 个实例").click();
   await page.getByRole("button", { name: "编辑 Robotics lab" }).click();
   await page.getByLabel("标题").fill("Robotics studio");
   await page.getByRole("button", { name: "更新约束" }).click();
   await expect(page.getByText("Robotics studio", { exact: true })).toBeVisible();
   await expect(page.getByText("Robotics lab", { exact: true })).toHaveCount(0);
 
+  await page.locator(".paw-constraint-group", { hasText: "Linear Algebra" }).getByText("查看 / 编辑 1 个实例").click();
   await page.getByRole("button", { name: "删除 Linear Algebra" }).click();
   await expect(page.getByText("约束已删除。")).toBeVisible();
   await expect(page.getByText("Linear Algebra", { exact: true })).toHaveCount(0);

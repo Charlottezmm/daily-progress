@@ -110,6 +110,8 @@ export function OnboardingChecklist() {
     );
   }
 
+  if (state.completedCount >= state.totalCount) return null;
+
   return (
     <section className="paw-onboarding-card" aria-live="polite">
       <div className="paw-onboarding-head">
