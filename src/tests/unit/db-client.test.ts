@@ -7,7 +7,6 @@ const mockState = vi.hoisted(() => ({
   neonPoolConfigs: [] as Array<Record<string, unknown>>,
   pgPoolConfigs: [] as Array<Record<string, unknown>>,
   neonConfig: {} as { webSocketConstructor?: unknown },
-  webSocketClass: class MockWebSocket {},
 }));
 
 vi.mock("@neondatabase/serverless", () => ({
@@ -49,12 +48,9 @@ vi.mock("pg", () => ({
   },
 }));
 
-vi.mock("ws", () => ({
-  default: mockState.webSocketClass,
-}));
-
 describe("database client", () => {
   const originalDatabaseUrl = process.env.DATABASE_URL;
+  const originalWsNoBufferUtil = process.env.WS_NO_BUFFER_UTIL;
 
   beforeEach(() => {
     vi.resetModules();
@@ -64,10 +60,12 @@ describe("database client", () => {
     mockState.neonPoolConfigs = [];
     mockState.pgPoolConfigs = [];
     delete mockState.neonConfig.webSocketConstructor;
+    delete process.env.WS_NO_BUFFER_UTIL;
   });
 
   afterEach(() => {
     process.env.DATABASE_URL = originalDatabaseUrl;
+    process.env.WS_NO_BUFFER_UTIL = originalWsNoBufferUtil;
   });
 
   it("uses neon-serverless for non-local database URLs so transaction writes are supported", async () => {
@@ -81,7 +79,8 @@ describe("database client", () => {
     expect(mockState.neonServerlessDrizzleCalls).toBe(1);
     expect(mockState.neonHttpDrizzleCalls).toBe(0);
     expect(mockState.nodePostgresDrizzleCalls).toBe(0);
-    expect(mockState.neonConfig.webSocketConstructor).toBe(mockState.webSocketClass);
+    expect(process.env.WS_NO_BUFFER_UTIL).toBe("1");
+    expect(typeof mockState.neonConfig.webSocketConstructor).toBe("function");
   });
 
   it("keeps node-postgres for local database URLs", async () => {

@@ -2,8 +2,12 @@ import { Pool as NeonPool, neonConfig } from "@neondatabase/serverless";
 import { drizzle as drizzleNeonServerless } from "drizzle-orm/neon-serverless";
 import { drizzle as drizzleNodePostgres } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import ws from "ws";
 import * as schema from "./schema";
+
+const ws = (() => {
+  process.env.WS_NO_BUFFER_UTIL ??= "1";
+  return require("ws") as typeof import("ws");
+})();
 
 type DbClient =
   | ReturnType<typeof drizzleNeonServerless<typeof schema>>
