@@ -132,9 +132,9 @@ test("opens constraints from More, saves a course block, and deletes it explicit
   });
 
   await page.goto("/more");
-  await page.getByRole("link", { name: /日历与课程/ }).click();
+  await page.getByRole("link", { name: /固定安排/ }).click();
   await expect(page).toHaveURL(/\/constraints$/);
-  await expect(page.getByRole("heading", { name: "日历与课程" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "固定安排", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "导入 timetable.csv" })).toHaveAttribute("href", "/import");
   await expect(page.getByText("冲突: 1")).toBeVisible();
   await expect(page.getByText("Linear Algebra overlaps Studio unavailable")).toBeVisible();

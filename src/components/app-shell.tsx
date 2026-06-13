@@ -28,7 +28,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   function isActive(href: string) {
     if (href === "/plan") return pathname === href || pathname === "/week" || pathname === "/month";
     if (href === "/review") return pathname === href || pathname === "/reschedule";
-    if (href === "/more") return pathname === href || pathname === "/import" || pathname === "/settings";
+    if (href === "/more") return pathname === href || pathname === "/import" || pathname === "/settings" || pathname === "/constraints";
     return pathname === href || pathname.startsWith(`${href}/`);
   }
 

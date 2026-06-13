@@ -1401,6 +1401,16 @@ a {
     transform 150ms ease;
 }
 
+.paw-more-card.featured {
+  border-color: color-mix(in srgb, var(--app-accent) 42%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-soft) 52%, var(--app-surface));
+}
+
+.paw-more-card.featured .paw-more-icon {
+  background: var(--app-accent-soft);
+  color: var(--app-accent-dark);
+}
+
 .paw-more-card.disabled {
   border-style: dashed;
   background: transparent;

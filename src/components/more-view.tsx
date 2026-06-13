@@ -1,4 +1,4 @@
-import { Archive, CalendarDays, ChevronRight, Clock3, Download, KeyRound, Settings } from "lucide-react";
+import { Archive, CalendarDays, ChevronRight, Download, KeyRound, Settings } from "lucide-react";
 import Link from "next/link";
 import { CatIcon } from "./cat-icon";
 import { LogoutButton } from "./logout-button";
@@ -9,6 +9,7 @@ type Tool = {
   text: string;
   icon: typeof Archive;
   active: boolean;
+  featured?: boolean;
 };
 
 const sections: Array<{ title: string; tools: Tool[] }> = [
@@ -32,21 +33,15 @@ const sections: Array<{ title: string; tools: Tool[] }> = [
     ],
   },
   {
-    title: "约束",
+    title: "固定安排",
     tools: [
       {
         href: "/constraints",
-        title: "日历与课程",
-        text: "课程、固定日程、不可用时间。",
+        title: "固定安排",
+        text: "课程、日常事项、恢复和不可用时间都在这里看。",
         icon: CalendarDays,
         active: true,
-      },
-      {
-        href: "/settings#routines",
-        title: "日常事项",
-        text: "家务、通勤、运动等固定消耗。",
-        icon: Clock3,
-        active: true,
+        featured: true,
       },
     ],
   },
@@ -90,7 +85,7 @@ export function MoreView() {
               {section.tools.map((tool) => {
                 const Icon = tool.icon;
                 const content = (
-                  <div className={`paw-more-card ${tool.active ? "" : "disabled"}`}>
+                  <div className={`paw-more-card ${tool.active ? "" : "disabled"} ${tool.featured ? "featured" : ""}`}>
                     <span className="paw-more-icon">
                       <Icon size={18} />
                     </span>

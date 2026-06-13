@@ -283,7 +283,7 @@ export function ConstraintsView() {
         if (!response.ok) {
           if (active) {
             setDataUnavailable(true);
-            setMessage("日历与课程读取失败。");
+            setMessage("固定安排读取失败。");
           }
           return;
         }
@@ -299,7 +299,7 @@ export function ConstraintsView() {
       } catch {
         if (!active) return;
         setDataUnavailable(true);
-        setMessage("日历与课程读取失败。");
+        setMessage("固定安排读取失败。");
       }
     }
 
@@ -408,10 +408,10 @@ export function ConstraintsView() {
     <div className="paw-page">
       <section className="paw-page-header">
         <BackLink />
-        <h1 className="paw-page-date">日历与课程</h1>
+        <h1 className="paw-page-date">固定安排</h1>
         <div className="paw-agent-row">
           <CatIcon size={40} mood="think" />
-          <p className="paw-agent-msg">这里看每天的固定结构：课程、日常事项、恢复时间都按时间线排开；重复实例会折叠成周循环摘要。</p>
+          <p className="paw-agent-msg">课程、日常事项、恢复和不可用时间都放在这一处；先看一天时间线，再看周循环摘要。</p>
         </div>
         <div className="paw-status-pills">
           <span className="paw-status-pill">{workspaceId ? `Workspace: ${workspaceId}` : "Workspace 读取中"}</span>
@@ -427,7 +427,7 @@ export function ConstraintsView() {
       <section className="paw-list-card mb-4">
         <div className="paw-list-header">
           <div>
-            <h2 className="paw-list-title">日时间线</h2>
+            <h2 className="paw-list-title">固定安排时间线</h2>
             <p className="paw-list-subtitle">按星期查看一天怎么排；这里展示课程、日常事项、恢复和不可用时间。</p>
           </div>
           <Link href="/import" className="paw-secondary-btn !px-4 !py-2 !text-sm" aria-label="导入 timetable.csv">
@@ -501,8 +501,8 @@ export function ConstraintsView() {
       <section className="paw-list-card mb-4">
         <div className="paw-list-header">
           <div>
-            <h2 className="paw-list-title">{form.id ? "编辑约束" : "新增约束"}</h2>
-            <p className="paw-list-subtitle">保存到 time_blocks，固定约束默认不可移动。</p>
+            <h2 className="paw-list-title">{form.id ? "编辑固定安排" : "新增固定安排"}</h2>
+            <p className="paw-list-subtitle">课程、日常事项、恢复和不可用时间都可以从这里新增。</p>
           </div>
           <span className="paw-more-icon">
             <CalendarDays size={18} />
@@ -618,8 +618,8 @@ export function ConstraintsView() {
 
         {visibleBlocks.length === 0 ? (
           <div className="paw-empty mt-4">
-            <h3>还没有日历约束</h3>
-            <p>新增课程、会议或不可用时间后，会显示在这里。</p>
+            <h3>还没有固定安排</h3>
+            <p>新增课程、日常事项、恢复或不可用时间后，会显示在这里。</p>
           </div>
         ) : (
           <div className="paw-list mt-4">
