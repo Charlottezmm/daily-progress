@@ -6,6 +6,8 @@
 
 **Architecture:** Treat the existing `index.html` as a legacy prototype, not the base to extend. Build a new Next.js App Router application with a Postgres-backed workspace model, MCP-native data boundaries, agent patch proposal contracts, and responsive Web/PWA delivery. The app does not embed an LLM client or store model API keys. Keep this foundation focused on single-user/internal use while preserving `workspace_id` boundaries for Hosted Lite.
 
+**Direction update 2026-06-08:** The product is agent-first. PWA is not the planner backend that users manually operate all day; it is the human control surface for check, end-of-day feedback, and patch confirmation. Scheduled planning review is triggered by Codex/Cowork scheduled automation, which calls the app's MCP tools. The app must not implement its own server cron, browser timer, or PWA background agent loop.
+
 **Tech Stack:** Next.js App Router, TypeScript, Postgres, Drizzle ORM, Zod, Tailwind CSS, shadcn/ui-compatible component structure, Vitest for unit tests, Playwright for one browser smoke test, Web App Manifest for PWA.
 
 ---
@@ -18,10 +20,10 @@ Recommended order:
 
 1. Codex locks the IA and screen state inventory in this plan.
 2. Codex implements backend, schema, auth, and unstyled/low-style screens.
-3. Claude Design creates UI design for the fixed screens: Today, Week, Month, Inbox, Settings, Import, Reschedule Preview.
+3. Claude Design creates a simple static HTML/CSS visual reference for the fixed screens: Today, Plan, Review, More.
 4. Codex implements the approved UI design with real data and tests.
 
-Do not ask Claude Design to invent product scope. Give it constraints: Web/PWA, schedule-first, dense operational interface, no marketing landing page, Today/Week as primary views, project/course/track as filters.
+Do not ask Claude Design to invent product scope. Give it constraints: Web/PWA, agent-first execution console, no marketing landing page, no complex JSX/JS, no scheduler logic, no manual drag planning. Claude Design owns visual hierarchy and style only; Codex owns data model, MCP boundary, route/data contracts, and implementation.
 
 ## First-Stage Scope
 
@@ -30,16 +32,18 @@ This first-stage plan includes:
 - Responsive Web app and PWA manifest.
 - Workspace password login.
 - Postgres schema with `workspace_id` on all core data.
-- Today / Week / Month / Inbox / Settings / Import / Reschedule Preview routes.
+- Today / Plan / Review / More information architecture.
+- Existing low-style routes can remain as implementation scaffolding until the next UI pass consolidates them.
 - Task, project, course, tag, track, routine, recovery, capacity, check-in, agent patch, change log.
-- Quick Capture to Inbox.
-- 5-second Daily Check-in card with completed/blocker/next fields.
+- Quick Capture to Inbox, visually demoted from primary planner control to lightweight capture.
+- 5-second end-of-day feedback card with completed/blocker/next fields.
 - Routine and Recovery blocks that occupy capacity but are not agent-movable tasks.
 - Track balance calculations.
 - Segment energy settings.
 - `plan.md` and `timetable.csv` import preview.
 - Agent patch schema and protected-block validation.
 - Internal route shaped for patch proposal preview.
+- Documentation and examples for Codex/Cowork scheduled automation calling MCP tools.
 
 This first-stage plan excludes:
 
@@ -53,6 +57,7 @@ This first-stage plan excludes:
 - Native iOS.
 - PDF/image import.
 - Push notifications.
+- App-owned scheduler, server cron, browser timer, or PWA background planning loop.
 
 ## Target File Structure
 
@@ -1723,36 +1728,37 @@ Create `docs/design/claude-design-brief-v0.1.md`:
 ```markdown
 # Claude Design Brief v0.1
 
-Design a responsive Web/PWA interface for an operational MCP-native planning app.
+Design a simple mobile-first Web/PWA static mockup for an agent-first MCP-native planning app.
 
-Do not add new product scope. Use these screens:
+Do not add new product scope. Do not write complex JSX/JS. Use these screens:
 
 - Today
-- Week
-- Month
-- Inbox
-- Import
-- Settings
-- Reschedule Preview
+- Plan
+- Review
+- More
 
 Design constraints:
 
-- Schedule-first, not project-manager-first.
-- Dense but calm operational UI.
-- Today and Week are primary.
-- Project, course, tag, and track are filters.
-- Routine and recovery are visually separate from tasks.
-- Daily Check-in is always visible at the bottom of Today with three inputs: 完成 / 卡点 / 明日接.
+- Agent-first execution console, not a manual planner backend.
+- PWA only does task check, end-of-day feedback, and patch confirmation.
+- Codex/Cowork scheduled automation triggers the agent through MCP; the app does not design or implement scheduler UI.
+- Navigation is only Today / Plan / Review / More.
+- Today is primary.
+- Plan has 日 / 周 / 月 tabs for display only.
+- Calendar, courses, routines, inbox, import, MCP token, and settings live under More.
+- 收工反馈 is always visible at the bottom of Today with three inputs: 完成 / 卡点 / 明日接.
 - Do not design PWA push notification for v0.1; only design the Today check-in card and in-app warning state.
-- Agent/MCP reschedule appears as preview patches requiring confirmation.
+- Agent/MCP planning changes appear as Review patches requiring confirmation.
 - No landing page.
 - No decorative hero.
 - Mobile PWA must be first-class.
 
 Deliver:
 
-- Desktop and mobile layout for each screen.
+- One static HTML file with CSS in a style tag is enough.
+- Mobile-first layout plus a simple desktop centered/wide adaptation.
 - Component states for empty, loading, warning, error, and populated.
+- Visual treatment for task status actions: 完成 / 卡住 / 跳过 / 延后.
 - Visual treatment for agent patch groups: moved, split, defer, backlog, priority change, rejected.
 ```
 

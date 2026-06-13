@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS "workspaces_name_unique" ON "workspaces" USING btree ("name");
