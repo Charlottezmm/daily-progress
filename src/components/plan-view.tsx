@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { CatIcon } from "./cat-icon";
+import { RescheduleList } from "./reschedule-list";
 import type { MonthViewData, TodayViewData, WeekViewData } from "@/lib/planning/view-data";
 
-type Tab = "day" | "week" | "month";
+type Tab = "day" | "week" | "month" | "reschedule";
 
 function minutesLabel(minutes: number) {
   if (minutes >= 60) {
@@ -36,6 +37,7 @@ export function PlanView({ today, week, month }: { today: TodayViewData; week: W
             ["day", "日"],
             ["week", "周"],
             ["month", "月"],
+            ["reschedule", "改期"],
           ].map(([value, label]) => (
             <button
               key={value}
@@ -162,6 +164,12 @@ export function PlanView({ today, week, month }: { today: TodayViewData; week: W
               <span className="paw-deadline-tag">{card.tag}</span>
             </article>
           ))}
+        </section>
+      ) : null}
+
+      {tab === "reschedule" ? (
+        <section className="paw-plan-view">
+          <RescheduleList />
         </section>
       ) : null}
     </div>

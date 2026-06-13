@@ -1,6 +1,7 @@
 import { Archive, CalendarDays, ChevronRight, Clock3, Download, KeyRound, Settings } from "lucide-react";
 import Link from "next/link";
 import { CatIcon } from "./cat-icon";
+import { LogoutButton } from "./logout-button";
 
 type Tool = {
   href: string;
@@ -117,6 +118,13 @@ export function MoreView() {
             </div>
           </section>
         ))}
+
+        <section>
+          <h2 className="paw-more-section-title">账户</h2>
+          <div className="paw-more-grid">
+            <LogoutButton />
+          </div>
+        </section>
       </div>
       <p className="paw-version">PawPlan v1.0 public beta</p>
     </div>
