@@ -46,6 +46,33 @@ export function ReviewPreview({ data }: { data: RescheduleViewData }) {
     setDecisions(Object.fromEntries(actionable.map((item) => [item.id, "accepted" as Decision])));
   }
 
+  // 丢弃整条草稿：拒绝该 patch 的全部 operation，绕过冲突/未应用态的死路
+  async function dismissPatch(patchId: string) {
+    const rejectedOperationIndexes = [
+      ...new Set(data.patchItems.filter((entry) => entry.patchId === patchId).map((entry) => entry.operationIndex)),
+    ];
+    if (rejectedOperationIndexes.length === 0) return;
+    setIsApplying(true);
+    setApplyError(null);
+    try {
+      const response = await fetch("/api/patches/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ patchId, acceptedOperationIndexes: [], rejectedOperationIndexes }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error ?? "丢弃草稿失败");
+      }
+      setClosedPatchIds((current) => [...current, patchId]);
+      setDecisions((current) => Object.fromEntries(Object.entries(current).filter(([id]) => !id.startsWith(`${patchId}:`))));
+    } catch (error) {
+      setApplyError(error instanceof Error ? error.message : "丢弃草稿失败");
+    } finally {
+      setIsApplying(false);
+    }
+  }
+
   async function applySelected() {
     const acceptedByPatch = new Map<string, number[]>();
     const rejectedByPatch = new Map<string, number[]>();
@@ -213,7 +240,18 @@ export function ReviewPreview({ data }: { data: RescheduleViewData }) {
 
                 <div className="paw-suggestion-actions">
                   {item.protected || item.skipped || item.conflict ? (
-                    <div className="paw-status-pill">需要手动处理</div>
+                    <>
+                      <span className="paw-status-pill">需要手动处理</span>
+                      <button
+                        type="button"
+                        onClick={() => dismissPatch(item.patchId)}
+                        disabled={isApplying}
+                        className="paw-sg-btn reject"
+                      >
+                        <X size={15} />
+                        丢弃整条
+                      </button>
+                    </>
                   ) : (
                     <>
                       <button
