@@ -304,7 +304,7 @@ describe("MCP planning tools", () => {
         {
           title: "Embodied AI seminar",
           kind: "course",
-          day_of_week: "monday",
+          day_of_week: "mon",
           start_time: "09:00",
           end_time: "10:30",
           starts_on: "2026-06-15",
@@ -340,7 +340,7 @@ describe("MCP planning tools", () => {
                 rows: [
                   expect.objectContaining({
                     title: "Embodied AI seminar",
-                    dayOfWeek: "monday",
+                    dayOfWeek: "mon",
                     startTime: "09:00",
                     endTime: "10:30",
                   }),
@@ -354,6 +354,34 @@ describe("MCP planning tools", () => {
       }),
     ]);
     expect(db.inserts.filter((write) => write.table === "courses" || write.table === "time_blocks")).toEqual([]);
+  });
+
+  it("rejects timetable import rows with multi-day or localized day_of_week values at the MCP schema boundary", async () => {
+    const db = createFakeDb({ activePlanId: "plan-1" });
+    const baseRow = {
+      title: "Study block",
+      kind: "routine",
+      start_time: "05:00",
+      end_time: "07:00",
+      starts_on: "2026-06-15",
+      ends_on: "2026-06-21",
+    };
+
+    await expect(
+      runPawPlanTool(db, "workspace-1", "propose_timetable_import", {
+        reason: "Prepare recurring study blocks.",
+        rows: [{ ...baseRow, day_of_week: "Mon-Sat" }],
+      }),
+    ).rejects.toThrow("Invalid enum value");
+
+    await expect(
+      runPawPlanTool(db, "workspace-1", "propose_timetable_import", {
+        reason: "Prepare recurring study blocks.",
+        rows: [{ ...baseRow, day_of_week: "每天" }],
+      }),
+    ).rejects.toThrow("Invalid enum value");
+
+    expect(db.inserts).toEqual([]);
   });
 
   it("creates a check-in date at the Shanghai day boundary for MCP date strings", async () => {

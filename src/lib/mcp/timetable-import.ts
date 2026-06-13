@@ -15,12 +15,15 @@ type PlanningDb = {
 };
 
 const createdBySchema = z.enum(["codex", "claude", "user"]);
+const singleWeekdaySchema = z
+  .enum(["sun", "mon", "tue", "wed", "thu", "fri", "sat"])
+  .describe("Single weekday only. Use sun, mon, tue, wed, thu, fri, or sat. For multiple days, send one row per weekday.");
 
 export const mcpTimetableRowSchema = z
   .object({
     title: z.string().trim().min(1).max(180),
     kind: z.enum(["course", "meeting", "unavailable", "routine", "recovery"]),
-    day_of_week: z.string().trim().max(20).optional().nullable(),
+    day_of_week: singleWeekdaySchema.optional().nullable(),
     start_time: z.string().trim().regex(/^\d{2}:\d{2}$/),
     end_time: z.string().trim().regex(/^\d{2}:\d{2}$/),
     starts_on: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/),

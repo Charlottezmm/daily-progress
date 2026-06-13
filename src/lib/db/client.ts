@@ -1,15 +1,18 @@
-import { neon } from "@neondatabase/serverless";
-import { drizzle as drizzleNeon } from "drizzle-orm/neon-http";
+import { Pool as NeonPool, neonConfig } from "@neondatabase/serverless";
+import { drizzle as drizzleNeonServerless } from "drizzle-orm/neon-serverless";
 import { drizzle as drizzleNodePostgres } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
+import ws from "ws";
 import * as schema from "./schema";
 
 type DbClient =
-  | ReturnType<typeof drizzleNeon<typeof schema>>
+  | ReturnType<typeof drizzleNeonServerless<typeof schema>>
   | ReturnType<typeof drizzleNodePostgres<typeof schema>>;
 
 let cachedDb: DbClient | null = null;
-let cachedPool: Pool | null = null;
+let cachedPool: Pool | NeonPool | null = null;
+
+neonConfig.webSocketConstructor = ws;
 
 function isLocalDatabaseUrl(url: string) {
   return url.includes("localhost") || url.includes("127.0.0.1");
@@ -29,7 +32,7 @@ export function getDb() {
     return cachedDb;
   }
 
-  const sql = neon(databaseUrl);
-  cachedDb = drizzleNeon(sql, { schema });
+  cachedPool = new NeonPool({ connectionString: databaseUrl });
+  cachedDb = drizzleNeonServerless(cachedPool, { schema });
   return cachedDb;
 }
