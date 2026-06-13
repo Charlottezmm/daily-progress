@@ -110,14 +110,34 @@ export async function updateTaskStatus(
   input: {
     workspaceId: string;
     taskId: string;
-    status: TaskStatus;
+    status?: TaskStatus;
+    blocked?: boolean;
+    note?: string;
     source?: ChangeSource;
   },
 ) {
+  if (!input.status && input.blocked === undefined) {
+    throw new PlanningServiceError("Task status update required", 400);
+  }
+
+  const values: { status?: TaskStatus; blocked?: boolean; updatedAt: Date } = { updatedAt: new Date() };
+  const detailsJson: { taskId: string; status?: TaskStatus; blocked?: boolean; note?: string } = {
+    taskId: input.taskId,
+  };
+  if (input.status) {
+    values.status = input.status;
+    detailsJson.status = input.status;
+  }
+  if (input.blocked !== undefined) {
+    values.blocked = input.blocked;
+    detailsJson.blocked = input.blocked;
+  }
+  if (input.note?.trim()) detailsJson.note = input.note.trim();
+
   return db.transaction(async (tx) => {
     const [task] = await tx
       .update(tasks)
-      .set({ status: input.status, updatedAt: new Date() })
+      .set(values)
       .where(and(eq(tasks.id, input.taskId), eq(tasks.workspaceId, input.workspaceId)))
       .returning();
 
@@ -127,11 +147,8 @@ export async function updateTaskStatus(
       workspaceId: input.workspaceId,
       planId: task.planId,
       source: input.source ?? "manual",
-      summary: `Updated task status to ${input.status}`,
-      detailsJson: {
-        taskId: input.taskId,
-        status: input.status,
-      },
+      summary: input.status ? `Updated task status to ${input.status}` : "Updated task blocked state",
+      detailsJson,
     });
 
     return task;
@@ -144,6 +161,7 @@ export async function updateTaskSchedule(
     workspaceId: string;
     taskId: string;
     status?: TaskStatus;
+    blocked?: boolean;
     date?: string;
     daySegment?: DaySegment;
     source?: ChangeSource;
@@ -151,16 +169,21 @@ export async function updateTaskSchedule(
 ) {
   if (!input.date && !input.daySegment) throw new PlanningServiceError("Task schedule update required", 400);
 
-  const values: { status?: TaskStatus; date?: Date; daySegment?: DaySegment; updatedAt: Date } = {
+  const values: { status?: TaskStatus; blocked?: boolean; date?: Date; daySegment?: DaySegment; updatedAt: Date } = {
     updatedAt: new Date(),
   };
-  const detailsJson: { taskId: string; status?: TaskStatus; date?: string; daySegment?: DaySegment } = {
+  const detailsJson: { taskId: string; status?: TaskStatus; blocked?: boolean; date?: string; daySegment?: DaySegment } = {
     taskId: input.taskId,
   };
 
   if (input.status) {
     values.status = input.status;
     detailsJson.status = input.status;
+  }
+
+  if (input.blocked !== undefined) {
+    values.blocked = input.blocked;
+    detailsJson.blocked = input.blocked;
   }
 
   if (input.date) {

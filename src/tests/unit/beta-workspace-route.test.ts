@@ -175,11 +175,10 @@ describe("public beta workspace route", () => {
     expect(await response.json()).toEqual({ error: "Invite code exhausted" });
   });
 
-  it("rejects duplicate workspace names before redeeming an invite", async () => {
+  it("suffixes duplicate workspace names before creating the workspace", async () => {
     const { getDb } = await import("@/lib/db/client");
-    const hashSpy = vi.spyOn(bcrypt, "hash");
-    const { calls } = mockBetaDb({ existingWorkspace: workspace, inviteRow: invite });
-    vi.mocked(getDb).mockReturnValue({ transaction: calls.transaction } as never);
+    const { db, records } = mockBetaDb({ existingWorkspace: workspace, inviteRow: invite });
+    vi.mocked(getDb).mockReturnValue(db as never);
     const { POST } = await import("@/app/api/beta/workspaces/route");
 
     const response = await POST(jsonRequest("http://localhost/api/beta/workspaces", {
@@ -188,11 +187,8 @@ describe("public beta workspace route", () => {
       inviteCode: "BETA-123",
     }));
 
-    expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({ error: "Workspace already exists" });
-    expect(calls.update).not.toHaveBeenCalled();
-    expect(calls.insert).not.toHaveBeenCalled();
-    expect(hashSpy).not.toHaveBeenCalled();
+    expect(response.status).toBe(201);
+    expect(records.inserted[0].values).toEqual(expect.objectContaining({ name: "Focus Lab 2" }));
   });
 
   it("rejects oversized or unsafe beta invite payloads before database or bcrypt work", async () => {
@@ -230,7 +226,7 @@ describe("public beta workspace route", () => {
     }));
 
     expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({ error: "Workspace already exists" });
+    expect(await response.json()).toEqual({ error: "Workspace name is unavailable; try again" });
     expect(vi.mocked(setWorkspaceSession)).not.toHaveBeenCalled();
   });
 });

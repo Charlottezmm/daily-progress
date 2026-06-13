@@ -85,6 +85,7 @@ export const pawPlanToolSchemas = {
   create_inbox_item: z
     .object({
       title: z.string().trim().min(1).max(240),
+      source: z.enum(["manual", "imported"]).optional(),
     })
     .strict(),
   create_checkin: z
@@ -579,7 +580,7 @@ export async function runPawPlanTool(
     const item = await createInboxItem(db, {
       workspaceId,
       title: parsed.title,
-      source: "manual",
+      source: parsed.source ?? "manual",
       changeLogSource: "mcp",
     });
 
@@ -587,7 +588,7 @@ export async function runPawPlanTool(
       item,
       audit: {
         source: "mcp",
-        note: "Inbox item source remains manual because the current schema only supports manual/imported.",
+        note: `Inbox item source recorded as ${item.source}.`,
       },
     };
   }
@@ -616,6 +617,7 @@ export async function runPawPlanTool(
       workspaceId,
       taskId: parsed.task_id,
       status: parsed.status,
+      note: parsed.note,
       source: "mcp",
     });
     if (!task) throw new Error("Task not found");
@@ -625,8 +627,7 @@ export async function runPawPlanTool(
       note: parsed.note
         ? {
             received: parsed.note,
-            persisted: false,
-            reason: "Task status notes are not supported by the current schema.",
+            persisted: true,
           }
       : undefined,
     };

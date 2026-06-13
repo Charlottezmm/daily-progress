@@ -25,13 +25,31 @@ describe("constraints route", () => {
     expect(await response.json()).toEqual({ error: "Unauthorized" });
   });
 
-  it("rejects non-editable time block kinds before opening a database connection", async () => {
+  it("accepts routine and recovery time block kinds for the data API", async () => {
     const { getWorkspaceIdFromSession } = await import("@/lib/auth/session");
     const { getDb } = await import("@/lib/db/client");
     vi.mocked(getWorkspaceIdFromSession).mockResolvedValue("workspace-1");
+    vi.mocked(getDb).mockReturnValue({
+      transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
+        callback({
+          select: () => ({
+            from: () => ({
+              where: () => ({
+                limit: async () => [{ id: "plan-1" }],
+              }),
+            }),
+          }),
+          insert: () => ({
+            values: (values: Record<string, unknown>) => ({
+              returning: async () => [{ id: "block-1", ...values }],
+              then: (resolve: (value: unknown) => unknown) => Promise.resolve().then(resolve),
+            }),
+          }),
+        }),
+    } as never);
     const { POST } = await import("@/app/api/constraints/route");
 
-    const response = await POST(
+    const routineResponse = await POST(
       new Request("http://localhost/api/constraints", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -46,10 +64,32 @@ describe("constraints route", () => {
         }),
       }),
     );
+    const recoveryResponse = await POST(
+      new Request("http://localhost/api/constraints", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "upsert_time_block",
+          timeBlock: {
+            title: "Recovery",
+            kind: "recovery",
+            startsAt: "2026-06-12T14:00:00.000Z",
+            endsAt: "2026-06-12T15:00:00.000Z",
+          },
+        }),
+      }),
+    );
 
-    expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({ error: "Invalid constraints action" });
-    expect(vi.mocked(getDb)).not.toHaveBeenCalled();
+    expect(routineResponse.status).toBe(200);
+    expect(await routineResponse.json()).toEqual({
+      timeBlock: expect.objectContaining({ id: "block-1", kind: "routine", title: "Morning routine" }),
+      course: null,
+    });
+    expect(recoveryResponse.status).toBe(200);
+    expect(await recoveryResponse.json()).toEqual({
+      timeBlock: expect.objectContaining({ id: "block-1", kind: "recovery", title: "Recovery" }),
+      course: null,
+    });
   });
 
   it("rejects blocks longer than 12 hours", async () => {

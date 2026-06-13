@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db/client";
-import { exchangeAuthorizationCode, OAuthConnectorError } from "@/lib/oauth/connector-auth";
+import { exchangeAuthorizationCode, OAuthConnectorError, refreshConnectorAccessToken } from "@/lib/oauth/connector-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -43,21 +43,39 @@ export async function POST(request: Request) {
   const clientId = params.get("client_id");
   const redirectUri = params.get("redirect_uri");
   const codeVerifier = params.get("code_verifier");
+  const refreshToken = params.get("refresh_token");
 
-  if (grantType !== "authorization_code") return oauthError("unsupported_grant_type", "grant_type must be authorization_code");
-  if (!code) return oauthError("invalid_request", "code is required");
   if (!clientId) return oauthError("invalid_request", "client_id is required");
-  if (!redirectUri) return oauthError("invalid_request", "redirect_uri is required");
-  if (!codeVerifier) return oauthError("invalid_request", "code_verifier is required");
 
   try {
-    const result = await exchangeAuthorizationCode(getDb(), { code, clientId, redirectUri, codeVerifier });
-    return NextResponse.json({
-      access_token: result.accessToken,
-      token_type: result.tokenType,
-      expires_in: result.expiresIn,
-      scope: result.scope,
-    });
+    if (grantType === "authorization_code") {
+      if (!code) return oauthError("invalid_request", "code is required");
+      if (!redirectUri) return oauthError("invalid_request", "redirect_uri is required");
+      if (!codeVerifier) return oauthError("invalid_request", "code_verifier is required");
+
+      const result = await exchangeAuthorizationCode(getDb(), { code, clientId, redirectUri, codeVerifier });
+      return NextResponse.json({
+        access_token: result.accessToken,
+        refresh_token: result.refreshToken,
+        token_type: result.tokenType,
+        expires_in: result.expiresIn,
+        scope: result.scope,
+      });
+    }
+
+    if (grantType === "refresh_token") {
+      if (!refreshToken) return oauthError("invalid_request", "refresh_token is required");
+      const result = await refreshConnectorAccessToken(getDb(), { refreshToken, clientId });
+      return NextResponse.json({
+        access_token: result.accessToken,
+        refresh_token: result.refreshToken,
+        token_type: result.tokenType,
+        expires_in: result.expiresIn,
+        scope: result.scope,
+      });
+    }
+
+    return oauthError("unsupported_grant_type", "grant_type must be authorization_code or refresh_token");
   } catch (error) {
     if (error instanceof OAuthConnectorError) {
       return oauthError(error.oauthError, error.message, error.status);

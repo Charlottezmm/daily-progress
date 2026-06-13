@@ -88,6 +88,30 @@ describe("tasks route", () => {
     expect(updateTaskSchedule).not.toHaveBeenCalled();
   });
 
+  it("updates blocked state through the status service", async () => {
+    const task = { id: taskId, blocked: true };
+    const db = { id: "db" };
+    const { getWorkspaceIdFromSession } = await import("@/lib/auth/session");
+    const { getDb } = await import("@/lib/db/client");
+    const { updateTaskSchedule, updateTaskStatus } = await import("@/lib/planning/service");
+    vi.mocked(getWorkspaceIdFromSession).mockResolvedValue("workspace-1");
+    vi.mocked(getDb).mockReturnValue(db);
+    vi.mocked(updateTaskStatus).mockResolvedValue(task);
+    const { PATCH } = await import("@/app/api/tasks/route");
+
+    const response = await PATCH(patchRequest({ id: taskId, blocked: true }));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ task });
+    expect(updateTaskStatus).toHaveBeenCalledWith(db, {
+      workspaceId: "workspace-1",
+      taskId,
+      blocked: true,
+      source: "manual",
+    });
+    expect(updateTaskSchedule).not.toHaveBeenCalled();
+  });
+
   it("updates task schedule through the schedule service", async () => {
     const task = { id: taskId, date: "2026-06-17", daySegment: "afternoon" };
     const db = { id: "db" };
@@ -137,6 +161,7 @@ describe("tasks route", () => {
       workspaceId: "workspace-1",
       taskId,
       status: "done",
+      blocked: undefined,
       date: "2026-06-17",
       daySegment: "evening",
       source: "manual",

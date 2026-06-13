@@ -68,6 +68,17 @@ export type RecoveryBlockView = {
   time: string;
 };
 
+export type TimelineItemView = {
+  id: string;
+  kind: "task" | "course" | "meeting" | "unavailable" | "routine" | "recovery";
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  minutes: number;
+  segment: Segment;
+  protected: boolean;
+};
+
 export type WarningView = {
   id: string;
   title: string;
@@ -80,6 +91,7 @@ export type TodayViewData = {
   routines: TodayRoutineView[];
   recoveryBlocks: RecoveryBlockView[];
   warnings: WarningView[];
+  timelineItems: TimelineItemView[];
   patchCount: number;
   checkin: CheckinView | null;
   streakDays: number;
@@ -92,6 +104,7 @@ export type WeekDayView = {
   capacity: string;
   state: "ok" | "over" | "room" | "today";
   items: string[];
+  timelineItems: TimelineItemView[];
 };
 
 export type TrackBalanceView = {
@@ -219,6 +232,7 @@ function emptyTodayData(dataUnavailable = false): TodayViewData {
     warnings: dataUnavailable
       ? [{ id: "data_unavailable", title: "本地数据源未配置", text: "当前没有 DATABASE_URL，页面显示为空态；配置数据库后会读取真实计划。" }]
       : [],
+    timelineItems: [],
     patchCount: 0,
     checkin: null,
     streakDays: 0,
@@ -235,6 +249,7 @@ function emptyWeekData(dataUnavailable = false): WeekViewData {
       capacity: "空",
       state: isSameShanghaiDay(date, startOfShanghaiDay(new Date())) ? "today" : "room",
       items: [],
+      timelineItems: [],
     })),
     tracks: [],
     recovery: {
@@ -370,6 +385,12 @@ export function buildWeekCapacityDays(input: WeekCapacityInput): WeekDayView[] {
             .flatMap((segment) => day.segments[segment].blocks.map((block) => block.title))
             .slice(0, 4)
         : [],
+      timelineItems: buildDayTimelineItems({
+        date,
+        taskRows: input.taskRows,
+        blockRows: input.blockRows,
+        routineRows: input.routineRows,
+      }),
     };
   });
 }
@@ -378,6 +399,128 @@ const segmentOrder: Segment[] = ["morning", "afternoon", "evening"];
 
 function segmentCapacity(morning: number, afternoon: number, evening: number) {
   return morning + afternoon + evening;
+}
+
+function timeOnShanghaiDay(date: Date, time: string) {
+  const [hour, minute] = time.split(":").map(Number);
+  const start = startOfShanghaiDay(date);
+  return new Date(start.getTime() + (hour || 0) * 60 * 60 * 1000 + (minute || 0) * 60 * 1000);
+}
+
+function segmentStart(date: Date, segment: Segment) {
+  if (segment === "afternoon") return timeOnShanghaiDay(date, "12:00");
+  if (segment === "evening") return timeOnShanghaiDay(date, "18:00");
+  return startOfShanghaiDay(date);
+}
+
+function segmentForDate(date: Date): Segment {
+  const start = startOfShanghaiDay(date);
+  const minutes = Math.floor((date.getTime() - start.getTime()) / 60000);
+  if (minutes >= 18 * 60) return "evening";
+  if (minutes >= 12 * 60) return "afternoon";
+  return "morning";
+}
+
+function weekdayForShanghaiDay(date: Date) {
+  const start = startOfShanghaiDay(date);
+  const noon = new Date(start.getTime() + 20 * 60 * 60 * 1000);
+  return noon.getUTCDay();
+}
+
+function routineAppliesOnDate(routine: CapacityRoutineInput, date: Date) {
+  const pattern = routine.weekdayPattern?.trim().toLowerCase();
+  if (!pattern || pattern === "daily" || pattern === "*") return true;
+
+  const weekday = weekdayForShanghaiDay(date);
+  const names = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+  const tokens = pattern.split(/[\s,，/|]+/).filter(Boolean);
+  return tokens.some((token) => token === names[weekday] || token === String(weekday) || (weekday === 0 && token === "7"));
+}
+
+function timelineItem(
+  item: Omit<TimelineItemView, "startsAt" | "endsAt" | "minutes"> & { startsAt: Date; endsAt: Date },
+): TimelineItemView {
+  return {
+    ...item,
+    startsAt: item.startsAt.toISOString(),
+    endsAt: item.endsAt.toISOString(),
+    minutes: minutesBetween(item.startsAt, item.endsAt),
+  };
+}
+
+export function buildDayTimelineItems(input: {
+  date: Date;
+  taskRows: CapacityTaskInput[];
+  blockRows: CapacityTimeBlockInput[];
+  routineRows: CapacityRoutineInput[];
+}): TimelineItemView[] {
+  const dayStart = startOfShanghaiDay(input.date);
+  const dayEnd = addDays(dayStart, 1);
+  const dateKey = capacityDateKey(dayStart);
+  const items: TimelineItemView[] = [];
+
+  for (const task of input.taskRows) {
+    if (task.status === "backlog") continue;
+    if (capacityDateKey(task.date) !== dateKey) continue;
+
+    const startsAt = segmentStart(dayStart, task.daySegment);
+    items.push(
+      timelineItem({
+        id: task.id,
+        kind: "task",
+        title: task.title,
+        startsAt,
+        endsAt: new Date(startsAt.getTime() + task.estimatedMinutes * 60_000),
+        segment: task.daySegment,
+        protected: false,
+      }),
+    );
+  }
+
+  for (const block of input.blockRows) {
+    if (block.endsAt <= dayStart || block.startsAt >= dayEnd) continue;
+    const startsAt = new Date(Math.max(block.startsAt.getTime(), dayStart.getTime()));
+    const endsAt = new Date(Math.min(block.endsAt.getTime(), dayEnd.getTime()));
+    items.push(
+      timelineItem({
+        id: block.id,
+        kind: block.kind,
+        title: block.title,
+        startsAt,
+        endsAt,
+        segment: segmentForDate(startsAt),
+        protected: true,
+      }),
+    );
+  }
+
+  for (const routine of input.routineRows) {
+    if (!routineAppliesOnDate(routine, dayStart)) continue;
+
+    const segment = routine.defaultTimeSegment === "specific_window"
+      ? segmentForDate(timeOnShanghaiDay(dayStart, routine.defaultStartTime ?? "00:00"))
+      : routine.defaultTimeSegment;
+    const startsAt = routine.defaultTimeSegment === "specific_window"
+      ? timeOnShanghaiDay(dayStart, routine.defaultStartTime ?? "00:00")
+      : segmentStart(dayStart, segment);
+    const endsAt = routine.defaultTimeSegment === "specific_window" && routine.defaultEndTime
+      ? timeOnShanghaiDay(dayStart, routine.defaultEndTime)
+      : new Date(startsAt.getTime() + routine.estimatedMinutes * 60_000);
+
+    items.push(
+      timelineItem({
+        id: routine.id,
+        kind: "routine",
+        title: routine.title,
+        startsAt,
+        endsAt,
+        segment,
+        protected: true,
+      }),
+    );
+  }
+
+  return items.sort((a, b) => a.startsAt.localeCompare(b.startsAt) || a.title.localeCompare(b.title));
 }
 
 function timeLabel(date: Date) {
@@ -694,6 +837,12 @@ export async function getTodayPageData(workspaceId: string): Promise<TodayViewDa
         title: warning.message,
         text: warning.code === "inbox_pileup" ? "Inbox 不占 capacity，但堆积会污染计划判断。" : "这条提醒会进入下一次 agent 重排上下文。",
       })),
+      timelineItems: buildDayTimelineItems({
+        date: start,
+        taskRows,
+        blockRows: todayBlocks,
+        routineRows,
+      }),
       patchCount: patchRows.length,
       checkin: todayCheckin
         ? {

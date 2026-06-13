@@ -11,10 +11,11 @@ const taskUpdateSchema = z
   .object({
     id: z.string().uuid(),
     status: z.enum(["todo", "done", "skipped", "backlog"]).optional(),
+    blocked: z.boolean().optional(),
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     daySegment: z.enum(["morning", "afternoon", "evening"]).optional(),
   })
-  .refine((value) => value.status || value.date || value.daySegment, {
+  .refine((value) => value.status || value.blocked !== undefined || value.date || value.daySegment, {
     message: "At least one task update field is required",
   });
 
@@ -42,6 +43,7 @@ export async function PATCH(request: Request) {
           workspaceId,
           taskId: parsed.data.id,
           status: parsed.data.status,
+          blocked: parsed.data.blocked,
           date: parsed.data.date,
           daySegment: parsed.data.daySegment,
           source: "manual",
@@ -49,7 +51,8 @@ export async function PATCH(request: Request) {
       : await updateTaskStatus(db, {
           workspaceId,
           taskId: parsed.data.id,
-          status: parsed.data.status!,
+          status: parsed.data.status,
+          blocked: parsed.data.blocked,
           source: "manual",
         });
 

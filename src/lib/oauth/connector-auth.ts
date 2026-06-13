@@ -41,6 +41,8 @@ type ConnectorAuthorizationRow = {
   clientId: string;
   clientName?: string;
   accessTokenHash: string;
+  refreshTokenHash: string | null;
+  refreshTokenExpiresAt: Date | string | null;
   permission: Permission;
   scope: string;
   expiresAt: Date | string | null;
@@ -58,6 +60,8 @@ export class OAuthConnectorError extends Error {
 // and one of Claude's first-party hosts, rather than accepting arbitrary dynamic redirects.
 const allowedClaudeRedirectHosts = new Set(["claude.ai", "www.claude.ai", "claude.com", "www.claude.com"]);
 export const staticClaudeOAuthClientId = "pawplan_claude_custom_connector";
+const accessTokenTtlMs = 30 * 24 * 60 * 60 * 1000;
+const refreshTokenTtlMs = 90 * 24 * 60 * 60 * 1000;
 
 export function isStaticClaudeOAuthClientId(clientId: string) {
   return clientId === staticClaudeOAuthClientId;
@@ -118,7 +122,7 @@ export async function registerOAuthClient(
       clientId,
       clientName,
       redirectUris,
-      grantTypes: ["authorization_code"],
+      grantTypes: ["authorization_code", "refresh_token"],
       responseTypes: ["code"],
       tokenEndpointAuthMethod: "none",
     })
@@ -223,7 +227,9 @@ export async function exchangeAuthorizationCode(
   }
 
   const accessToken = randomToken("pwp_oauth_access_");
-  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+  const refreshToken = randomToken("pwp_oauth_refresh_");
+  const expiresAt = new Date(Date.now() + accessTokenTtlMs);
+  const refreshTokenExpiresAt = new Date(Date.now() + refreshTokenTtlMs);
   const client = await findOAuthClient(db, codeRow.clientId);
   const [authorization] = await db
     .insert(claudeConnectorAuthorizations)
@@ -232,6 +238,8 @@ export async function exchangeAuthorizationCode(
       clientId: codeRow.clientId,
       clientName: client?.clientName || "Claude",
       accessTokenHash: hashConnectorToken(accessToken),
+      refreshTokenHash: hashConnectorToken(refreshToken),
+      refreshTokenExpiresAt,
       permission: codeRow.permission,
       scope: codeRow.scope || "mcp",
       expiresAt,
@@ -240,10 +248,76 @@ export async function exchangeAuthorizationCode(
 
   return {
     accessToken,
+    refreshToken,
     tokenType: "Bearer",
     expiresIn: Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000)),
     scope: codeRow.scope || "mcp",
     authorizationId: authorization.id as string,
+  };
+}
+
+export async function refreshConnectorAccessToken(
+  db: DbLike,
+  input: {
+    refreshToken: string;
+    clientId: string;
+  },
+) {
+  if (!input.refreshToken.startsWith("pwp_oauth_refresh_")) {
+    throw new OAuthConnectorError("Invalid refresh token", 400, "invalid_grant");
+  }
+
+  const refreshTokenHash = hashConnectorToken(input.refreshToken);
+  const rows = await db
+    .select()
+    .from(claudeConnectorAuthorizations)
+    .where(
+      and(
+        eq(claudeConnectorAuthorizations.refreshTokenHash, refreshTokenHash),
+        isNull(claudeConnectorAuthorizations.revokedAt),
+        gt(claudeConnectorAuthorizations.refreshTokenExpiresAt, new Date()),
+      ),
+    )
+    .limit(1);
+  const row = (rows as ConnectorAuthorizationRow[])[0];
+  if (!row?.refreshTokenHash || !safeEqual(row.refreshTokenHash, refreshTokenHash)) {
+    throw new OAuthConnectorError("Invalid refresh token", 400, "invalid_grant");
+  }
+  if (row.clientId !== input.clientId) {
+    throw new OAuthConnectorError("Refresh token client mismatch", 400, "invalid_grant");
+  }
+
+  const accessToken = randomToken("pwp_oauth_access_");
+  const refreshToken = randomToken("pwp_oauth_refresh_");
+  const expiresAt = new Date(Date.now() + accessTokenTtlMs);
+  const refreshTokenExpiresAt = new Date(Date.now() + refreshTokenTtlMs);
+  const [authorization] = await db
+    .update(claudeConnectorAuthorizations)
+    .set({
+      accessTokenHash: hashConnectorToken(accessToken),
+      refreshTokenHash: hashConnectorToken(refreshToken),
+      expiresAt,
+      refreshTokenExpiresAt,
+      lastUsedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(claudeConnectorAuthorizations.id, row.id),
+        eq(claudeConnectorAuthorizations.refreshTokenHash, refreshTokenHash),
+        isNull(claudeConnectorAuthorizations.revokedAt),
+      ),
+    )
+    .returning();
+
+  if (!authorization) throw new OAuthConnectorError("Invalid refresh token", 400, "invalid_grant");
+
+  return {
+    accessToken,
+    refreshToken,
+    tokenType: "Bearer",
+    expiresIn: Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000)),
+    scope: row.scope || "mcp",
+    authorizationId: row.id,
   };
 }
 

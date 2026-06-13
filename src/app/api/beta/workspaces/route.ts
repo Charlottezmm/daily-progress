@@ -30,6 +30,10 @@ function isWorkspaceNameUniqueViolation(error: unknown) {
     || (typeof candidate.message === "string" && candidate.message.includes("workspaces_name_unique"));
 }
 
+function suffixedWorkspaceName(name: string) {
+  return `${name} 2`;
+}
+
 export async function POST(request: Request) {
   const parsed = betaWorkspaceSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) {
@@ -44,9 +48,7 @@ export async function POST(request: Request) {
         .from(workspaces)
         .where(eq(workspaces.name, parsed.data.workspaceName))
         .limit(1);
-      if (existingWorkspace) {
-        return { ok: false as const, status: 400, error: "Workspace already exists" };
-      }
+      const workspaceName = existingWorkspace ? suffixedWorkspaceName(parsed.data.workspaceName) : parsed.data.workspaceName;
 
       const invite = await validateAndRedeemInviteCode(tx, parsed.data.inviteCode);
       if (!invite.ok) {
@@ -56,7 +58,7 @@ export async function POST(request: Request) {
       const passwordHash = await bcrypt.hash(parsed.data.password, 12);
       const [created] = await tx
         .insert(workspaces)
-        .values({ name: parsed.data.workspaceName, passwordHash })
+        .values({ name: workspaceName, passwordHash })
         .returning();
       const defaults = buildDefaultPlanValues(created.id);
       const [plan] = await tx.insert(plans).values(defaults.plan).returning();
@@ -67,7 +69,7 @@ export async function POST(request: Request) {
       await tx.update(plans).set({ currentVersionId: version.id }).where(eq(plans.id, plan.id));
       await tx.insert(changeLogs).values({ ...defaults.changeLog, planId: plan.id });
       await tx.insert(workspaceBetaAccess).values({ workspaceId: created.id, inviteCodeId: invite.inviteCodeId });
-      return { ok: true as const, workspaceId: created.id, planId: plan.id };
+      return { ok: true as const, workspaceId: created.id, planId: plan.id, workspaceName };
     });
 
     if (!result.ok) {
@@ -78,7 +80,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ workspaceId: result.workspaceId, planId: result.planId, created: true }, { status: 201 });
   } catch (error) {
     if (isWorkspaceNameUniqueViolation(error)) {
-      return NextResponse.json({ error: "Workspace already exists" }, { status: 400 });
+      return NextResponse.json({ error: "Workspace name is unavailable; try again" }, { status: 400 });
     }
     throw error;
   }

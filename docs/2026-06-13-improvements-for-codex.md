@@ -9,12 +9,20 @@
 - A2：`day_of_week` 已收紧为单天 enum 契约。
 - E：`PATCH /api/tasks` 已支持 `{ id, status?, date?, daySegment? }`；用户手动改期直接写 `tasks` + `change_logs(source:"manual")`，不走 `/review` / `agentPatches`。后端提交：`761dea4 feat: support manual task rescheduling`。
 - F：More 页已加退出登录按钮；Plan 页已加“改期”入口和前端改期控件。前端提交：`d0ef218 feat: add manual reschedule UI`。
+- A1：OAuth connector 已发 `refresh_token`，`/api/oauth/token` 支持 `refresh_token` grant 并轮换 access/refresh token；metadata 已声明 `authorization_code` + `refresh_token`。
+- A3：beta workspace 创建时已自动生成默认 active Starter Plan。
+- A4：`update_task_status.note` 已写入 `change_logs.detailsJson.note`；`create_inbox_item.source` 支持 `manual|imported` 并落库。
+- A5：已加 gated 集成测试 `src/tests/integration/db-transaction.test.ts`，设置 `RUN_DATABASE_INTEGRATION=1 DATABASE_URL=...` 后会对当前 driver 跑最小事务写 + rollback smoke。
+- B1 数据层：`POST /api/constraints` 已接受 `routine|recovery`，service 读写/删除权限和测试已同步。
+- C1 数据层：`getMonthPlanData` 已返回真实月度任务/周分布/import summary 数据，当前属于已有覆盖。
+- C2 数据层：today/week view-data 已暴露 `timelineItems`，包含 task/course/meeting/unavailable/routine/recovery 的 `startsAt/endsAt/minutes/protected`。
+- C3 数据层：`tasks.blocked` 已加 schema + migration，`PATCH /api/tasks` 已支持 `{ blocked: boolean }` 并写 manual changelog。
+- G 后端：beta workspace 撞名时自动创建 `名称 2`；并发唯一冲突返回明确错误。
 
 仍待拆分处理：
-- A1：OAuth refresh_token。
-- A5：当前只有 driver 选择单测，仍缺真实 `DATABASE_URL` 最小事务写集成测试。
-- G：邀请流程加固。
-- B/C 里的 Month、时间轴、卡住状态持久化、constraints/routines 入口统一仍未开工。
+- Claude UI：Month 视图、day/week 时间轴、today “卡住”接 `blocked`、constraints 表单加入 `routine|recovery`。
+- 远期：登录/创建流程的密码找回或无找回风险文案仍是前端/产品项；本轮未引入账号邮箱或 recovery 机制。
+- 确认点：`createDailyCheckin` 的 `(workspace_id,date)` 唯一索引、`recordHostedMcpUsage` 成功/失败口径需要单独审计；本轮未改。
 
 ---
 
@@ -24,6 +32,7 @@
 - 现状：connector access token 30 天过期（`connector-auth.ts` `exchangeAuthorizationCode` 写死 30d），无 refresh_token；`/.well-known/oauth-authorization-server` 只声明 `grant_types_supported: ["authorization_code"]`。
 - 后果：Charlotte 自己天天用，每 30 天要重新授权一次连接器。
 - 改：发 refresh_token + 加 `refresh_token` grant + token endpoint 支持 refresh 换发。
+- 状态：已完成。refresh token 仅存 hash，refresh grant 会同时轮换 access/refresh token。
 
 ### A2〔P1〕`day_of_week` schema 陷阱
 - 现状：MCP 入参 `timetable-import.ts:23` 只 `z.string().max(20)`，但 `timetable-save.ts:82 normalizeWeekday` 只接受单个 `sun/mon/.../sat`（或全称小写）；范围/中文/大写直接抛 `Invalid day_of_week`，且每行只支持一个 weekday。
@@ -32,14 +41,17 @@
 ### A3〔P2〕空 workspace 没有 bootstrap
 - 现状：新工作区无 active plan，`propose_patch` / `propose_timetable_import` 抛 `No active plan`，必须先 `import_plan_bundle`。
 - 改：workspace 创建时自动建一个默认 active plan，或文档写清启动顺序。
+- 状态：已确认已有覆盖。`/api/beta/workspaces` 创建 workspace 时会写默认 active Starter Plan。
 
 ### A4〔P2〕"收到但没存"的字段
 - `update_task_status` 的 `note`、`create_inbox_item` 的 `source` 接收后静默丢弃（schema 不支持）。
 - 改：补 schema 落库，或从接口删掉避免误导。
+- 状态：已完成。`note` 进入 changelog details，`source` 支持 `manual|imported`。
 
 ### A5〔P1〕加事务回归测试
 - 刚修的 neon-http 不支持事务 bug（已由 `9fecb3d` 修复）应有测试兜底。
 - 改：加集成测试，对"当前 DATABASE_URL 实际选中的 driver"跑一次最小事务写，CI 挡回归。
+- 状态：已完成 gated 集成测试；默认不跑真实库，需显式设置 `RUN_DATABASE_INTEGRATION=1`。
 
 ---
 
@@ -50,6 +62,7 @@
 - 后果：用户想自己加"运动时间""家务""每周 recovery"无入口。
 - 改：把 `routine` / `recovery` 加进 `EditableKind` + 表单（含 recurrence、weekday 多选）。可考虑给 `routine` 加细分标签（学习/工作/家务/运动）方便战线统计。
 - 注：数据层已支持全部 5 种 kind（course/meeting/unavailable/routine/recovery），实测 course+routine 均可落库，纯前端缺口。
+- 状态：API/service 数据层已确认支持 `routine|recovery`；前端表单仍交给 Claude。
 
 ### B2〔P2〕routine 多日重复输入繁琐
 - 现状：导入时"周一到周六同一时段"要拆 6 行（每行一个 weekday）。
@@ -63,15 +76,18 @@
 - 现状：`month-view.tsx` 仅 10 行，只有标题占位，无任何内容；`get_month` 也注明"no full month planner contract"。
 - 后果：用户跑 4 个月计划、有月度 milestone，月视图完全空白。
 - 改：做月度视图——按周/按 track 的任务分布、月度 milestone 进度、baseline vs current 对比（占位文案已暗示要做这些）。
+- 状态：数据层已有 `getMonthPlanData` 真实数据；UI 仍交给 Claude。
 
 ### C2〔P1〕缺时间轴 / 日历网格
 - 现状：week = 容量条，today = 任务列表（把固定安排压成一个总分钟数 `fixedMinutes`），全工具没有"一天/一周的时段排布"可视化。
 - 后果：用户看不到 5-7 学习、9-12、13-18 工作、家务、运动、课程长在哪；想要的"课程表/日程表"没有载体。
 - 改：加一个 day/week 时间轴视图，把 routine/course/recovery 时间块 + 当天任务按时段画在网格上（只读即可，不必拖拽，符合现有边界）。
+- 状态：数据层已新增 `timelineItems`；UI 仍交给 Claude。
 
 ### C3〔P2〕today "卡住"状态不持久化
 - 现状：`today-view.tsx` `blocked` 只在前端 state，不 PATCH 落库，刷新即丢。
 - 改：要么持久化一个 `blocked`/`stuck` 标记，要么明确它是临时态并在 UI 注明。
+- 状态：数据层已加 `tasks.blocked` + `PATCH /api/tasks` 支持；UI 仍交给 Claude。
 
 ### C4〔P2〕in-app chat（按需，可不做）
 - 现状：产品边界明确"No embedded AI chat"，用户靠 Cowork/Codex 连接器驱动。
@@ -102,8 +118,34 @@
 ## G〔P1〕邀请流程加固 —— Codex 后端
 - 工作区名全局唯一（`workspaces_name_unique`）撞名报错差 → 自动加后缀或放宽唯一性约束范围。
 - 无密码找回（无账号/邮箱）→ 至少在 /login + 创建流程文案里讲清"密码丢了进不去"，或加一个 recovery 机制（远期）。
+- 状态：后端撞名已自动加 ` 2` 后缀；无密码找回文案/机制仍留给前端/产品。
 
 ## D. 任务 reschedule（回答"往前排"）
 - 现状：**已支持**。`patch-schema.ts` 的 `propose_patch` 含 `move_task`（任意日期，往前往后皆可）、`defer_task`、`change_priority`、`split_task`、`move_to_backlog`；走 `/review`(`reschedule-preview.tsx`) 逐条确认，apply 前重查任务状态 + 冲突（乐观并发，`patch-apply.ts`）。
 - 缺的是入口顺手度：
-  - 〔P2〕在 today/week 任务卡上加"往前挪/往后挪"快捷操作，直接生成一条 move_task 草稿进 /review（现在只能靠 agent 对话发起）。
+  - 〔P2〕在 today/week 任务卡上加"往前挪/往后挪"快捷操作，直接生成一条 move_task 草稿进 /review（现在只能靠 agent 对话发起）。Claude 已用直接编辑（E 接口）实现了「改期」tab，本项可降级或取消。
+
+---
+
+## 本轮 Codex 范围（只做后端 / 数据层 / schema / API / 测试，别碰前端 .tsx）
+
+> 边界硬约束：Codex **只动** `src/lib/**`、`src/app/api/**`、`src/lib/db/schema` + migration、`src/tests/**`。
+> **不要动** `src/components/**` 和 `src/app/(app)/**/page.tsx` 里的任何 `.tsx` UI——Month 视图、时间轴、constraints 表单、改期、登出这些 UI 由 Claude 写。Codex 已做的 E（PATCH /api/tasks）就是这么分的。
+
+### 纯后端项（独立提交，互不混）
+1. **A5** 真实 `DATABASE_URL` driver 的最小事务写集成测试（回归防护）——已完成，默认 gated。
+2. **A1** OAuth refresh_token：发 refresh_token + 加 `refresh_token` grant + token endpoint 支持续期 + metadata 声明——已完成。
+3. **G** 邀请加固：工作区名撞名自动加后缀 / 放宽唯一性；/login + 创建流程文案讲清无密码找回（或加 recovery）——后端撞名已完成，文案/recovery 未做。
+4. **A3** 空 workspace 自动建默认 active plan——已确认已有覆盖。
+5. **A4** `update_task_status.note` / `create_inbox_item.source` 补 schema 落库，或从 API 删字段——已完成。
+6. 确认点：`createDailyCheckin` 的 `(workspace_id,date)` 唯一索引是否存在；`recordHostedMcpUsage` 把失败记成成功的口径——未审计，另拆。
+
+### 数据层准备（给 Claude 的前端铺路，只改 view-data / api / schema，不画 UI）
+7. **C1 数据**：`getMonthPlanData`（`src/lib/planning/view-data.ts`）返回真实月度数据——已确认已有覆盖；Claude 随后写 `month-view.tsx`。
+8. **C2 数据**：在 day/week 的 view-data 里暴露带 **起止时间** 的时间块（routine/course/recovery）+ 当天任务，供时间轴渲染——已完成；Claude 随后写时间轴 UI。
+9. **B1 数据**：确保 `POST /api/constraints` 接受 `kind: routine | recovery`——已完成；Claude 随后把这两类加进 constraints 表单。
+10. **C3 数据**：tasks 加一个可持久化的 `blocked`/`stuck` 字段（schema + migration + PATCH 支持）——已完成；Claude 随后把 today 的"卡住"接上。
+
+### 交接顺序
+- Codex 后端/data 侧已完成并验证，待 push + 部署。
+- 部署后告诉 Claude「数据层好了」，Claude 接 C1/C2/B1/C3 的 UI + 小文案（Plan 头部"去 Review 确认"已过时）。

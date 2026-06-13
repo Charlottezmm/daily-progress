@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildWeekCapacityDays } from "@/lib/planning/view-data";
+import { buildDayTimelineItems, buildWeekCapacityDays } from "@/lib/planning/view-data";
 
 describe("planning view shared capacity", () => {
   it("builds week day load from the shared capacity model", () => {
@@ -64,5 +64,70 @@ describe("planning view shared capacity", () => {
       }),
     );
     expect(days[1]).toEqual(expect.objectContaining({ load: 0, capacity: "0h", state: "room", items: [] }));
+  });
+});
+
+describe("planning timeline data", () => {
+  it("exposes dated task and protected block items with start/end times", () => {
+    const items = buildDayTimelineItems({
+      date: new Date("2026-06-12T00:00:00.000+08:00"),
+      taskRows: [
+        {
+          id: "task-1",
+          title: "Write implementation",
+          date: new Date("2026-06-12T00:00:00.000+08:00"),
+          daySegment: "morning",
+          estimatedMinutes: 90,
+          status: "todo",
+        },
+      ],
+      blockRows: [
+        {
+          id: "course-1",
+          title: "Course block",
+          kind: "course",
+          startsAt: new Date("2026-06-12T09:00:00.000+08:00"),
+          endsAt: new Date("2026-06-12T10:00:00.000+08:00"),
+        },
+      ],
+      routineRows: [
+        {
+          id: "routine-1",
+          title: "Morning walk",
+          defaultTimeSegment: "specific_window",
+          defaultStartTime: "07:30",
+          defaultEndTime: "08:00",
+          weekdayPattern: "fri",
+          estimatedMinutes: 30,
+        },
+      ],
+    });
+
+    expect(items).toEqual([
+      expect.objectContaining({
+        id: "task-1",
+        kind: "task",
+        title: "Write implementation",
+        startsAt: "2026-06-11T16:00:00.000Z",
+        endsAt: "2026-06-11T17:30:00.000Z",
+        protected: false,
+      }),
+      expect.objectContaining({
+        id: "routine-1",
+        kind: "routine",
+        title: "Morning walk",
+        startsAt: "2026-06-11T23:30:00.000Z",
+        endsAt: "2026-06-12T00:00:00.000Z",
+        protected: true,
+      }),
+      expect.objectContaining({
+        id: "course-1",
+        kind: "course",
+        title: "Course block",
+        startsAt: "2026-06-12T01:00:00.000Z",
+        endsAt: "2026-06-12T02:00:00.000Z",
+        protected: true,
+      }),
+    ]);
   });
 });

@@ -26,7 +26,9 @@ const registerSchema = z
 
 function isUnsupportedMetadata(input: z.infer<typeof registerSchema>) {
   return (
-    (input.grant_types && (input.grant_types.length !== 1 || input.grant_types[0] !== "authorization_code")) ||
+    (input.grant_types &&
+      (input.grant_types.length < 1 ||
+        input.grant_types.some((grantType) => !["authorization_code", "refresh_token"].includes(grantType)))) ||
     (input.response_types && (input.response_types.length !== 1 || input.response_types[0] !== "code"))
   );
 }
@@ -53,7 +55,7 @@ export async function POST(request: Request) {
         client_id: client.clientId,
         client_name: client.clientName,
         redirect_uris: client.redirectUris,
-        grant_types: ["authorization_code"],
+        grant_types: ["authorization_code", "refresh_token"],
         response_types: ["code"],
         token_endpoint_auth_method: "none",
         client_id_issued_at: Math.floor(Date.now() / 1000),

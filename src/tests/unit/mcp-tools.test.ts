@@ -211,7 +211,7 @@ describe("MCP planning tools", () => {
     expect(db.updates).toEqual([]);
   });
 
-  it("updates task status through the service with source=mcp and reports note handling", async () => {
+  it("updates task status through the service with source=mcp and persists note in the change log", async () => {
     const db = createFakeDb({
       taskUpdateResult: [{ id: "task-1", workspaceId: "workspace-1", planId: "plan-1", status: "done" }],
     });
@@ -226,8 +226,7 @@ describe("MCP planning tools", () => {
       task: expect.objectContaining({ id: "task-1", status: "done" }),
       note: {
         received: "Finished during coworking.",
-        persisted: false,
-        reason: "Task status notes are not supported by the current schema.",
+        persisted: true,
       },
     });
     expect(db.updates).toEqual([
@@ -243,7 +242,11 @@ describe("MCP planning tools", () => {
           workspaceId: "workspace-1",
           planId: "plan-1",
           source: "mcp",
-          detailsJson: expect.objectContaining({ taskId: "task-1", status: "done" }),
+          detailsJson: expect.objectContaining({
+            taskId: "task-1",
+            status: "done",
+            note: "Finished during coworking.",
+          }),
         }),
       }),
     ]);
@@ -424,7 +427,7 @@ describe("MCP planning tools", () => {
       }),
       audit: {
         source: "mcp",
-        note: "Inbox item source remains manual because the current schema only supports manual/imported.",
+        note: "Inbox item source recorded as manual.",
       },
     });
     expect(db.inserts).toEqual([
@@ -451,6 +454,49 @@ describe("MCP planning tools", () => {
       }),
     ]);
     expect(db.inserts.filter((write) => write.table === "inbox_items").map((write) => write.values.source)).not.toContain("mcp");
+  });
+
+  it("passes an explicit supported inbox source through to storage", async () => {
+    const db = createFakeDb({ activePlanId: "plan-1" });
+
+    const result = await runPawPlanTool(db, "workspace-1", "create_inbox_item", {
+      title: "Imported paper note",
+      source: "imported",
+    });
+
+    expect(result).toEqual({
+      item: expect.objectContaining({
+        id: "inbox_items-1",
+        workspaceId: "workspace-1",
+        title: "Imported paper note",
+        source: "imported",
+      }),
+      audit: {
+        source: "mcp",
+        note: "Inbox item source recorded as imported.",
+      },
+    });
+    expect(db.inserts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: "inbox_items",
+          values: expect.objectContaining({
+            workspaceId: "workspace-1",
+            title: "Imported paper note",
+            source: "imported",
+          }),
+        }),
+        expect.objectContaining({
+          table: "change_logs",
+          values: expect.objectContaining({
+            detailsJson: expect.objectContaining({
+              title: "Imported paper note",
+              inboxSource: "imported",
+            }),
+          }),
+        }),
+      ]),
+    );
   });
 
   it("denies write MCP tools for read-only tokens", async () => {

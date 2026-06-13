@@ -166,6 +166,44 @@ describe("planning service", () => {
     ]);
   });
 
+  it("updates task blocked state and writes a manual change log", async () => {
+    const db = createFakeDb({
+      taskUpdateResult: [{ id: "task-1", planId: "plan-1", blocked: true }],
+    });
+
+    const task = await updateTaskStatus(db, {
+      workspaceId: "workspace-1",
+      taskId: "task-1",
+      blocked: true,
+      note: "Blocked by missing credentials.",
+      source: "manual",
+    });
+
+    expect(task).toEqual({ id: "task-1", planId: "plan-1", blocked: true });
+    expect(db.updates).toEqual([
+      expect.objectContaining({
+        table: "tasks",
+        values: expect.objectContaining({ blocked: true, updatedAt: expect.any(Date) }),
+      }),
+    ]);
+    expect(db.inserts).toEqual([
+      expect.objectContaining({
+        table: "change_logs",
+        values: expect.objectContaining({
+          workspaceId: "workspace-1",
+          planId: "plan-1",
+          source: "manual",
+          summary: "Updated task blocked state",
+          detailsJson: expect.objectContaining({
+            taskId: "task-1",
+            blocked: true,
+            note: "Blocked by missing credentials.",
+          }),
+        }),
+      }),
+    ]);
+  });
+
   it("updates task schedule and writes a manual change log", async () => {
     const scheduledDate = new Date("2026-06-16T16:00:00.000Z");
     const db = createFakeDb({
@@ -175,6 +213,7 @@ describe("planning service", () => {
     const task = await updateTaskSchedule(db, {
       workspaceId: "workspace-1",
       taskId: "task-1",
+      status: "done",
       date: "2026-06-17",
       daySegment: "afternoon",
       source: "manual",
@@ -188,6 +227,7 @@ describe("planning service", () => {
         values: expect.objectContaining({
           date: scheduledDate,
           daySegment: "afternoon",
+          status: "done",
           updatedAt: expect.any(Date),
         }),
       }),
@@ -202,6 +242,7 @@ describe("planning service", () => {
           summary: "Updated task schedule",
           detailsJson: expect.objectContaining({
             taskId: "task-1",
+            status: "done",
             date: "2026-06-17",
             daySegment: "afternoon",
           }),

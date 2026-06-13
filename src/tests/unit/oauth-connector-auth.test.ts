@@ -252,6 +252,7 @@ describe("OAuth connector auth", () => {
     });
 
     expect(result.accessToken).toMatch(/^pwp_oauth_access_/);
+    expect(result.refreshToken).toMatch(/^pwp_oauth_refresh_/);
     expect(db.updates[0]).toEqual(expect.objectContaining({ table: "oauth_authorization_codes" }));
     expect(db.inserts[0]).toEqual(
       expect.objectContaining({
@@ -261,10 +262,60 @@ describe("OAuth connector auth", () => {
           clientId: "client-1",
           permission: "read_write",
           accessTokenHash: expect.any(String),
+          refreshTokenHash: expect.any(String),
+          refreshTokenExpiresAt: expect.any(Date),
         }),
       }),
     );
     expect(JSON.stringify(db.inserts[0].values)).not.toContain(result.accessToken);
+    expect(JSON.stringify(db.inserts[0].values)).not.toContain(result.refreshToken);
+  });
+
+  it("rotates access and refresh tokens during refresh_token grant", async () => {
+    const { hashConnectorToken, refreshConnectorAccessToken } = await import("@/lib/oauth/connector-auth");
+    const rawRefreshToken = "pwp_oauth_refresh_secret";
+    const db = createFakeDb({
+      selectRows: [
+        {
+          id: "authorization-1",
+          workspaceId: "workspace-1",
+          clientId: "client-1",
+          clientName: "Claude",
+          accessTokenHash: "old-access-hash",
+          refreshTokenHash: hashConnectorToken(rawRefreshToken),
+          refreshTokenExpiresAt: new Date(Date.now() + 60_000),
+          permission: "read_write",
+          scope: "mcp",
+          expiresAt: new Date(Date.now() - 60_000),
+          revokedAt: null,
+          createdAt: new Date(),
+        },
+      ],
+    });
+
+    const result = await refreshConnectorAccessToken(db, {
+      refreshToken: rawRefreshToken,
+      clientId: "client-1",
+    });
+
+    expect(result.accessToken).toMatch(/^pwp_oauth_access_/);
+    expect(result.refreshToken).toMatch(/^pwp_oauth_refresh_/);
+    expect(db.updates[0]).toEqual(
+      expect.objectContaining({
+        table: "claude_connector_authorizations",
+        values: expect.objectContaining({
+          accessTokenHash: expect.any(String),
+          refreshTokenHash: expect.any(String),
+          expiresAt: expect.any(Date),
+          refreshTokenExpiresAt: expect.any(Date),
+          lastUsedAt: expect.any(Date),
+        }),
+      }),
+    );
+    expect(db.updates[0].values.accessTokenHash).not.toBe("old-access-hash");
+    expect(db.updates[0].values.refreshTokenHash).not.toBe(hashConnectorToken(rawRefreshToken));
+    expect(JSON.stringify(db.updates[0].values)).not.toContain(result.accessToken);
+    expect(JSON.stringify(db.updates[0].values)).not.toContain(result.refreshToken);
   });
 
   it("does not mint an access token if the consumed update races and returns no rows", async () => {
@@ -470,6 +521,63 @@ describe("OAuth connector auth", () => {
 
     expect(response.status).toBe(400);
     expect(body).toEqual({ error: "invalid_request", error_description: "code_verifier is required" });
+  });
+
+  it("token endpoint accepts refresh_token grant and returns rotated tokens", async () => {
+    const { getDb } = await import("@/lib/db/client");
+    const { hashConnectorToken } = await import("@/lib/oauth/connector-auth");
+    const rawRefreshToken = "pwp_oauth_refresh_secret";
+    const db = createFakeDb({
+      selectRows: [
+        {
+          id: "authorization-1",
+          workspaceId: "workspace-1",
+          clientId: "client-1",
+          clientName: "Claude",
+          accessTokenHash: "old-access-hash",
+          refreshTokenHash: hashConnectorToken(rawRefreshToken),
+          refreshTokenExpiresAt: new Date(Date.now() + 60_000),
+          permission: "read_write",
+          scope: "mcp",
+          expiresAt: new Date(Date.now() - 60_000),
+          revokedAt: null,
+          createdAt: new Date(),
+        },
+      ],
+    });
+    vi.mocked(getDb).mockReturnValue(db);
+    const { POST } = await import("@/app/api/oauth/token/route");
+
+    const response = await POST(
+      new Request("https://pawplan.test/api/oauth/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "refresh_token",
+          refresh_token: rawRefreshToken,
+          client_id: "client-1",
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({
+      access_token: expect.stringMatching(/^pwp_oauth_access_/),
+      refresh_token: expect.stringMatching(/^pwp_oauth_refresh_/),
+      token_type: "Bearer",
+      expires_in: expect.any(Number),
+      scope: "mcp",
+    });
+  });
+
+  it("authorization server metadata advertises refresh_token grant", async () => {
+    const { GET } = await import("@/app/.well-known/oauth-authorization-server/route");
+
+    const response = await GET(new Request("https://pawplan.test/.well-known/oauth-authorization-server"));
+    const body = await response.json();
+
+    expect(body.grant_types_supported).toEqual(["authorization_code", "refresh_token"]);
   });
 
   it("token exchange rejects unsupported or malformed request bodies as invalid_request", async () => {

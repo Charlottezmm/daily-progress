@@ -189,10 +189,16 @@ describe("constraints service", () => {
         courseName: null,
         movable: false,
       }),
+      expect.objectContaining({
+        id: "routine-1",
+        kind: "recovery",
+        courseName: null,
+        movable: false,
+      }),
     ]);
     expect(result.summary).toEqual({
       courseCount: 2,
-      timeBlockCount: 2,
+      timeBlockCount: 3,
       conflictCount: 1,
       nextStartsAt: "2026-06-12T01:00:00.000Z",
     });
@@ -283,7 +289,7 @@ describe("constraints service", () => {
 
   it("refuses to delete non-editable time block kinds", async () => {
     const db = createFakeDb({
-      timeBlocks: [{ id: "block-1", workspaceId: "workspace-1", kind: "routine" }],
+      timeBlocks: [{ id: "block-1", workspaceId: "workspace-1", kind: "system" }],
     });
 
     await expect(deleteTimeBlock(db, "workspace-1", "block-1")).rejects.toEqual(
