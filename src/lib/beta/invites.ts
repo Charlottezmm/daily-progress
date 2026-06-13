@@ -19,6 +19,20 @@ export function hashInviteCode(code: string) {
   return createHash("sha256").update(normalizeInviteCode(code)).digest("hex");
 }
 
+export function buildInviteCodeInsert(input: {
+  code: string;
+  label: string;
+  maxRedemptions?: number | null;
+  expiresAt?: Date | null;
+}) {
+  return {
+    codeHash: hashInviteCode(input.code),
+    label: input.label.trim(),
+    maxRedemptions: input.maxRedemptions ?? null,
+    expiresAt: input.expiresAt ?? null,
+  };
+}
+
 export async function validateAndRedeemInviteCode(
   db: InviteDb,
   code: string,

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { hashInviteCode, validateAndRedeemInviteCode } from "@/lib/beta/invites";
+import { buildInviteCodeInsert, hashInviteCode, validateAndRedeemInviteCode } from "@/lib/beta/invites";
 
 const now = new Date("2026-06-13T08:00:00.000Z");
 
@@ -42,6 +42,24 @@ function mockInviteDb(row: ReturnType<typeof invite> | undefined, redeemed = tru
 }
 
 describe("beta invite validation", () => {
+  it("builds invite inserts without storing the raw invite code", () => {
+    const insert = buildInviteCodeInsert({
+      code: "friend-2026",
+      label: "Friend beta",
+      maxRedemptions: 1,
+      expiresAt: new Date("2026-07-13T00:00:00.000Z"),
+    });
+
+    expect(insert).toEqual({
+      codeHash: hashInviteCode("FRIEND-2026"),
+      label: "Friend beta",
+      maxRedemptions: 1,
+      expiresAt: new Date("2026-07-13T00:00:00.000Z"),
+    });
+    expect(JSON.stringify(insert)).not.toContain("friend-2026");
+    expect(JSON.stringify(insert)).not.toContain("FRIEND-2026");
+  });
+
   it("hashes equivalent invite code input consistently without returning the raw code", async () => {
     const row = invite();
     const { db, calls } = mockInviteDb(row);

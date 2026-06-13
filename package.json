@@ -13,7 +13,8 @@
     "test:e2e": "playwright test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "beta:invite": "tsx scripts/create-beta-invite.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
