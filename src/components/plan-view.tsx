@@ -62,6 +62,12 @@ function dateLabelFromKey(key: string) {
   return `${m}/${d} 周${weekdayChars[dt.getUTCDay()]}`;
 }
 
+function heroDateFromKey(key: string) {
+  const [y, m, d] = key.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return { date: `${m} 月 ${d} 日`, weekday: `星期${weekdayChars[dt.getUTCDay()]}` };
+}
+
 const timelineKindClass: Record<TimelineItemView["kind"], string> = {
   task: "task",
   course: "routine",
@@ -267,28 +273,34 @@ function TaskDetail({
 
 function WeekDayCard({ day, onOpenTask }: { day: WeekDayView; onOpenTask: (task: PlanTaskView) => void }) {
   return (
-    <article className={`paw-week-day ${day.state === "today" ? "today" : ""}`}>
-      <div className="paw-week-day-summary">
-        <span>
+    <details
+      className={`paw-week-day ${day.state === "today" ? "today" : ""}`}
+      open={day.state === "today" || day.taskCount > 0 || day.fixedItems.length > 0}
+    >
+      <summary className="paw-week-day-summary">
+        <span className="paw-week-day-id">
           {day.state === "today" ? <span className="paw-week-today-tag">今天</span> : null}
           <span className={`paw-week-day-name ${day.state === "today" ? "today" : ""}`}>周{day.day}</span>
           <span className="paw-week-day-date">{day.date}</span>
         </span>
-        <span className={day.state === "over" ? "paw-overload-badge" : "paw-status-pill"}>
-          {day.doneCount}/{day.taskCount} · {day.totalMinutes}
+        <span className="paw-week-day-right">
+          <span className={day.state === "over" ? "paw-overload-badge" : "paw-status-pill"}>
+            {day.doneCount}/{day.taskCount} · {day.totalMinutes}
+          </span>
+          <span className="paw-week-chevron" aria-hidden="true" />
         </span>
-      </div>
+      </summary>
       <div className="paw-capacity-bar">
         <div className={`paw-capacity-fill ${loadColor(day.state)}`} style={{ width: `${Math.min(day.load, 100)}%` }} />
       </div>
-      <div className="paw-plan-task-list compact">
-        {day.tasks.length === 0 ? <p className="paw-goal-meta">无任务</p> : null}
+      <div className="paw-plan-task-list compact paw-week-tasklist">
+        {day.tasks.length === 0 ? <p className="paw-week-empty">这一天还没有任务</p> : null}
         {day.tasks.map((task) => (
           <TaskCard key={task.id} task={task} onOpen={onOpenTask} compact />
         ))}
       </div>
       <FixedItems items={day.fixedItems} />
-    </article>
+    </details>
   );
 }
 
@@ -454,6 +466,14 @@ export function PlanView({ today, week, month }: { today: TodayViewData; week: W
       {tab === "day" ? (
         <section className="paw-plan-view paw-plan-split">
           <div className="paw-plan-main">
+            <header className="paw-plan-hero">
+              <span className="paw-plan-hero-kicker">{heroDateFromKey(currentDateKey).weekday}</span>
+              <h2 className="paw-plan-hero-date">{heroDateFromKey(currentDateKey).date}</h2>
+              <p className="paw-plan-hero-sub">
+                今日任务 {todayTasks.filter((task) => task.done).length}/{todayTasks.length}
+                {overdueTasks.length > 0 ? ` · ${overdueTasks.length} 件遗留待清` : " · 没有遗留"}
+              </p>
+            </header>
             {overdueTasks.length > 0 ? (
               <TaskList
                 label={`未完成遗留 · ${overdueTasks.length}`}
@@ -526,20 +546,20 @@ export function PlanView({ today, week, month }: { today: TodayViewData; week: W
             </article>
           ) : (
             <>
-              <div className="grid grid-cols-3 gap-3">
-                <div className="paw-goal-card text-center">
-                  <p className="text-2xl font-bold text-[var(--app-ink)]">
+              <div className="paw-month-stats">
+                <div className="paw-month-stat">
+                  <p className="paw-month-stat-num">
                     {month.doneCount}/{month.taskCount}
                   </p>
-                  <p className="paw-goal-meta">已完成任务</p>
+                  <p className="paw-month-stat-label">已完成任务</p>
                 </div>
-                <div className="paw-goal-card text-center">
-                  <p className="text-2xl font-bold text-[var(--app-ink)]">{month.completionPercent}%</p>
-                  <p className="paw-goal-meta">完成度</p>
+                <div className="paw-month-stat">
+                  <p className="paw-month-stat-num">{month.completionPercent}%</p>
+                  <p className="paw-month-stat-label">完成度</p>
                 </div>
-                <div className="paw-goal-card text-center">
-                  <p className="text-2xl font-bold text-[var(--app-ink)]">{month.totalHours}</p>
-                  <p className="paw-goal-meta">总工时</p>
+                <div className="paw-month-stat">
+                  <p className="paw-month-stat-num">{month.totalHours}</p>
+                  <p className="paw-month-stat-label">总工时</p>
                 </div>
               </div>
 
