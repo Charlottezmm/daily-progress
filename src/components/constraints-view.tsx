@@ -256,6 +256,17 @@ export function buildConstraintTimelineRows(groups: ConstraintGroup[], day: Week
     .sort((a, b) => a.startTime.localeCompare(b.startTime) || a.title.localeCompare(b.title));
 }
 
+// routine 在数据上不分轨道，这里按标题关键词给个视觉细分；其它 kind 用自己的配色
+function timeBarClass(row: { kind: EditableKind; title: string }) {
+  if (row.kind !== "routine") return row.kind;
+  const t = row.title;
+  if (t.includes("学习") || t.includes("FlowGuard") || t.includes("论文") || t.includes("视频")) return "routine-study";
+  if (t.includes("工作") || t.includes("硬件") || t.includes("SolidWorks")) return "routine-work";
+  if (t.includes("家务") || t.includes("通勤")) return "routine-chore";
+  if (t.includes("运动") || t.includes("健身") || t.includes("锻炼")) return "routine-sport";
+  return "routine";
+}
+
 export function ConstraintsView() {
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -462,7 +473,7 @@ export function ConstraintsView() {
                 <span className="paw-time-label">
                   {row.startTime}–{row.endTime}
                 </span>
-                <div className={`paw-time-bar ${row.kind}`}>
+                <div className={`paw-time-bar ${timeBarClass(row)}`}>
                   <span>{redactPrivateTitle(row.title)}</span>
                   <span className="ml-2 text-xs opacity-70">
                     {kindLabels[row.kind]}{row.courseName ? ` · ${row.courseName}` : ""}

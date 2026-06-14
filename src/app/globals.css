@@ -962,6 +962,31 @@ a {
   color: #4a9e4a;
 }
 
+.paw-time-bar.routine-study {
+  background: #eceefb;
+  color: #4a4fb0;
+}
+
+.paw-time-bar.routine-work {
+  background: #fbf2e6;
+  color: #9c6b2c;
+}
+
+.paw-time-bar.routine-chore {
+  background: #eef1f4;
+  color: #566776;
+}
+
+.paw-time-bar.routine-sport {
+  background: #e4f4f0;
+  color: #2c8a76;
+}
+
+/* 左侧色条：用各自文字色，让时间轴一眼分得清类型 */
+.paw-time-bar:not(.empty) {
+  border-left: 4px solid currentColor;
+}
+
 .paw-time-bar.empty {
   border: 1px dashed var(--app-line);
   background: transparent;
