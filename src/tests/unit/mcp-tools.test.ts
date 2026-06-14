@@ -252,6 +252,56 @@ describe("MCP planning tools", () => {
     ]);
   });
 
+  it("updates task schedule through MCP with source=mcp", async () => {
+    const db = createFakeDb({
+      taskUpdateResult: [
+        {
+          id: "task-1",
+          workspaceId: "workspace-1",
+          planId: "plan-1",
+          date: new Date("2026-06-15T00:00:00.000+08:00"),
+          daySegment: "afternoon",
+        },
+      ],
+    });
+
+    const result = await runPawPlanTool(db, "workspace-1", "update_task_schedule", {
+      task_id: "task-1",
+      date: "2026-06-15",
+      day_segment: "afternoon",
+    });
+
+    expect(result).toEqual({
+      task: expect.objectContaining({ id: "task-1", daySegment: "afternoon" }),
+    });
+    expect(db.updates).toEqual([
+      expect.objectContaining({
+        table: "tasks",
+        values: expect.objectContaining({
+          date: new Date("2026-06-14T16:00:00.000Z"),
+          daySegment: "afternoon",
+          updatedAt: expect.any(Date),
+        }),
+      }),
+    ]);
+    expect(db.inserts).toEqual([
+      expect.objectContaining({
+        table: "change_logs",
+        values: expect.objectContaining({
+          workspaceId: "workspace-1",
+          planId: "plan-1",
+          source: "mcp",
+          summary: "Updated task schedule",
+          detailsJson: expect.objectContaining({
+            taskId: "task-1",
+            date: "2026-06-15",
+            daySegment: "afternoon",
+          }),
+        }),
+      }),
+    ]);
+  });
+
   it("proposes a patch as preview-only draft without updating tasks", async () => {
     const db = createFakeDb({ activePlanId: "plan-1" });
     const patch = {
@@ -294,6 +344,41 @@ describe("MCP planning tools", () => {
       }),
     ]);
     expect(db.updates.filter((write) => write.table === "tasks")).toEqual([]);
+  });
+
+  it("accepts JSON-stringified patch payloads from MCP connectors", async () => {
+    const db = createFakeDb({ activePlanId: "plan-1" });
+    const patch = {
+      operations: [
+        {
+          type: "move_task",
+          task_id: "task-1",
+          from_date: "2026-06-14",
+          from_day_segment: "afternoon",
+          to_date: "2026-06-15",
+          to_day_segment: "afternoon",
+          reason: "Move SolidWorks back to Monday.",
+        },
+      ],
+    };
+
+    const result = await runPawPlanTool(db, "workspace-1", "propose_patch", {
+      mode: "week",
+      reason: "Connector serialized the patch object as JSON.",
+      patch: JSON.stringify(patch),
+      created_by: "claude",
+    });
+
+    expect(result).toEqual(expect.objectContaining({ status: "draft", previewOnly: true }));
+    expect(db.inserts).toEqual([
+      expect.objectContaining({
+        table: "agent_patches",
+        values: expect.objectContaining({
+          patchJson: patch,
+          createdBy: "claude",
+        }),
+      }),
+    ]);
   });
 
   it("proposes a timetable import as a review draft without writing constraints", async () => {

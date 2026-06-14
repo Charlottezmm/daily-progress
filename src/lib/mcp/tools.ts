@@ -7,6 +7,7 @@ import {
   createDailyCheckin,
   createInboxItem,
   proposeAgentPatch,
+  updateTaskSchedule,
   updateTaskStatus,
 } from "@/lib/planning/service";
 import { saveMcpPlanImport } from "@/lib/mcp/plan-import";
@@ -102,6 +103,15 @@ export const pawPlanToolSchemas = {
       task_id: z.string().min(1),
       status: taskStatusSchema,
       note: z.string().max(1000).optional(),
+    })
+    .strict(),
+  update_task_schedule: z
+    .object({
+      task_id: z.string().min(1),
+      date: dateStringSchema.optional(),
+      day_segment: daySegmentSchema.optional(),
+      status: taskStatusSchema.optional(),
+      blocked: z.boolean().optional(),
     })
     .strict(),
   save_conversation_summary: z
@@ -209,6 +219,7 @@ export const pawPlanToolDescriptions: Record<PawPlanToolName, string> = {
   create_inbox_item: "Create an inbox item and record an MCP audit changelog.",
   create_checkin: "Create or update a daily check-in with MCP source attribution.",
   update_task_status: "Update a task status with MCP source attribution.",
+  update_task_schedule: "Update a task date or day segment with MCP source attribution.",
   save_conversation_summary: "Save a structured conversation summary without storing raw transcript, with MCP provenance.",
   record_decision: "Record a structured workspace decision with MCP provenance.",
   propose_patch: "Create a preview-only agent patch draft; this never applies the patch.",
@@ -229,6 +240,7 @@ const pawPlanToolPermissions: Record<PawPlanToolName, "read" | "write"> = {
   create_inbox_item: "write",
   create_checkin: "write",
   update_task_status: "write",
+  update_task_schedule: "write",
   save_conversation_summary: "write",
   record_decision: "write",
   propose_patch: "write",
@@ -634,6 +646,23 @@ export async function runPawPlanTool(
           }
       : undefined,
     };
+  }
+
+  if (toolName === "update_task_schedule") {
+    const parsed = pawPlanToolSchemas.update_task_schedule.parse(args);
+    if (!parsed.date && !parsed.day_segment) throw new Error("date or day_segment is required");
+    const task = await updateTaskSchedule(db, {
+      workspaceId,
+      taskId: parsed.task_id,
+      status: parsed.status,
+      blocked: parsed.blocked,
+      date: parsed.date,
+      daySegment: parsed.day_segment,
+      source: "mcp",
+    });
+    if (!task) throw new Error("Task not found");
+
+    return { task };
   }
 
   if (toolName === "save_conversation_summary") {

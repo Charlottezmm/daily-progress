@@ -391,7 +391,8 @@ export async function proposeAgentPatch(
 ) {
   const planId = await requireActivePlanId(db, input.workspaceId);
   const protectedBlockIds = await getProtectedBlockIds(db, input.workspaceId);
-  const patch: AgentPatch = validatePatchAgainstProtectedBlocks(input.patch, protectedBlockIds);
+  const patchPayload = typeof input.patch === "string" ? parsePatchJson(input.patch) : input.patch;
+  const patch: AgentPatch = validatePatchAgainstProtectedBlocks(patchPayload, protectedBlockIds);
   const scopeStart = startOfToday();
   const scopeEnd = input.mode === "today" ? addDays(scopeStart, 1) : addDays(scopeStart, 7);
   const [agentPatch] = await db
@@ -417,4 +418,12 @@ export async function proposeAgentPatch(
     createdBy: input.createdBy,
     status: "draft" as const,
   };
+}
+
+function parsePatchJson(value: string) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    throw new PlanningServiceError("Invalid agent patch JSON", 400);
+  }
 }
