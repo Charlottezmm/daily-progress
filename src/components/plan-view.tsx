@@ -66,9 +66,26 @@ const priorityLabel: Record<PlanTaskView["priority"], string> = {
   urgent: "紧急",
 };
 
-function TaskCard({ task, onOpen, compact = false }: { task: PlanTaskView; onOpen: (task: PlanTaskView) => void; compact?: boolean }) {
+function TaskCard({
+  task,
+  onOpen,
+  compact = false,
+  variant,
+  active = false,
+}: {
+  task: PlanTaskView;
+  onOpen: (task: PlanTaskView) => void;
+  compact?: boolean;
+  variant?: "overdue";
+  active?: boolean;
+}) {
   return (
-    <button type="button" className={`paw-plan-task-card ${compact ? "compact" : ""}`} onClick={() => onOpen(task)}>
+    <button
+      type="button"
+      className={`paw-plan-task-card ${compact ? "compact" : ""} ${variant === "overdue" ? "overdue" : ""} ${task.done ? "done" : ""} ${active ? "active" : ""}`}
+      aria-pressed={active}
+      onClick={() => onOpen(task)}
+    >
       <span className="paw-plan-task-title">{redactPrivateTitle(task.title)}</span>
       <span className="paw-plan-task-meta">
         {segmentLabel[task.segment]} · {minutesLabel(task.minutes)} · {task.context} · {task.track}
@@ -107,19 +124,31 @@ function TaskList({
   tasks,
   empty,
   onOpen,
+  tone,
+  variant,
+  selectedId,
 }: {
   label: string;
   tasks: PlanTaskView[];
   empty: string;
   onOpen: (task: PlanTaskView) => void;
+  tone?: "warn";
+  variant?: "overdue";
+  selectedId?: string | null;
 }) {
   return (
-    <section className="paw-plan-task-section">
-      <div className="paw-section-label">{label}</div>
+    <section className={`paw-plan-task-section ${tone === "warn" ? "warn" : ""}`}>
+      <div className={`paw-section-label ${tone === "warn" ? "warn" : ""}`}>{label}</div>
       {tasks.length === 0 ? <div className="paw-empty"><p>{empty}</p></div> : null}
       <div className="paw-plan-task-list">
         {tasks.map((task) => (
-          <TaskCard key={task.id} task={task} onOpen={onOpen} />
+          <TaskCard
+            key={task.id}
+            task={task}
+            onOpen={onOpen}
+            variant={variant}
+            active={selectedId === task.id}
+          />
         ))}
       </div>
     </section>
@@ -171,16 +200,17 @@ function TaskDetail({ task }: { task: PlanTaskView | null }) {
 
 function WeekDayCard({ day, onOpenTask }: { day: WeekDayView; onOpenTask: (task: PlanTaskView) => void }) {
   return (
-    <details className="paw-week-day" open={day.state === "today"}>
-      <summary className="paw-week-day-summary">
+    <article className={`paw-week-day ${day.state === "today" ? "today" : ""}`}>
+      <div className="paw-week-day-summary">
         <span>
+          {day.state === "today" ? <span className="paw-week-today-tag">今天</span> : null}
           <span className={`paw-week-day-name ${day.state === "today" ? "today" : ""}`}>周{day.day}</span>
           <span className="paw-week-day-date">{day.date}</span>
         </span>
         <span className={day.state === "over" ? "paw-overload-badge" : "paw-status-pill"}>
           {day.doneCount}/{day.taskCount} · {day.totalMinutes}
         </span>
-      </summary>
+      </div>
       <div className="paw-capacity-bar">
         <div className={`paw-capacity-fill ${loadColor(day.state)}`} style={{ width: `${Math.min(day.load, 100)}%` }} />
       </div>
@@ -191,7 +221,7 @@ function WeekDayCard({ day, onOpenTask }: { day: WeekDayView; onOpenTask: (task:
         ))}
       </div>
       <FixedItems items={day.fixedItems} />
-    </details>
+    </article>
   );
 }
 
@@ -268,17 +298,23 @@ export function PlanView({ today, week, month }: { today: TodayViewData; week: W
       {tab === "day" ? (
         <section className="paw-plan-view paw-plan-split">
           <div className="paw-plan-main">
-            <TaskList
-              label={`未完成遗留 · ${today.overdueTasks.length}`}
-              tasks={today.overdueTasks}
-              empty="今天以前没有遗留待办。"
-              onOpen={setSelectedTask}
-            />
+            {today.overdueTasks.length > 0 ? (
+              <TaskList
+                label={`未完成遗留 · ${today.overdueTasks.length}`}
+                tasks={today.overdueTasks}
+                empty="今天以前没有遗留待办。"
+                onOpen={setSelectedTask}
+                tone="warn"
+                variant="overdue"
+                selectedId={selectedTask?.id ?? null}
+              />
+            ) : null}
             <TaskList
               label={`今日任务 · ${today.todayTasks.filter((task) => task.done).length}/${today.todayTasks.length}`}
               tasks={today.todayTasks}
               empty="今天还没有安排任务。"
               onOpen={setSelectedTask}
+              selectedId={selectedTask?.id ?? null}
             />
             <FixedItems items={today.fixedItems} />
           </div>
@@ -371,15 +407,38 @@ export function PlanView({ today, week, month }: { today: TodayViewData; week: W
                     ))}
                   </div>
                   {selectedMonthDay ? (
-                    <div className="paw-month-selected">
-                      <div className="paw-section-label">{selectedMonthDay.dateLabel} · {selectedMonthDay.doneCount}/{selectedMonthDay.taskCount}</div>
-                      <div className="paw-plan-task-list compact">
-                        {selectedMonthDay.tasks.length === 0 ? <p className="paw-goal-meta">这一天没有任务。</p> : null}
-                        {selectedMonthDay.tasks.map((task) => (
-                          <TaskCard key={task.id} task={task} onOpen={setSelectedTask} compact />
-                        ))}
+                    <>
+                      <div
+                        className="paw-month-sheet-backdrop"
+                        aria-hidden="true"
+                        onClick={() => setSelectedMonthDay(null)}
+                      />
+                      <div className="paw-month-selected" role="group" aria-label="当天任务">
+                        <div className="paw-month-selected-head">
+                          <div className="paw-section-label">{selectedMonthDay.dateLabel} · {selectedMonthDay.doneCount}/{selectedMonthDay.taskCount}</div>
+                          <button
+                            type="button"
+                            className="paw-month-sheet-close"
+                            aria-label="关闭"
+                            onClick={() => setSelectedMonthDay(null)}
+                          >
+                            ×
+                          </button>
+                        </div>
+                        <div className="paw-plan-task-list compact">
+                          {selectedMonthDay.tasks.length === 0 ? <p className="paw-goal-meta">这一天没有任务。</p> : null}
+                          {selectedMonthDay.tasks.map((task) => (
+                            <TaskCard
+                              key={task.id}
+                              task={task}
+                              onOpen={setSelectedTask}
+                              compact
+                              active={selectedTask?.id === task.id}
+                            />
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    </>
                   ) : null}
                 </article>
               ) : null}
