@@ -1,6 +1,7 @@
 import { getTableName } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import { zodToJsonSchema } from "zod-to-json-schema";
 import { allowedPawPlanToolNames, pawPlanToolSchemas, runPawPlanTool } from "@/lib/mcp/tools";
 
 type TableWrite = {
@@ -142,7 +143,31 @@ describe("MCP planning tools", () => {
     const patchSchema = pawPlanToolSchemas.propose_patch.shape.patch;
 
     expect(patchSchema).toBeInstanceOf(z.ZodObject);
-    expect((patchSchema as z.ZodObject<z.ZodRawShape>).shape.operations).toBeInstanceOf(z.ZodArray);
+    const operationsSchema = (patchSchema as z.ZodObject<z.ZodRawShape>).shape.operations;
+    expect(operationsSchema).toBeInstanceOf(z.ZodArray);
+
+    const operationSchema = (operationsSchema as z.ZodArray<z.ZodTypeAny>).element;
+    expect(operationSchema).toBeInstanceOf(z.ZodObject);
+    expect((operationSchema as z.ZodObject<z.ZodRawShape>).shape.type).toBeInstanceOf(z.ZodString);
+
+    const jsonSchema = zodToJsonSchema(pawPlanToolSchemas.propose_patch, {
+      strictUnions: true,
+      pipeStrategy: "input",
+    }) as any;
+    const publishedPatchSchema = jsonSchema.properties.patch;
+    const publishedOperationSchema = publishedPatchSchema.properties.operations.items;
+
+    expect(publishedPatchSchema.type).toBe("object");
+    expect(publishedOperationSchema).toMatchObject({
+      type: "object",
+      properties: {
+        type: { type: "string" },
+        task_id: { type: "string" },
+      },
+      required: ["type"],
+      additionalProperties: true,
+    });
+    expect(publishedOperationSchema.anyOf).toBeUndefined();
   });
 
   it("filters write tools out for read-only MCP tokens", () => {

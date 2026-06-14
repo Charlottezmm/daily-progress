@@ -18,7 +18,6 @@ import {
   saveConversationSummary,
 } from "@/lib/mcp/conversation-tools";
 import { proposeTimetableImport, proposeTimetableImportArgsSchema } from "@/lib/mcp/timetable-import";
-import { agentPatchSchema } from "@/lib/patches/patch-schema";
 
 type PlanningDb = {
   transaction<T>(callback: (tx: any) => Promise<T>): Promise<T>;
@@ -54,11 +53,25 @@ const rangeArgsSchema = z
     date_to: dateStringSchema.optional(),
   })
   .strict();
+const mcpAgentPatchSchema = z
+  .object({
+    operations: z
+      .array(
+        z
+          .object({
+            type: z.string(),
+            task_id: z.string().optional(),
+          })
+          .passthrough(),
+      )
+      .min(1),
+  })
+  .strict();
 const proposePatchArgsSchema = z
   .object({
     mode: z.enum(["today", "week"]),
     reason: z.string().min(1),
-    patch: agentPatchSchema,
+    patch: mcpAgentPatchSchema,
     created_by: createdBySchema.optional(),
   })
   .strict();
@@ -75,7 +88,7 @@ const jsonStringAgentPatchSchema = z.string().transform((value, ctx) => {
     return z.NEVER;
   }
 
-  const result = agentPatchSchema.safeParse(parsed);
+  const result = mcpAgentPatchSchema.safeParse(parsed);
   if (!result.success) {
     for (const issue of result.error.issues) {
       ctx.addIssue(issue);
@@ -86,7 +99,7 @@ const jsonStringAgentPatchSchema = z.string().transform((value, ctx) => {
   return result.data;
 });
 const proposePatchRuntimeArgsSchema = proposePatchArgsSchema.extend({
-  patch: z.union([agentPatchSchema, jsonStringAgentPatchSchema]),
+  patch: z.union([mcpAgentPatchSchema, jsonStringAgentPatchSchema]),
 });
 
 export const pawPlanToolSchemas = {
