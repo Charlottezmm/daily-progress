@@ -18,6 +18,7 @@ import {
   saveConversationSummary,
 } from "@/lib/mcp/conversation-tools";
 import { proposeTimetableImport, proposeTimetableImportArgsSchema } from "@/lib/mcp/timetable-import";
+import { agentPatchSchema } from "@/lib/patches/patch-schema";
 
 type PlanningDb = {
   transaction<T>(callback: (tx: any) => Promise<T>): Promise<T>;
@@ -53,6 +54,40 @@ const rangeArgsSchema = z
     date_to: dateStringSchema.optional(),
   })
   .strict();
+const proposePatchArgsSchema = z
+  .object({
+    mode: z.enum(["today", "week"]),
+    reason: z.string().min(1),
+    patch: agentPatchSchema,
+    created_by: createdBySchema.optional(),
+  })
+  .strict();
+const jsonStringAgentPatchSchema = z.string().transform((value, ctx) => {
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Invalid agent patch JSON",
+    });
+    return z.NEVER;
+  }
+
+  const result = agentPatchSchema.safeParse(parsed);
+  if (!result.success) {
+    for (const issue of result.error.issues) {
+      ctx.addIssue(issue);
+    }
+    return z.NEVER;
+  }
+
+  return result.data;
+});
+const proposePatchRuntimeArgsSchema = proposePatchArgsSchema.extend({
+  patch: z.union([agentPatchSchema, jsonStringAgentPatchSchema]),
+});
 
 export const pawPlanToolSchemas = {
   get_today: emptyArgsSchema,
@@ -145,14 +180,7 @@ export const pawPlanToolSchemas = {
       status: decisionStatusSchema,
     })
     .strict(),
-  propose_patch: z
-    .object({
-      mode: z.enum(["today", "week"]),
-      reason: z.string().min(1),
-      patch: z.unknown(),
-      created_by: createdBySchema.optional(),
-    })
-    .strict(),
+  propose_patch: proposePatchArgsSchema,
   propose_timetable_import: proposeTimetableImportArgsSchema,
   import_plan_bundle: z
     .object({
@@ -725,7 +753,7 @@ export async function runPawPlanTool(
     return proposeTimetableImport(db, workspaceId, parsed);
   }
 
-  const parsed = pawPlanToolSchemas.propose_patch.parse(args);
+  const parsed = proposePatchRuntimeArgsSchema.parse(args);
   const result = await proposeAgentPatch(db, {
     workspaceId,
     mode: parsed.mode,

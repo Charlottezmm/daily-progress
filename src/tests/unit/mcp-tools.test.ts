@@ -1,6 +1,7 @@
 import { getTableName } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import { allowedPawPlanToolNames, runPawPlanTool } from "@/lib/mcp/tools";
+import { z } from "zod";
+import { allowedPawPlanToolNames, pawPlanToolSchemas, runPawPlanTool } from "@/lib/mcp/tools";
 
 type TableWrite = {
   table: string;
@@ -137,6 +138,13 @@ function createFakeDb(options: FakeDbOptions = {}) {
 }
 
 describe("MCP planning tools", () => {
+  it("publishes propose_patch.patch as a structured object for MCP clients", () => {
+    const patchSchema = pawPlanToolSchemas.propose_patch.shape.patch;
+
+    expect(patchSchema).toBeInstanceOf(z.ZodObject);
+    expect((patchSchema as z.ZodObject<z.ZodRawShape>).shape.operations).toBeInstanceOf(z.ZodArray);
+  });
+
   it("filters write tools out for read-only MCP tokens", () => {
     expect(allowedPawPlanToolNames("read_only")).toEqual([
       "get_today",
