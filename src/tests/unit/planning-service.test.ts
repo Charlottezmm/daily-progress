@@ -5,6 +5,7 @@ import {
   createDailyCheckin,
   processInboxItem,
   proposeAgentPatch,
+  updateTaskNotes,
   updateTaskSchedule,
   updateTaskStatus,
 } from "@/lib/planning/service";
@@ -250,6 +251,60 @@ describe("planning service", () => {
       }),
     ]);
     expect(db.inserts.filter((write) => write.table === "agent_patches")).toEqual([]);
+  });
+
+  it("updates task notes and writes a manual change log without touching schedule fields", async () => {
+    const db = createFakeDb({
+      taskUpdateResult: [{ id: "task-1", planId: "plan-1", notes: "目标：补齐任务说明" }],
+    });
+
+    const task = await updateTaskNotes(db, {
+      workspaceId: "workspace-1",
+      taskId: "task-1",
+      notes: "  目标：补齐任务说明  ",
+      source: "manual",
+    });
+
+    expect(task).toEqual({ id: "task-1", planId: "plan-1", notes: "目标：补齐任务说明" });
+    expect(db.updates).toEqual([
+      expect.objectContaining({
+        table: "tasks",
+        values: {
+          notes: "目标：补齐任务说明",
+          updatedAt: expect.any(Date),
+        },
+      }),
+    ]);
+    expect(db.inserts).toEqual([
+      expect.objectContaining({
+        table: "change_logs",
+        values: expect.objectContaining({
+          workspaceId: "workspace-1",
+          planId: "plan-1",
+          source: "manual",
+          summary: "Updated task notes",
+          detailsJson: {
+            taskId: "task-1",
+            notes: "目标：补齐任务说明",
+          },
+        }),
+      }),
+    ]);
+  });
+
+  it("rejects empty task notes updates", async () => {
+    const db = createFakeDb();
+
+    await expect(
+      updateTaskNotes(db, {
+        workspaceId: "workspace-1",
+        taskId: "task-1",
+        notes: "   ",
+        source: "manual",
+      }),
+    ).rejects.toThrow("Task notes update required");
+    expect(db.updates).toEqual([]);
+    expect(db.inserts).toEqual([]);
   });
 
   it("rejects invalid task schedule dates", async () => {

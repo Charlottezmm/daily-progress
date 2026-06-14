@@ -4,7 +4,7 @@ import { z } from "zod";
 import { getWorkspaceIdFromSession } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import { tasks } from "@/lib/db/schema";
-import { PlanningServiceError, updateTaskSchedule, updateTaskStatus } from "@/lib/planning/service";
+import { PlanningServiceError, updateTaskNotes, updateTaskSchedule, updateTaskStatus } from "@/lib/planning/service";
 import { readJsonBody } from "@/lib/validation/common";
 
 const taskUpdateSchema = z
@@ -14,9 +14,13 @@ const taskUpdateSchema = z
     blocked: z.boolean().optional(),
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     daySegment: z.enum(["morning", "afternoon", "evening"]).optional(),
+    notes: z.string().trim().min(1).max(2000).optional(),
   })
-  .refine((value) => value.status || value.blocked !== undefined || value.date || value.daySegment, {
+  .refine((value) => value.status || value.blocked !== undefined || value.date || value.daySegment || value.notes, {
     message: "At least one task update field is required",
+  })
+  .refine((value) => !value.notes || (!value.status && value.blocked === undefined && !value.date && !value.daySegment), {
+    message: "Task notes updates cannot be mixed with status or schedule updates",
   });
 
 export async function GET(request: Request) {
@@ -48,6 +52,18 @@ export async function PATCH(request: Request) {
   const db = getDb();
   try {
     const hasScheduleUpdate = parsed.data.date !== undefined || parsed.data.daySegment !== undefined;
+    if (parsed.data.notes) {
+      const task = await updateTaskNotes(db, {
+        workspaceId,
+        taskId: parsed.data.id,
+        notes: parsed.data.notes,
+        source: "manual",
+      });
+
+      if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 });
+      return NextResponse.json({ task });
+    }
+
     const task = hasScheduleUpdate
       ? await updateTaskSchedule(db, {
           workspaceId,

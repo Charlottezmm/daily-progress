@@ -219,6 +219,42 @@ export async function updateTaskSchedule(
   });
 }
 
+export async function updateTaskNotes(
+  db: PlanningDb,
+  input: {
+    workspaceId: string;
+    taskId: string;
+    notes: string;
+    source?: ChangeSource;
+  },
+) {
+  const notes = input.notes.trim();
+  if (!notes) throw new PlanningServiceError("Task notes update required", 400);
+
+  return db.transaction(async (tx) => {
+    const [task] = await tx
+      .update(tasks)
+      .set({ notes, updatedAt: new Date() })
+      .where(and(eq(tasks.id, input.taskId), eq(tasks.workspaceId, input.workspaceId)))
+      .returning();
+
+    if (!task) return null;
+
+    await tx.insert(changeLogs).values({
+      workspaceId: input.workspaceId,
+      planId: task.planId,
+      source: input.source ?? "manual",
+      summary: "Updated task notes",
+      detailsJson: {
+        taskId: input.taskId,
+        notes,
+      },
+    });
+
+    return task;
+  });
+}
+
 export async function createDailyCheckin(
   db: PlanningDb,
   input: {

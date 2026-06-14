@@ -17,6 +17,7 @@ vi.mock("@/lib/planning/service", () => {
 
   return {
     PlanningServiceError,
+    updateTaskNotes: vi.fn(),
     updateTaskSchedule: vi.fn(),
     updateTaskStatus: vi.fn(),
   };
@@ -102,6 +103,31 @@ describe("tasks route", () => {
       status: "done",
       source: "manual",
     });
+    expect(updateTaskSchedule).not.toHaveBeenCalled();
+  });
+
+  it("updates task notes through the notes service", async () => {
+    const task = { id: taskId, notes: "目标：补齐任务说明" };
+    const db = { id: "db" };
+    const { getWorkspaceIdFromSession } = await import("@/lib/auth/session");
+    const { getDb } = await import("@/lib/db/client");
+    const { updateTaskNotes, updateTaskSchedule, updateTaskStatus } = await import("@/lib/planning/service");
+    vi.mocked(getWorkspaceIdFromSession).mockResolvedValue("workspace-1");
+    vi.mocked(getDb).mockReturnValue(db);
+    vi.mocked(updateTaskNotes).mockResolvedValue(task);
+    const { PATCH } = await import("@/app/api/tasks/route");
+
+    const response = await PATCH(patchRequest({ id: taskId, notes: "目标：补齐任务说明" }));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ task });
+    expect(updateTaskNotes).toHaveBeenCalledWith(db, {
+      workspaceId: "workspace-1",
+      taskId,
+      notes: "目标：补齐任务说明",
+      source: "manual",
+    });
+    expect(updateTaskStatus).not.toHaveBeenCalled();
     expect(updateTaskSchedule).not.toHaveBeenCalled();
   });
 

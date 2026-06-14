@@ -324,6 +324,52 @@ describe("MCP planning tools", () => {
     ]);
   });
 
+  it("updates task notes through MCP with source=mcp", async () => {
+    const db = createFakeDb({
+      taskUpdateResult: [
+        {
+          id: "task-1",
+          workspaceId: "workspace-1",
+          planId: "plan-1",
+          notes: "目标：补齐任务说明",
+        },
+      ],
+    });
+
+    const result = await runPawPlanTool(db, "workspace-1", "update_task_notes", {
+      task_id: "task-1",
+      notes: "目标：补齐任务说明",
+    });
+
+    expect(result).toEqual({
+      task: expect.objectContaining({ id: "task-1", notes: "目标：补齐任务说明" }),
+    });
+    expect(db.updates).toEqual([
+      expect.objectContaining({
+        table: "tasks",
+        values: {
+          notes: "目标：补齐任务说明",
+          updatedAt: expect.any(Date),
+        },
+      }),
+    ]);
+    expect(db.inserts).toEqual([
+      expect.objectContaining({
+        table: "change_logs",
+        values: expect.objectContaining({
+          workspaceId: "workspace-1",
+          planId: "plan-1",
+          source: "mcp",
+          summary: "Updated task notes",
+          detailsJson: {
+            taskId: "task-1",
+            notes: "目标：补齐任务说明",
+          },
+        }),
+      }),
+    ]);
+  });
+
   it("proposes a patch as preview-only draft without updating tasks", async () => {
     const db = createFakeDb({ activePlanId: "plan-1" });
     const patch = {
@@ -651,6 +697,15 @@ describe("MCP planning tools", () => {
 
     await expect(
       runPawPlanTool(db, "workspace-1", "create_inbox_item", { title: "Blocked write" }, "read_only"),
+    ).rejects.toThrow("MCP token does not allow write tools");
+    await expect(
+      runPawPlanTool(
+        db,
+        "workspace-1",
+        "update_task_notes",
+        { task_id: "task-1", notes: "目标：补齐任务说明" },
+        "read_only",
+      ),
     ).rejects.toThrow("MCP token does not allow write tools");
   });
 
