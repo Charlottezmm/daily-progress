@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { CatIcon } from "./cat-icon";
 import { RescheduleList } from "./reschedule-list";
-import type { MonthViewData, TimelineItemView, TodayViewData, WeekViewData } from "@/lib/planning/view-data";
+import type { MonthDayView, MonthViewData, PlanTaskView, TimelineItemView, TodayViewData, WeekDayView, WeekViewData } from "@/lib/planning/view-data";
 import { redactPrivateTitle } from "@/lib/display/privacy";
 
 type Tab = "day" | "week" | "month" | "reschedule";
@@ -53,8 +53,184 @@ function sortByStart(items: TimelineItemView[]) {
   return [...items].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
 }
 
+const segmentLabel: Record<PlanTaskView["segment"], string> = {
+  morning: "上午",
+  afternoon: "下午",
+  evening: "晚上",
+};
+
+const priorityLabel: Record<PlanTaskView["priority"], string> = {
+  low: "低",
+  normal: "普通",
+  high: "高",
+  urgent: "紧急",
+};
+
+function TaskCard({ task, onOpen, compact = false }: { task: PlanTaskView; onOpen: (task: PlanTaskView) => void; compact?: boolean }) {
+  return (
+    <button type="button" className={`paw-plan-task-card ${compact ? "compact" : ""}`} onClick={() => onOpen(task)}>
+      <span className="paw-plan-task-title">{redactPrivateTitle(task.title)}</span>
+      <span className="paw-plan-task-meta">
+        {segmentLabel[task.segment]} · {minutesLabel(task.minutes)} · {task.context} · {task.track}
+      </span>
+      {task.detail.summary ? <span className="paw-plan-task-note">{task.detail.summary}</span> : null}
+    </button>
+  );
+}
+
+function FixedItems({ items }: { items: TimelineItemView[] }) {
+  if (items.length === 0) return null;
+  return (
+    <details className="paw-plan-fixed">
+      <summary>固定占用 · {items.length} 项</summary>
+      <div className="paw-timeline compact">
+        {sortByStart(items).map((item) => (
+          <div key={item.id} className="paw-time-block">
+            <span className="paw-time-label">
+              {clock(item.startsAt)}–{clock(item.endsAt)}
+            </span>
+            <div className={`paw-time-bar ${timelineKindClass[item.kind]}`}>
+              <span>{redactPrivateTitle(item.title)}</span>
+              <span className="ml-2 text-xs opacity-70">
+                {timelineKindLabel[item.kind]} · {minutesLabel(item.minutes)}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </details>
+  );
+}
+
+function TaskList({
+  label,
+  tasks,
+  empty,
+  onOpen,
+}: {
+  label: string;
+  tasks: PlanTaskView[];
+  empty: string;
+  onOpen: (task: PlanTaskView) => void;
+}) {
+  return (
+    <section className="paw-plan-task-section">
+      <div className="paw-section-label">{label}</div>
+      {tasks.length === 0 ? <div className="paw-empty"><p>{empty}</p></div> : null}
+      <div className="paw-plan-task-list">
+        {tasks.map((task) => (
+          <TaskCard key={task.id} task={task} onOpen={onOpen} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function TaskDetail({ task }: { task: PlanTaskView | null }) {
+  if (!task) {
+    return (
+      <aside className="paw-plan-detail">
+        <p className="paw-section-label">任务详情</p>
+        <p className="paw-goal-meta">点击日、周或月里的任务查看说明、完成标准和资源。</p>
+      </aside>
+    );
+  }
+
+  return (
+    <aside className="paw-plan-detail">
+      <p className="paw-section-label">任务详情</p>
+      <h2 className="paw-goal-title">{redactPrivateTitle(task.title)}</h2>
+      <div className="paw-plan-detail-meta">
+        <span>{task.dateLabel}</span>
+        <span>{segmentLabel[task.segment]}</span>
+        <span>{minutesLabel(task.minutes)}</span>
+        <span>优先级 {priorityLabel[task.priority]}</span>
+        <span>能量 {task.energy}</span>
+      </div>
+      <p className="paw-goal-meta">{task.context} · {task.track}</p>
+      {task.notes ? <p className="paw-plan-detail-notes">{task.notes}</p> : <p className="paw-plan-detail-notes muted">这条任务还没有详细描述。</p>}
+      {task.detail.sections.length > 0 ? (
+        <div className="paw-plan-detail-sections">
+          {task.detail.sections.map((section) => (
+            <section key={section.label}>
+              <h3>{section.label}</h3>
+              {section.lines.length === 0 ? null : (
+                <ul>
+                  {section.lines.map((line, index) => (
+                    <li key={`${section.label}-${index}`}>{line}</li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          ))}
+        </div>
+      ) : null}
+    </aside>
+  );
+}
+
+function WeekDayCard({ day, onOpenTask }: { day: WeekDayView; onOpenTask: (task: PlanTaskView) => void }) {
+  return (
+    <details className="paw-week-day" open={day.state === "today"}>
+      <summary className="paw-week-day-summary">
+        <span>
+          <span className={`paw-week-day-name ${day.state === "today" ? "today" : ""}`}>周{day.day}</span>
+          <span className="paw-week-day-date">{day.date}</span>
+        </span>
+        <span className={day.state === "over" ? "paw-overload-badge" : "paw-status-pill"}>
+          {day.doneCount}/{day.taskCount} · {day.totalMinutes}
+        </span>
+      </summary>
+      <div className="paw-capacity-bar">
+        <div className={`paw-capacity-fill ${loadColor(day.state)}`} style={{ width: `${Math.min(day.load, 100)}%` }} />
+      </div>
+      <div className="paw-plan-task-list compact">
+        {day.tasks.length === 0 ? <p className="paw-goal-meta">无任务</p> : null}
+        {day.tasks.map((task) => (
+          <TaskCard key={task.id} task={task} onOpen={onOpenTask} compact />
+        ))}
+      </div>
+      <FixedItems items={day.fixedItems} />
+    </details>
+  );
+}
+
+function MonthDayCell({
+  day,
+  selected,
+  onSelect,
+}: {
+  day: MonthDayView;
+  selected: boolean;
+  onSelect: (day: MonthDayView) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`paw-month-day ${day.inMonth ? "" : "outside"} ${day.state === "today" ? "today" : ""} ${selected ? "selected" : ""}`}
+      onClick={() => onSelect(day)}
+    >
+      <span className="paw-month-day-number">{day.dayOfMonth}</span>
+      {day.taskCount > 0 ? (
+        <span className="paw-month-day-count">
+          {day.doneCount}/{day.taskCount} · {day.totalMinutes}
+        </span>
+      ) : null}
+      <span className="paw-month-day-dots" aria-hidden="true">
+        {day.tasks.slice(0, 4).map((task) => (
+          <span key={task.id} className={`paw-month-dot ${task.done ? "done" : ""}`} />
+        ))}
+      </span>
+    </button>
+  );
+}
+
 export function PlanView({ today, week, month }: { today: TodayViewData; week: WeekViewData; month: MonthViewData }) {
   const [tab, setTab] = useState<Tab>("day");
+  const [selectedTask, setSelectedTask] = useState<PlanTaskView | null>(today.overdueTasks[0] ?? today.todayTasks[0] ?? null);
+  const [selectedMonthDay, setSelectedMonthDay] = useState<MonthDayView | null>(
+    month.days.find((day) => day.state === "today") ?? month.days.find((day) => day.taskCount > 0) ?? null,
+  );
 
   return (
     <div className="paw-page">
@@ -62,7 +238,7 @@ export function PlanView({ today, week, month }: { today: TodayViewData; week: W
         <h1 className="paw-page-date">计划</h1>
         <div className="paw-agent-row">
           <CatIcon size={40} mood="think" />
-          <p className="paw-agent-msg">日、周、月的安排都在这里。想改任务日期，去「改期」自己调；Agent 的建议在 Review 里确认。</p>
+          <p className="paw-agent-msg">日、周、月都以任务为主。固定占用只做参考；想改任务日期，去「改期」自己调；Agent 的建议在 Review 里确认。</p>
         </div>
         <div className="paw-sub-tabs">
           {[
@@ -90,56 +266,32 @@ export function PlanView({ today, week, month }: { today: TodayViewData; week: W
       ) : null}
 
       {tab === "day" ? (
-        <section className="paw-plan-view">
-          <div className="paw-timeline">
-            {today.timelineItems.length === 0 ? (
-              <div className="paw-time-block">
-                <span className="paw-time-label">--</span>
-                <div className="paw-time-bar empty">今天还没有可展示的安排。</div>
-              </div>
-            ) : (
-              sortByStart(today.timelineItems).map((item) => (
-                <div key={item.id} className="paw-time-block">
-                  <span className="paw-time-label">
-                    {clock(item.startsAt)}–{clock(item.endsAt)}
-                  </span>
-                  <div className={`paw-time-bar ${timelineKindClass[item.kind]}`}>
-                    <span>{redactPrivateTitle(item.title)}</span>
-                    <span className="ml-2 text-xs opacity-70">
-                      {timelineKindLabel[item.kind]} · {minutesLabel(item.minutes)}
-                    </span>
-                  </div>
-                </div>
-              ))
-            )}
+        <section className="paw-plan-view paw-plan-split">
+          <div className="paw-plan-main">
+            <TaskList
+              label={`未完成遗留 · ${today.overdueTasks.length}`}
+              tasks={today.overdueTasks}
+              empty="今天以前没有遗留待办。"
+              onOpen={setSelectedTask}
+            />
+            <TaskList
+              label={`今日任务 · ${today.todayTasks.filter((task) => task.done).length}/${today.todayTasks.length}`}
+              tasks={today.todayTasks}
+              empty="今天还没有安排任务。"
+              onOpen={setSelectedTask}
+            />
+            <FixedItems items={today.fixedItems} />
           </div>
+          <TaskDetail task={selectedTask} />
         </section>
       ) : null}
 
       {tab === "week" ? (
-        <section className="paw-plan-view">
+        <section className="paw-plan-view paw-plan-split">
+          <div className="paw-plan-main">
           <div className="paw-week-grid">
             {week.days.map((day) => (
-              <article key={day.date} className="paw-week-day">
-                <div className="paw-week-day-header">
-                  <div>
-                    <p className={`paw-week-day-name ${day.state === "today" ? "today" : ""}`}>周{day.day}</p>
-                    <p className="text-sm font-semibold text-[var(--app-ink-soft)]">{day.date}</p>
-                  </div>
-                  <span className={day.state === "over" ? "paw-overload-badge" : "paw-status-pill"}>
-                    {day.capacity}
-                  </span>
-                </div>
-                <div className="paw-capacity-bar">
-                  <div className={`paw-capacity-fill ${loadColor(day.state)}`} style={{ width: `${Math.min(day.load, 100)}%` }} />
-                </div>
-                <div className="paw-week-tasks">
-                  {day.items.length === 0 ? <p>无安排</p> : null}
-                  {day.items.map((item) => (
-                    <p key={item} className="truncate">{item}</p>
-                  ))}
-                </div>
-              </article>
+              <WeekDayCard key={day.date} day={day} onOpenTask={setSelectedTask} />
             ))}
           </div>
 
@@ -166,11 +318,14 @@ export function PlanView({ today, week, month }: { today: TodayViewData; week: W
               <p className="paw-goal-meta">目标 {week.recovery.targetHours}。{week.recovery.note}</p>
             </div>
           </div>
+          </div>
+          <TaskDetail task={selectedTask} />
         </section>
       ) : null}
 
       {tab === "month" ? (
-        <section className="paw-plan-view">
+        <section className="paw-plan-view paw-plan-split">
+          <div className="paw-plan-main">
           {month.emptyText ? (
             <article className="paw-goal-card">
               <h2 className="paw-goal-title">本月计划</h2>
@@ -195,6 +350,39 @@ export function PlanView({ today, week, month }: { today: TodayViewData; week: W
                   <p className="paw-goal-meta">总工时</p>
                 </div>
               </div>
+
+              {month.days.length > 0 ? (
+                <article className="paw-goal-card mt-3">
+                  <h2 className="paw-goal-title">月视图</h2>
+                  <div className="paw-month-calendar">
+                    {["一", "二", "三", "四", "五", "六", "日"].map((day) => (
+                      <span key={day} className="paw-month-weekday">周{day}</span>
+                    ))}
+                    {month.days.map((day) => (
+                      <MonthDayCell
+                        key={day.key}
+                        day={day}
+                        selected={selectedMonthDay?.key === day.key}
+                        onSelect={(next) => {
+                          setSelectedMonthDay(next);
+                          if (next.tasks[0]) setSelectedTask(next.tasks[0]);
+                        }}
+                      />
+                    ))}
+                  </div>
+                  {selectedMonthDay ? (
+                    <div className="paw-month-selected">
+                      <div className="paw-section-label">{selectedMonthDay.dateLabel} · {selectedMonthDay.doneCount}/{selectedMonthDay.taskCount}</div>
+                      <div className="paw-plan-task-list compact">
+                        {selectedMonthDay.tasks.length === 0 ? <p className="paw-goal-meta">这一天没有任务。</p> : null}
+                        {selectedMonthDay.tasks.map((task) => (
+                          <TaskCard key={task.id} task={task} onOpen={setSelectedTask} compact />
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </article>
+              ) : null}
 
               {month.importSummary ? (
                 <article className="paw-goal-card mt-3">
@@ -254,6 +442,8 @@ export function PlanView({ today, week, month }: { today: TodayViewData; week: W
               ) : null}
             </>
           )}
+          </div>
+          <TaskDetail task={selectedTask} />
         </section>
       ) : null}
 

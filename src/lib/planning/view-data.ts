@@ -31,6 +31,7 @@ import type { AgentPatch } from "@/lib/patches/patch-schema";
 type Segment = "morning" | "afternoon" | "evening";
 type Energy = "low" | "medium" | "high";
 type TaskStatus = "todo" | "done" | "skipped" | "backlog";
+type Priority = "low" | "normal" | "high" | "urgent";
 
 export type InboxItemView = {
   id: string;
@@ -52,6 +53,34 @@ export type TodayTaskView = {
   track: string;
   minutes: number;
   energy: "低" | "中" | "高";
+  status: TaskStatus;
+  blocked: boolean;
+  done: boolean;
+};
+
+export type TaskDetailSectionView = {
+  label: string;
+  lines: string[];
+};
+
+export type TaskDetailView = {
+  summary: string | null;
+  sections: TaskDetailSectionView[];
+};
+
+export type PlanTaskView = {
+  id: string;
+  title: string;
+  notes: string | null;
+  detail: TaskDetailView;
+  dateKey: string;
+  dateLabel: string;
+  segment: Segment;
+  context: string;
+  track: string;
+  minutes: number;
+  energy: "低" | "中" | "高";
+  priority: Priority;
   status: TaskStatus;
   blocked: boolean;
   done: boolean;
@@ -90,10 +119,13 @@ export type WarningView = {
 export type TodayViewData = {
   dataUnavailable: boolean;
   tasks: TodayTaskView[];
+  todayTasks: PlanTaskView[];
+  overdueTasks: PlanTaskView[];
   routines: TodayRoutineView[];
   recoveryBlocks: RecoveryBlockView[];
   warnings: WarningView[];
   timelineItems: TimelineItemView[];
+  fixedItems: TimelineItemView[];
   patchCount: number;
   checkin: CheckinView | null;
   streakDays: number;
@@ -106,6 +138,11 @@ export type WeekDayView = {
   capacity: string;
   state: "ok" | "over" | "room" | "today";
   items: string[];
+  tasks: PlanTaskView[];
+  fixedItems: TimelineItemView[];
+  taskCount: number;
+  doneCount: number;
+  totalMinutes: string;
   timelineItems: TimelineItemView[];
 };
 
@@ -162,6 +199,19 @@ export type MonthCardView = {
   progress: number | null;
 };
 
+export type MonthDayView = {
+  key: string;
+  dayOfMonth: number;
+  dateLabel: string;
+  weekday: string;
+  inMonth: boolean;
+  state: "today" | "past" | "future";
+  tasks: PlanTaskView[];
+  taskCount: number;
+  doneCount: number;
+  totalMinutes: string;
+};
+
 export type MonthViewData = {
   dataUnavailable: boolean;
   taskCount: number;
@@ -170,6 +220,7 @@ export type MonthViewData = {
   completionPercent: number;
   importSummary: MonthImportSummaryView | null;
   weeks: MonthWeekBucketView[];
+  days: MonthDayView[];
   cards: MonthCardView[];
   emptyText: string | null;
 };
@@ -229,12 +280,15 @@ function emptyTodayData(dataUnavailable = false): TodayViewData {
   return {
     dataUnavailable,
     tasks: [],
+    todayTasks: [],
+    overdueTasks: [],
     routines: [],
     recoveryBlocks: [],
     warnings: dataUnavailable
       ? [{ id: "data_unavailable", title: "本地数据源未配置", text: "当前没有 DATABASE_URL，页面显示为空态；配置数据库后会读取真实计划。" }]
       : [],
     timelineItems: [],
+    fixedItems: [],
     patchCount: 0,
     checkin: null,
     streakDays: 0,
@@ -251,6 +305,11 @@ function emptyWeekData(dataUnavailable = false): WeekViewData {
       capacity: "空",
       state: isSameShanghaiDay(date, startOfShanghaiDay(new Date())) ? "today" : "room",
       items: [],
+      tasks: [],
+      fixedItems: [],
+      taskCount: 0,
+      doneCount: 0,
+      totalMinutes: "0h",
       timelineItems: [],
     })),
     tracks: [],
@@ -274,6 +333,7 @@ function emptyMonthData(dataUnavailable = false): MonthViewData {
     completionPercent: 0,
     importSummary: null,
     weeks: [],
+    days: [],
     cards: [],
     emptyText: dataUnavailable ? "本地数据源未配置，无法读取月度计划。" : "还没有月度计划数据。导入计划或创建本月任务后，这里会显示真实任务分布。",
   };
@@ -346,12 +406,52 @@ function hoursLabel(minutes: number) {
   return rest ? `${hours}h ${rest}m` : `${hours}h`;
 }
 
+function dateKeyLabel(date: Date) {
+  return capacityDateKey(date);
+}
+
+function dateDisplayLabel(date: Date) {
+  const { month, day } = shanghaiDateParts(date);
+  return `${month}/${day} 周${weekdayLabel(date)}`;
+}
+
+function parseTaskDetail(notes: string | null | undefined): TaskDetailView {
+  const raw = notes?.trim();
+  if (!raw) return { summary: null, sections: [] };
+
+  const labels = new Set(["目标", "完成标准", "验收", "资源", "备注", "下一步", "重点"]);
+  const sections: TaskDetailSectionView[] = [];
+  let current: TaskDetailSectionView | null = null;
+  const looseLines: string[] = [];
+
+  for (const line of raw.split(/\r?\n/).map((item) => item.trim()).filter(Boolean)) {
+    const match = line.match(/^([^:：]{1,12})[:：]\s*(.*)$/);
+    if (match && labels.has(match[1])) {
+      current = { label: match[1], lines: match[2] ? [match[2]] : [] };
+      sections.push(current);
+      continue;
+    }
+
+    if (current && /^[-*•]\s+/.test(line)) {
+      current.lines.push(line.replace(/^[-*•]\s+/, ""));
+    } else {
+      looseLines.push(line);
+    }
+  }
+
+  return {
+    summary: looseLines[0] ?? raw,
+    sections,
+  };
+}
+
 type WeekCapacityInput = {
   weekDates: Date[];
   today: Date;
   taskRows: CapacityTaskInput[];
   blockRows: CapacityTimeBlockInput[];
   routineRows: CapacityRoutineInput[];
+  refs?: ReferenceMaps;
   capacityRows: Array<{
     date: Date;
     morningMinutes: number;
@@ -376,23 +476,29 @@ export function buildWeekCapacityDays(input: WeekCapacityInput): WeekDayView[] {
     const available = day ? segmentCapacity(day.segments.morning.availableMinutes, day.segments.afternoon.availableMinutes, day.segments.evening.availableMinutes) : 540;
     const used = day ? segmentCapacity(day.segments.morning.totalUsedMinutes, day.segments.afternoon.totalUsedMinutes, day.segments.evening.totalUsedMinutes) : 0;
     const percent = available === 0 ? 0 : Math.round((used / available) * 100);
+    const taskViews = input.taskRows
+      .filter((task) => task.status !== "backlog" && capacityDateKey(task.date) === key)
+      .sort((a, b) => segmentOrder.indexOf(a.daySegment as Segment) - segmentOrder.indexOf(b.daySegment as Segment) || a.title.localeCompare(b.title))
+      .map((task) => buildPlanTaskView(task, input.refs));
+    const timelineItems = buildDayTimelineItems({
+      date,
+      taskRows: input.taskRows,
+      blockRows: input.blockRows,
+      routineRows: input.routineRows,
+    });
     return {
       day: weekdayLabel(date),
       date: monthDayLabel(date),
       load: percent,
       capacity: hoursLabel(used),
       state: isSameShanghaiDay(date, input.today) ? "today" : percent > 100 ? "over" : percent < 60 ? "room" : "ok",
-      items: day
-        ? segmentOrder
-            .flatMap((segment) => day.segments[segment].blocks.map((block) => block.title))
-            .slice(0, 4)
-        : [],
-      timelineItems: buildDayTimelineItems({
-        date,
-        taskRows: input.taskRows,
-        blockRows: input.blockRows,
-        routineRows: input.routineRows,
-      }),
+      items: taskViews.map((task) => task.title).slice(0, 4),
+      tasks: taskViews,
+      fixedItems: timelineItems.filter((item) => item.kind !== "task"),
+      taskCount: taskViews.length,
+      doneCount: taskViews.filter((task) => task.done).length,
+      totalMinutes: hoursLabel(taskViews.reduce((sum, task) => sum + task.minutes, 0)),
+      timelineItems,
     };
   });
 }
@@ -683,6 +789,57 @@ async function loadReferenceMaps(workspaceId: string) {
   };
 }
 
+type ReferenceMaps = Awaited<ReturnType<typeof loadReferenceMaps>>;
+
+type TaskRowForView = CapacityTaskInput & {
+  notes?: string | null;
+  blocked?: boolean;
+  priority?: Priority;
+  energyLevel?: Energy;
+  projectId?: string | null;
+  courseId?: string | null;
+  trackId?: string | null;
+};
+
+function buildPlanTaskView(task: TaskRowForView, refs?: ReferenceMaps): PlanTaskView {
+  const project = task.projectId && refs ? refs.projects.get(task.projectId) : null;
+  const course = task.courseId && refs ? refs.courses.get(task.courseId) : null;
+  const track = task.trackId && refs ? refs.tracks.get(task.trackId) : null;
+  return {
+    id: task.id,
+    title: task.title,
+    notes: task.notes?.trim() ? task.notes : null,
+    detail: parseTaskDetail(task.notes),
+    dateKey: dateKeyLabel(task.date),
+    dateLabel: dateDisplayLabel(task.date),
+    segment: task.daySegment,
+    context: course?.name ?? project?.name ?? "未分类",
+    track: track?.name ?? "未分类",
+    minutes: task.estimatedMinutes,
+    energy: energyLabel(task.energyLevel ?? "medium"),
+    priority: task.priority ?? "normal",
+    status: task.status,
+    blocked: task.blocked ?? false,
+    done: statusDone(task.status),
+  };
+}
+
+function buildTodayTaskSummary(task: TaskRowForView, refs: ReferenceMaps): TodayTaskView {
+  const view = buildPlanTaskView(task, refs);
+  return {
+    id: view.id,
+    segment: view.segment,
+    title: view.title,
+    context: view.context,
+    track: view.track,
+    minutes: view.minutes,
+    energy: view.energy,
+    status: view.status,
+    blocked: view.blocked,
+    done: view.done,
+  };
+}
+
 async function loadCheckinStreak(workspaceId: string) {
   const db = getDb();
   const rows = await db
@@ -732,6 +889,7 @@ export async function getTodayPageData(workspaceId: string): Promise<TodayViewDa
       taskRows,
       routineRows,
       completionRows,
+      overdueTaskRows,
       todayBlocks,
       todayCapacityRows,
       weekRecoveryBlocks,
@@ -751,6 +909,11 @@ export async function getTodayPageData(workspaceId: string): Promise<TodayViewDa
           .select()
           .from(routineCompletions)
           .where(and(eq(routineCompletions.workspaceId, workspaceId), gte(routineCompletions.date, start), lt(routineCompletions.date, end))),
+        db
+          .select()
+          .from(tasks)
+          .where(and(eq(tasks.workspaceId, workspaceId), eq(tasks.status, "todo"), lt(tasks.date, start)))
+          .orderBy(desc(tasks.date), tasks.createdAt),
         db
           .select()
           .from(timeBlocks)
@@ -803,25 +966,17 @@ export async function getTodayPageData(workspaceId: string): Promise<TodayViewDa
     ];
 
     const todayCheckin = todayCheckinRows[0] ?? null;
+    const timelineItems = buildDayTimelineItems({
+      date: start,
+      taskRows,
+      blockRows: todayBlocks,
+      routineRows,
+    });
     return {
       dataUnavailable: false,
-      tasks: taskRows.map((task) => {
-        const project = task.projectId ? refs.projects.get(task.projectId) : null;
-        const course = task.courseId ? refs.courses.get(task.courseId) : null;
-        const track = task.trackId ? refs.tracks.get(task.trackId) : null;
-        return {
-          id: task.id,
-          segment: task.daySegment,
-          title: task.title,
-          context: course?.name ?? project?.name ?? "未分类",
-          track: track?.name ?? "未分类",
-          minutes: task.estimatedMinutes,
-          energy: energyLabel(task.energyLevel),
-          status: task.status,
-          blocked: task.blocked,
-          done: statusDone(task.status),
-        };
-      }),
+      tasks: taskRows.map((task) => buildTodayTaskSummary(task, refs)),
+      todayTasks: taskRows.map((task) => buildPlanTaskView(task, refs)),
+      overdueTasks: overdueTaskRows.map((task) => buildPlanTaskView(task, refs)),
       routines: routineRows.map((routine) => ({
         id: routine.id,
         title: routine.title,
@@ -840,12 +995,8 @@ export async function getTodayPageData(workspaceId: string): Promise<TodayViewDa
         title: warning.message,
         text: warning.code === "inbox_pileup" ? "Inbox 不占 capacity，但堆积会污染计划判断。" : "这条提醒会进入下一次 agent 重排上下文。",
       })),
-      timelineItems: buildDayTimelineItems({
-        date: start,
-        taskRows,
-        blockRows: todayBlocks,
-        routineRows,
-      }),
+      timelineItems,
+      fixedItems: timelineItems.filter((item) => item.kind !== "task"),
       patchCount: patchRows.length,
       checkin: todayCheckin
         ? {
@@ -908,7 +1059,7 @@ export async function getWeekPageData(workspaceId: string): Promise<WeekViewData
 
     return {
       dataUnavailable: false,
-      days: buildWeekCapacityDays({ weekDates, today, taskRows, blockRows, routineRows, capacityRows }),
+      days: buildWeekCapacityDays({ weekDates, today, taskRows, blockRows, routineRows, refs, capacityRows }),
       tracks: balance.map((item, index) => {
         const track = refs.tracks.get(item.trackId);
         return {
@@ -942,19 +1093,60 @@ export async function getWeekPageData(workspaceId: string): Promise<WeekViewData
   }
 }
 
-type MonthTaskInput = {
-  id: string;
-  title: string;
-  status: TaskStatus;
-  date: Date;
-  estimatedMinutes?: number;
-};
+type MonthTaskInput = TaskRowForView;
+
+function buildMonthCalendarDays(input: {
+  monthStart: Date;
+  monthEnd: Date;
+  today: Date;
+  taskRows: MonthTaskInput[];
+  refs?: ReferenceMaps;
+}): MonthDayView[] {
+  const calendarStart = startOfShanghaiWeek(input.monthStart);
+  const calendarEnd = addDays(startOfShanghaiWeek(addDays(input.monthEnd, -1)), 7);
+  const todayKey = capacityDateKey(input.today);
+  const monthStartKey = capacityDateKey(input.monthStart);
+  const monthEndKey = capacityDateKey(input.monthEnd);
+  const byDate = new Map<string, PlanTaskView[]>();
+
+  for (const task of input.taskRows) {
+    if (task.status === "backlog") continue;
+    const key = capacityDateKey(task.date);
+    const arr = byDate.get(key) ?? [];
+    arr.push(buildPlanTaskView(task, input.refs));
+    byDate.set(key, arr);
+  }
+
+  const days: MonthDayView[] = [];
+  for (let cursor = calendarStart; cursor < calendarEnd; cursor = addDays(cursor, 1)) {
+    const key = capacityDateKey(cursor);
+    const taskViews = (byDate.get(key) ?? []).sort(
+      (a, b) => segmentOrder.indexOf(a.segment) - segmentOrder.indexOf(b.segment) || a.title.localeCompare(b.title),
+    );
+    const { day } = shanghaiDateParts(cursor);
+    days.push({
+      key,
+      dayOfMonth: day,
+      dateLabel: dateDisplayLabel(cursor),
+      weekday: `周${weekdayLabel(cursor)}`,
+      inMonth: key >= monthStartKey && key < monthEndKey,
+      state: key === todayKey ? "today" : key < todayKey ? "past" : "future",
+      tasks: taskViews,
+      taskCount: taskViews.length,
+      doneCount: taskViews.filter((task) => task.done).length,
+      totalMinutes: hoursLabel(taskViews.reduce((sum, task) => sum + task.minutes, 0)),
+    });
+  }
+
+  return days;
+}
 
 export function buildMonthPlanViewData(
   taskRows: MonthTaskInput[],
   activePlanSnapshot: unknown,
   now = new Date(),
 ): MonthViewData {
+  const { start, end } = dateRangeForMonth(now);
   const totalMinutes = taskRows.reduce((sum, task) => sum + (task.estimatedMinutes ?? 30), 0);
   const doneCount = taskRows.filter((task) => statusDone(task.status)).length;
   const minutesByWeek = new Map<string, number>();
@@ -994,6 +1186,7 @@ export function buildMonthPlanViewData(
     completionPercent,
     importSummary,
     weeks,
+    days: buildMonthCalendarDays({ monthStart: start, monthEnd: end, today: startOfShanghaiDay(now), taskRows }),
     cards,
     emptyText: cards.length === 0 ? "还没有月度计划数据。导入计划或创建本月任务后，这里会显示真实任务分布。" : null,
   };
@@ -1057,6 +1250,7 @@ export async function getMonthPlanData(workspaceId: string): Promise<MonthViewDa
       completionPercent,
       importSummary,
       weeks,
+      days: buildMonthCalendarDays({ monthStart: start, monthEnd: end, today: startOfShanghaiDay(new Date()), taskRows, refs: await loadReferenceMaps(workspaceId) }),
       cards,
       emptyText: cards.length === 0 ? "还没有月度计划数据。导入计划或创建本月任务后，这里会显示真实任务分布。" : null,
     };

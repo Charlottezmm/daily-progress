@@ -60,10 +60,15 @@ describe("planning view shared capacity", () => {
         load: 28,
         capacity: "2h 30m",
         state: "today",
-        items: ["Morning implementation", "Course block"],
+        items: ["Morning implementation"],
+        taskCount: 1,
+        doneCount: 0,
+        totalMinutes: "1h 30m",
       }),
     );
-    expect(days[1]).toEqual(expect.objectContaining({ load: 0, capacity: "0h", state: "room", items: [] }));
+    expect(days[0].tasks[0]).toEqual(expect.objectContaining({ title: "Morning implementation", minutes: 90 }));
+    expect(days[0].fixedItems[0]).toEqual(expect.objectContaining({ title: "Course block", kind: "course" }));
+    expect(days[1]).toEqual(expect.objectContaining({ load: 0, capacity: "0h", state: "room", items: [], taskCount: 0 }));
   });
 });
 

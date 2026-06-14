@@ -199,7 +199,11 @@ export const pawPlanToolSchemas = {
               estimated_minutes: z.number().int().min(5).max(480),
               priority: prioritySchema.optional(),
               energy_level: energyLevelSchema.optional(),
-              notes: z.string().max(2000).optional(),
+              notes: z
+                .string()
+                .max(2000)
+                .optional()
+                .describe("Structured Markdown details. Prefer labels like 目标, 完成标准, 资源, 下一步, 备注 so Plan can show useful task detail."),
               project_name: z.string().trim().max(120).optional(),
               track_name: z.string().trim().max(120).optional(),
             })

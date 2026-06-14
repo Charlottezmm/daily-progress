@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getWorkspaceIdFromSession } from "@/lib/auth/session";
@@ -19,9 +19,19 @@ const taskUpdateSchema = z
     message: "At least one task update field is required",
   });
 
-export async function GET() {
+export async function GET(request: Request) {
   const workspaceId = await getWorkspaceIdFromSession();
   if (!workspaceId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const taskId = new URL(request.url).searchParams.get("id");
+  if (taskId) {
+    const parsedId = z.string().uuid().safeParse(taskId);
+    if (!parsedId.success) return NextResponse.json({ error: "Invalid task id" }, { status: 400 });
+    const db = getDb();
+    const [task] = await db.select().from(tasks).where(and(eq(tasks.workspaceId, workspaceId), eq(tasks.id, parsedId.data))).limit(1);
+    if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    return NextResponse.json({ task });
+  }
 
   const db = getDb();
   const items = await db.select().from(tasks).where(eq(tasks.workspaceId, workspaceId));

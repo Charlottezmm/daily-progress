@@ -32,6 +32,10 @@ function patchRequest(body: Record<string, unknown>) {
   });
 }
 
+function getRequest(path = "/api/tasks") {
+  return new Request(`http://localhost${path}`);
+}
+
 describe("tasks route", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -48,6 +52,19 @@ describe("tasks route", () => {
 
     expect(response.status).toBe(401);
     expect(await response.json()).toEqual({ error: "Unauthorized" });
+    expect(vi.mocked(getDb)).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid GET task id before opening the database", async () => {
+    const { getWorkspaceIdFromSession } = await import("@/lib/auth/session");
+    const { getDb } = await import("@/lib/db/client");
+    vi.mocked(getWorkspaceIdFromSession).mockResolvedValue("workspace-1");
+    const { GET } = await import("@/app/api/tasks/route");
+
+    const response = await GET(getRequest("/api/tasks?id=not-a-uuid"));
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Invalid task id" });
     expect(vi.mocked(getDb)).not.toHaveBeenCalled();
   });
 
