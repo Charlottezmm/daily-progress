@@ -8,6 +8,8 @@ import { redactPrivateTitle } from "@/lib/display/privacy";
 
 type Tab = "day" | "week" | "month" | "reschedule";
 
+const weekdayChars = "日一二三四五六";
+
 function minutesLabel(minutes: number) {
   if (minutes >= 60) {
     const hours = Math.floor(minutes / 60);
@@ -29,6 +31,35 @@ function clock(iso: string) {
     minute: "2-digit",
     hour12: false,
   }).format(new Date(iso));
+}
+
+function shanghaiDateKey(iso: string) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(iso));
+}
+
+function todayKey() {
+  return shanghaiDateKey(new Date().toISOString());
+}
+
+function addDaysKey(key: string, delta: number) {
+  const [y, m, d] = key.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + delta);
+  const yy = dt.getUTCFullYear();
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(dt.getUTCDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
+}
+
+function dateLabelFromKey(key: string) {
+  const [y, m, d] = key.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return `${m}/${d} 周${weekdayChars[dt.getUTCDay()]}`;
 }
 
 const timelineKindClass: Record<TimelineItemView["kind"], string> = {
@@ -155,7 +186,22 @@ function TaskList({
   );
 }
 
-function TaskDetail({ task }: { task: PlanTaskView | null }) {
+function TaskDetail({
+  task,
+  actions,
+  savingId,
+  message,
+}: {
+  task: PlanTaskView | null;
+  actions?: {
+    moveToday: (task: PlanTaskView) => void;
+    moveTomorrow: (task: PlanTaskView) => void;
+    complete: (task: PlanTaskView) => void;
+    backlog: (task: PlanTaskView) => void;
+  };
+  savingId?: string | null;
+  message?: string | null;
+}) {
   if (!task) {
     return (
       <aside className="paw-plan-detail">
@@ -164,6 +210,10 @@ function TaskDetail({ task }: { task: PlanTaskView | null }) {
       </aside>
     );
   }
+
+  const taskActions = actions;
+  const canAct = taskActions && (task.status === "todo" || task.status === "backlog");
+  const isSaving = savingId === task.id;
 
   return (
     <aside className="paw-plan-detail">
@@ -178,6 +228,23 @@ function TaskDetail({ task }: { task: PlanTaskView | null }) {
       </div>
       <p className="paw-goal-meta">{task.context} · {task.track}</p>
       {task.notes ? <p className="paw-plan-detail-notes">{task.notes}</p> : <p className="paw-plan-detail-notes muted">这条任务还没有详细描述。</p>}
+      {canAct ? (
+        <div className="paw-plan-detail-actions" aria-label="任务操作">
+          <button type="button" className="paw-act-btn" disabled={isSaving} onClick={() => taskActions!.moveToday(task)}>
+            挪到今天
+          </button>
+          <button type="button" className="paw-act-btn" disabled={isSaving} onClick={() => taskActions!.moveTomorrow(task)}>
+            明天
+          </button>
+          <button type="button" className="paw-act-btn done" disabled={isSaving} onClick={() => taskActions!.complete(task)}>
+            完成
+          </button>
+          <button type="button" className="paw-act-btn defer" disabled={isSaving} onClick={() => taskActions!.backlog(task)}>
+            放回 Backlog
+          </button>
+        </div>
+      ) : null}
+      {message ? <p className="paw-toast" role="status">{message}</p> : null}
       {task.detail.sections.length > 0 ? (
         <div className="paw-plan-detail-sections">
           {task.detail.sections.map((section) => (
@@ -257,10 +324,99 @@ function MonthDayCell({
 
 export function PlanView({ today, week, month }: { today: TodayViewData; week: WeekViewData; month: MonthViewData }) {
   const [tab, setTab] = useState<Tab>("day");
+  const [overdueTasks, setOverdueTasks] = useState<PlanTaskView[]>(today.overdueTasks);
+  const [todayTasks, setTodayTasks] = useState<PlanTaskView[]>(today.todayTasks);
   const [selectedTask, setSelectedTask] = useState<PlanTaskView | null>(today.overdueTasks[0] ?? today.todayTasks[0] ?? null);
   const [selectedMonthDay, setSelectedMonthDay] = useState<MonthDayView | null>(
     month.days.find((day) => day.state === "today") ?? month.days.find((day) => day.taskCount > 0) ?? null,
   );
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const currentDateKey = todayKey();
+
+  function nextSelectedTask(taskId: string, nextOverdue: PlanTaskView[], nextToday: PlanTaskView[]) {
+    if (selectedTask?.id !== taskId) return;
+    setSelectedTask(nextOverdue[0] ?? nextToday[0] ?? null);
+  }
+
+  async function patchTask(task: PlanTaskView, body: { date?: string; status?: PlanTaskView["status"] }, successMessage: string) {
+    setSavingId(task.id);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/tasks", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: task.id, ...body }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error ?? "更新失败");
+      }
+      setMessage(successMessage);
+      window.setTimeout(() => setMessage(null), 1800);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "更新失败");
+      throw err;
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function moveTaskToDate(task: PlanTaskView, dateKey: string, successMessage: string) {
+    const previousOverdue = overdueTasks;
+    const previousToday = todayTasks;
+    const updatedTask: PlanTaskView = {
+      ...task,
+      dateKey,
+      dateLabel: dateLabelFromKey(dateKey),
+      status: "todo",
+      done: false,
+    };
+    const nextOverdue = overdueTasks.filter((item) => item.id !== task.id);
+    const nextToday = todayTasks.filter((item) => item.id !== task.id);
+    setOverdueTasks(nextOverdue);
+    if (dateKey === currentDateKey) {
+      const nextTodayWithTask = [...nextToday, updatedTask];
+      setTodayTasks(nextTodayWithTask);
+      setSelectedTask(updatedTask);
+    } else {
+      setTodayTasks(nextToday);
+      nextSelectedTask(task.id, nextOverdue, nextToday);
+    }
+
+    try {
+      await patchTask(task, { date: dateKey, status: "todo" }, successMessage);
+    } catch {
+      setOverdueTasks(previousOverdue);
+      setTodayTasks(previousToday);
+      setSelectedTask(task);
+    }
+  }
+
+  async function setTaskStatus(task: PlanTaskView, status: "done" | "backlog", successMessage: string) {
+    const previousOverdue = overdueTasks;
+    const previousToday = todayTasks;
+    const nextOverdue = overdueTasks.filter((item) => item.id !== task.id);
+    const nextToday = todayTasks.filter((item) => item.id !== task.id);
+    setOverdueTasks(nextOverdue);
+    setTodayTasks(nextToday);
+    nextSelectedTask(task.id, nextOverdue, nextToday);
+
+    try {
+      await patchTask(task, { status }, successMessage);
+    } catch {
+      setOverdueTasks(previousOverdue);
+      setTodayTasks(previousToday);
+      setSelectedTask(task);
+    }
+  }
+
+  const taskActions = {
+    moveToday: (task: PlanTaskView) => void moveTaskToDate(task, currentDateKey, "已挪到今天"),
+    moveTomorrow: (task: PlanTaskView) => void moveTaskToDate(task, addDaysKey(currentDateKey, 1), "已挪到明天"),
+    complete: (task: PlanTaskView) => void setTaskStatus(task, "done", "已标记完成"),
+    backlog: (task: PlanTaskView) => void setTaskStatus(task, "backlog", "已放回 Backlog"),
+  };
 
   return (
     <div className="paw-page">
@@ -298,10 +454,10 @@ export function PlanView({ today, week, month }: { today: TodayViewData; week: W
       {tab === "day" ? (
         <section className="paw-plan-view paw-plan-split">
           <div className="paw-plan-main">
-            {today.overdueTasks.length > 0 ? (
+            {overdueTasks.length > 0 ? (
               <TaskList
-                label={`未完成遗留 · ${today.overdueTasks.length}`}
-                tasks={today.overdueTasks}
+                label={`未完成遗留 · ${overdueTasks.length}`}
+                tasks={overdueTasks}
                 empty="今天以前没有遗留待办。"
                 onOpen={setSelectedTask}
                 tone="warn"
@@ -310,15 +466,15 @@ export function PlanView({ today, week, month }: { today: TodayViewData; week: W
               />
             ) : null}
             <TaskList
-              label={`今日任务 · ${today.todayTasks.filter((task) => task.done).length}/${today.todayTasks.length}`}
-              tasks={today.todayTasks}
+              label={`今日任务 · ${todayTasks.filter((task) => task.done).length}/${todayTasks.length}`}
+              tasks={todayTasks}
               empty="今天还没有安排任务。"
               onOpen={setSelectedTask}
               selectedId={selectedTask?.id ?? null}
             />
             <FixedItems items={today.fixedItems} />
           </div>
-          <TaskDetail task={selectedTask} />
+          <TaskDetail task={selectedTask} actions={taskActions} savingId={savingId} message={message} />
         </section>
       ) : null}
 

@@ -670,6 +670,12 @@ a {
   transform: scale(0.94);
 }
 
+.paw-act-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  transform: none;
+}
+
 .paw-act-btn.selected {
   animation: paw-pop 360ms var(--app-ease-spring);
 }
@@ -1051,6 +1057,12 @@ a {
 
 .paw-plan-detail-notes.muted {
   color: var(--app-ink-muted);
+}
+
+.paw-plan-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .paw-plan-detail-sections {
