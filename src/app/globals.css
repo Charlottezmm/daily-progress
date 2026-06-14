@@ -1977,7 +1977,7 @@ a {
     left: 0;
     z-index: 30;
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     min-height: calc(var(--app-bottom-nav-height) + env(safe-area-inset-bottom, 0px));
     border-top: 1px solid var(--app-line);
     background: rgba(255, 254, 251, 0.96);

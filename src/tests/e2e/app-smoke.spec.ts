@@ -32,6 +32,7 @@ test("renders Today on desktop and mobile with a workspace session", async ({ co
   const nav = page.getByLabel(isMobile ? "Mobile navigation" : "Primary navigation");
   await expect(nav.getByRole("link", { name: "Today", exact: true })).toBeVisible();
   await expect(nav.getByRole("link", { name: "Plan", exact: true })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Fixed", exact: true })).toBeVisible();
   await expect(nav.getByRole("link", { name: "Inbox", exact: true })).toBeVisible();
   await expect(nav.getByRole("link", { name: "Review", exact: true })).toBeVisible();
   await expect(nav.getByRole("link", { name: "More", exact: true })).toBeVisible();
@@ -98,7 +99,7 @@ test("renders real settings surfaces without fake recovery saves", async ({ cont
   await expect(page.getByText("Metadata verified", { exact: true })).toHaveCount(2);
 });
 
-test("renders More with one prominent fixed schedule entry point", async ({ context, page }) => {
+test("keeps fixed schedule out of More because it is a top-level tab", async ({ context, page }) => {
   await context.addCookies([
     {
       name: "daily_progress_workspace",
@@ -112,7 +113,7 @@ test("renders More with one prominent fixed schedule entry point", async ({ cont
 
   await page.goto("/more");
   await expect(page.getByText("PawPlan v1.0 public beta")).toBeVisible();
-  await expect(page.locator('a[href="/constraints"]').filter({ hasText: "固定安排" })).toBeVisible();
+  await expect(page.locator('a[href="/constraints"]').filter({ hasText: "固定安排" })).toHaveCount(0);
   await expect(page.locator('a[href="/settings#routines"]').filter({ hasText: "日常事项" })).toHaveCount(0);
   await expect(page.locator('a[href="/constraints"]').filter({ hasText: "日历与课程" })).toHaveCount(0);
 });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildConstraintGroups, buildConstraintTimelineRows } from "@/components/constraints-view";
+import { redactPrivateTitle } from "@/lib/display/privacy";
 
 function block(input: {
   id: string;
@@ -22,6 +23,10 @@ function block(input: {
 }
 
 describe("constraints view helpers", () => {
+  it("redacts private names from fixed schedule titles", () => {
+    expect(redactPrivateTitle("工作·程辉硬件(SolidWorks+Kalpakjian)")).toBe("工作·硬件(SolidWorks+Kalpakjian)");
+  });
+
   it("folds repeated concrete time blocks into weekly summary groups", () => {
     const groups = buildConstraintGroups([
       block({

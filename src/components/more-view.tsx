@@ -1,4 +1,4 @@
-import { Archive, CalendarDays, ChevronRight, Download, KeyRound, Settings } from "lucide-react";
+import { Archive, ChevronRight, Download, KeyRound, Settings } from "lucide-react";
 import Link from "next/link";
 import { CatIcon } from "./cat-icon";
 import { LogoutButton } from "./logout-button";
@@ -29,19 +29,6 @@ const sections: Array<{ title: string; tools: Tool[] }> = [
         text: "导入计划文档和课表文件。",
         icon: Download,
         active: true,
-      },
-    ],
-  },
-  {
-    title: "固定安排",
-    tools: [
-      {
-        href: "/constraints",
-        title: "固定安排",
-        text: "课程、日常事项、恢复和不可用时间都在这里看。",
-        icon: CalendarDays,
-        active: true,
-        featured: true,
       },
     ],
   },

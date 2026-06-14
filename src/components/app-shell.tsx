@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Archive, CalendarDays, CheckCircle2, MoreHorizontal, PawPrint } from "lucide-react";
+import { Archive, CalendarDays, CheckCircle2, Clock3, MoreHorizontal, PawPrint } from "lucide-react";
 import { CatIcon } from "./cat-icon";
 import { FloatingCat } from "./floating-cat";
 
 const navItems = [
   { href: "/today", label: "Today" },
   { href: "/plan", label: "Plan" },
+  { href: "/constraints", label: "Fixed" },
   { href: "/inbox", label: "Inbox" },
   { href: "/review", label: "Review" },
   { href: "/more", label: "More" },
@@ -17,6 +18,7 @@ const navItems = [
 const navIcons = {
   Today: PawPrint,
   Plan: CalendarDays,
+  Fixed: Clock3,
   Inbox: Archive,
   Review: CheckCircle2,
   More: MoreHorizontal,
@@ -28,7 +30,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   function isActive(href: string) {
     if (href === "/plan") return pathname === href || pathname === "/week" || pathname === "/month";
     if (href === "/review") return pathname === href || pathname === "/reschedule";
-    if (href === "/more") return pathname === href || pathname === "/import" || pathname === "/settings" || pathname === "/constraints";
+    if (href === "/more") return pathname === href || pathname === "/import" || pathname === "/settings";
     return pathname === href || pathname.startsWith(`${href}/`);
   }
 

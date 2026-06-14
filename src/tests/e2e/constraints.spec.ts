@@ -19,7 +19,7 @@ async function addWorkspaceSession(context: BrowserContext) {
   ]);
 }
 
-test("opens constraints from More, saves a course block, and deletes it explicitly", async ({ context, page }) => {
+test("opens constraints from the Fixed tab, saves a course block, and deletes it explicitly", async ({ context, page }) => {
   await addWorkspaceSession(context);
 
   const workspaceId = "00000000-0000-0000-0000-000000000001";
@@ -131,8 +131,8 @@ test("opens constraints from More, saves a course block, and deletes it explicit
     await route.fallback();
   });
 
-  await page.goto("/more");
-  await page.getByRole("link", { name: /固定安排/ }).click();
+  await page.goto("/today");
+  await page.getByRole("link", { name: "Fixed", exact: true }).click();
   await expect(page).toHaveURL(/\/constraints$/);
   await expect(page.getByRole("heading", { name: "固定安排", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "导入 timetable.csv" })).toHaveAttribute("href", "/import");

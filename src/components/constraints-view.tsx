@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { BackLink } from "./back-link";
 import { CatIcon } from "./cat-icon";
+import { redactPrivateTitle } from "@/lib/display/privacy";
 
 type EditableKind = "course" | "meeting" | "unavailable" | "routine" | "recovery";
 type WeekdayKey = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
@@ -462,7 +463,7 @@ export function ConstraintsView() {
                   {row.startTime}–{row.endTime}
                 </span>
                 <div className={`paw-time-bar ${row.kind}`}>
-                  <span>{row.title}</span>
+                  <span>{redactPrivateTitle(row.title)}</span>
                   <span className="ml-2 text-xs opacity-70">
                     {kindLabels[row.kind]}{row.courseName ? ` · ${row.courseName}` : ""}
                     {row.instanceCount > 1 ? ` · ${row.instanceCount} 个日期` : ""}
@@ -626,7 +627,7 @@ export function ConstraintsView() {
             {constraintGroups.map((group) => (
               <div key={group.key} className="paw-constraint-group">
                 <div className="min-w-0">
-                  <p className="paw-row-title">{group.title}</p>
+                  <p className="paw-row-title">{redactPrivateTitle(group.title)}</p>
                   <p className="paw-row-meta">
                     {kindLabels[group.kind]} · {group.startTime}–{group.endTime} · {weekdaySummary(group.weekdays)}
                     {group.courseName ? ` · ${group.courseName}` : ""}
@@ -652,7 +653,7 @@ export function ConstraintsView() {
                             type="button"
                             disabled={pending === block.id}
                             onClick={() => editExistingTimeBlock(block)}
-                            aria-label={`编辑 ${block.title}`}
+                            aria-label={`编辑 ${redactPrivateTitle(block.title)}`}
                             className="paw-secondary-btn !px-3 !py-2 !text-xs"
                           >
                             <Pencil size={13} />
@@ -662,7 +663,7 @@ export function ConstraintsView() {
                             type="button"
                             disabled={pending === block.id}
                             onClick={() => void deleteExistingTimeBlock(block)}
-                            aria-label={`删除 ${block.title}`}
+                            aria-label={`删除 ${redactPrivateTitle(block.title)}`}
                             className="paw-secondary-btn !px-3 !py-2 !text-xs text-[var(--app-danger)]"
                           >
                             <Trash2 size={13} />

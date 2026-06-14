@@ -4,6 +4,7 @@ import { useState } from "react";
 import { CatIcon } from "./cat-icon";
 import { RescheduleList } from "./reschedule-list";
 import type { MonthViewData, TimelineItemView, TodayViewData, WeekViewData } from "@/lib/planning/view-data";
+import { redactPrivateTitle } from "@/lib/display/privacy";
 
 type Tab = "day" | "week" | "month" | "reschedule";
 
@@ -103,7 +104,7 @@ export function PlanView({ today, week, month }: { today: TodayViewData; week: W
                     {clock(item.startsAt)}–{clock(item.endsAt)}
                   </span>
                   <div className={`paw-time-bar ${timelineKindClass[item.kind]}`}>
-                    <span>{item.title}</span>
+                    <span>{redactPrivateTitle(item.title)}</span>
                     <span className="ml-2 text-xs opacity-70">
                       {timelineKindLabel[item.kind]} · {minutesLabel(item.minutes)}
                     </span>
