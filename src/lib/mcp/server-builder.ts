@@ -25,7 +25,7 @@ export function createPawPlanMcpServer(input: { workspaceId: string; permission:
   const db = getDb();
   const server = new McpServer({
     name: "pawplan",
-    version: "0.2.0",
+    version: "0.2.1",
   });
 
   for (const name of allowedPawPlanToolNames(input.permission)) {
