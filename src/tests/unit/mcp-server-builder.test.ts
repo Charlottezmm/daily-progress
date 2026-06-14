@@ -1,12 +1,63 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { describe, expect, it, vi } from "vitest";
+import { getTableName } from "drizzle-orm";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+function createFakeDb() {
+  const inserts: Array<{ table: string; values: Record<string, unknown> }> = [];
+
+  function tableName(table: unknown) {
+    return getTableName(table as Parameters<typeof getTableName>[0]);
+  }
+
+  return {
+    inserts,
+    select() {
+      return {
+        from(table: unknown) {
+          const name = tableName(table);
+          return {
+            where() {
+              const rows = name === "plans" ? [{ id: "plan-1" }] : [];
+              return {
+                limit(count: number) {
+                  return Promise.resolve(rows.slice(0, count));
+                },
+                then(resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) {
+                  return Promise.resolve(rows).then(resolve, reject);
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+    insert(table: unknown) {
+      return {
+        values(values: Record<string, unknown>) {
+          inserts.push({ table: tableName(table), values });
+          return {
+            returning() {
+              return Promise.resolve([{ id: `${tableName(table)}-1`, ...values }]);
+            },
+          };
+        },
+      };
+    },
+  };
+}
+
+const fakeDb = vi.hoisted(() => createFakeDb());
 
 vi.mock("@/lib/db/client", () => ({
-  getDb: vi.fn(() => ({})),
+  getDb: vi.fn(() => fakeDb),
 }));
 
 describe("PawPlan MCP server builder", () => {
+  beforeEach(() => {
+    fakeDb.inserts.length = 0;
+  });
+
   it("publishes a concrete propose_patch patch schema through tools/list", async () => {
     const { createPawPlanMcpServer } = await import("@/lib/mcp/server-builder");
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -15,7 +66,7 @@ describe("PawPlan MCP server builder", () => {
 
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
     try {
-      expect(client.getServerVersion()).toEqual({ name: "pawplan", version: "0.2.1" });
+      expect(client.getServerVersion()).toEqual({ name: "pawplan", version: "0.2.2" });
 
       const result = await client.listTools();
       const tool = result.tools.find((candidate) => candidate.name === "propose_patch");
@@ -39,6 +90,60 @@ describe("PawPlan MCP server builder", () => {
         },
         required: ["operations"],
       });
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it("accepts stringified propose_patch payloads from clients that serialize object fields", async () => {
+    const { createPawPlanMcpServer } = await import("@/lib/mcp/server-builder");
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const server = createPawPlanMcpServer({ workspaceId: "workspace-1", permission: "read_write" });
+    const client = new Client({ name: "schema-check", version: "0.0.0" });
+    const patch = {
+      operations: [
+        {
+          type: "move_task",
+          task_id: "task-1",
+          from_date: "2026-06-14",
+          from_day_segment: "afternoon",
+          to_date: "2026-06-15",
+          to_day_segment: "afternoon",
+          reason: "Move after overload.",
+        },
+      ],
+    };
+
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    try {
+      const result = await client.callTool({
+        name: "propose_patch",
+        arguments: {
+          mode: "week",
+          reason: "Client serialized the patch object as JSON.",
+          patch: JSON.stringify(patch),
+          created_by: "claude",
+        },
+      });
+
+      const text = result.content[0]?.type === "text" ? result.content[0].text : null;
+      expect(JSON.parse(text ?? "{}")).toEqual(
+        expect.objectContaining({
+          patchId: "agent_patches-1",
+          previewOnly: true,
+          status: "draft",
+        }),
+      );
+      expect(fakeDb.inserts).toEqual([
+        expect.objectContaining({
+          table: "agent_patches",
+          values: expect.objectContaining({
+            patchJson: patch,
+            createdBy: "claude",
+          }),
+        }),
+      ]);
     } finally {
       await client.close();
       await server.close();

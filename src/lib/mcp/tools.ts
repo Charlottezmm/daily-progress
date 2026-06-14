@@ -67,40 +67,23 @@ const mcpAgentPatchSchema = z
       .min(1),
   })
   .strict();
+const mcpAgentPatchInputSchema = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}, mcpAgentPatchSchema);
 const proposePatchArgsSchema = z
   .object({
     mode: z.enum(["today", "week"]),
     reason: z.string().min(1),
-    patch: mcpAgentPatchSchema,
+    patch: mcpAgentPatchInputSchema,
     created_by: createdBySchema.optional(),
   })
   .strict();
-const jsonStringAgentPatchSchema = z.string().transform((value, ctx) => {
-  let parsed: unknown;
-
-  try {
-    parsed = JSON.parse(value);
-  } catch {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Invalid agent patch JSON",
-    });
-    return z.NEVER;
-  }
-
-  const result = mcpAgentPatchSchema.safeParse(parsed);
-  if (!result.success) {
-    for (const issue of result.error.issues) {
-      ctx.addIssue(issue);
-    }
-    return z.NEVER;
-  }
-
-  return result.data;
-});
-const proposePatchRuntimeArgsSchema = proposePatchArgsSchema.extend({
-  patch: z.union([mcpAgentPatchSchema, jsonStringAgentPatchSchema]),
-});
 
 export const pawPlanToolSchemas = {
   get_today: emptyArgsSchema,
@@ -766,7 +749,7 @@ export async function runPawPlanTool(
     return proposeTimetableImport(db, workspaceId, parsed);
   }
 
-  const parsed = proposePatchRuntimeArgsSchema.parse(args);
+  const parsed = pawPlanToolSchemas.propose_patch.parse(args);
   const result = await proposeAgentPatch(db, {
     workspaceId,
     mode: parsed.mode,

@@ -1,6 +1,5 @@
 import { getTableName } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { allowedPawPlanToolNames, pawPlanToolSchemas, runPawPlanTool } from "@/lib/mcp/tools";
 
@@ -140,16 +139,6 @@ function createFakeDb(options: FakeDbOptions = {}) {
 
 describe("MCP planning tools", () => {
   it("publishes propose_patch.patch as a structured object for MCP clients", () => {
-    const patchSchema = pawPlanToolSchemas.propose_patch.shape.patch;
-
-    expect(patchSchema).toBeInstanceOf(z.ZodObject);
-    const operationsSchema = (patchSchema as z.ZodObject<z.ZodRawShape>).shape.operations;
-    expect(operationsSchema).toBeInstanceOf(z.ZodArray);
-
-    const operationSchema = (operationsSchema as z.ZodArray<z.ZodTypeAny>).element;
-    expect(operationSchema).toBeInstanceOf(z.ZodObject);
-    expect((operationSchema as z.ZodObject<z.ZodRawShape>).shape.type).toBeInstanceOf(z.ZodString);
-
     const jsonSchema = zodToJsonSchema(pawPlanToolSchemas.propose_patch, {
       strictUnions: true,
       pipeStrategy: "input",
