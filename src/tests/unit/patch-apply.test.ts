@@ -693,7 +693,7 @@ describe("applyAgentPatch", () => {
       expect.objectContaining({
         index: 0,
         type: "import_timetable",
-        action: "imported 2 timetable blocks",
+        action: "imported 1 timetable blocks",
       }),
     ]);
     expect(db.inserts).toEqual(
@@ -712,16 +712,10 @@ describe("applyAgentPatch", () => {
             title: "Embodied AI seminar",
             kind: "course",
             startsAt: new Date("2026-06-15T01:00:00.000Z"),
-            endsAt: new Date("2026-06-15T02:30:00.000Z"),
-            courseId: "courses-1",
-            movable: false,
-          }),
-        }),
-        expect.objectContaining({
-          table: "time_blocks",
-          values: expect.objectContaining({
-            startsAt: new Date("2026-06-22T01:00:00.000Z"),
             endsAt: new Date("2026-06-22T02:30:00.000Z"),
+            courseId: "courses-1",
+            recurrenceWeekdayMask: 2,
+            movable: false,
           }),
         }),
         expect.objectContaining({

@@ -213,6 +213,41 @@ describe("constraints service", () => {
     ]);
   });
 
+  it("checks recurring constraint conflicts against expanded occurrences", async () => {
+    const db = createFakeDb({
+      timeBlocks: [
+        {
+          id: "study-rule",
+          workspaceId: "workspace-1",
+          title: "Study block",
+          kind: "routine",
+          startsAt: new Date("2026-06-15T05:00:00.000+08:00"),
+          endsAt: new Date("2026-06-30T07:00:00.000+08:00"),
+          recurrenceRule: "weekly",
+          recurrenceWeekdayMask: 1 << 1,
+          courseId: null,
+          movable: false,
+        },
+        {
+          id: "tuesday-meeting",
+          workspaceId: "workspace-1",
+          title: "Tuesday meeting",
+          kind: "meeting",
+          startsAt: new Date("2026-06-16T05:30:00.000+08:00"),
+          endsAt: new Date("2026-06-16T06:00:00.000+08:00"),
+          recurrenceRule: null,
+          courseId: null,
+          movable: false,
+        },
+      ],
+    });
+
+    const result = await getConstraints(db, "workspace-1");
+
+    expect(result.summary?.conflictCount).toBe(0);
+    expect(result.conflicts).toEqual([]);
+  });
+
   it("creates a course time block, reusing the current workspace course and writing a manual change log", async () => {
     const db = createFakeDb({
       courses: [{ id: "course-1", workspaceId: "workspace-1", name: "Robotics" }],

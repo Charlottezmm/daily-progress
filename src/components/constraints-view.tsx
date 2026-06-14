@@ -23,6 +23,7 @@ type TimeBlock = {
   startsAt: string;
   endsAt: string;
   recurrenceRule: string | null;
+  recurrenceWeekdayMask: number | null;
   courseId: string | null;
   courseName: string | null;
   movable: false;
@@ -143,6 +144,12 @@ function weekdayKey(value: string): WeekdayKey {
   return weekdayLookup[weekday] ?? "mon";
 }
 
+function weekdaysForBlock(block: TimeBlock): WeekdayKey[] {
+  const mask = block.recurrenceWeekdayMask ?? 0;
+  if (mask > 0) return weekdayOrder.filter((day) => (mask & (1 << ["sun", "mon", "tue", "wed", "thu", "fri", "sat"].indexOf(day))) !== 0);
+  return [weekdayKey(block.startsAt)];
+}
+
 function shanghaiInputParts(value: string) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Shanghai",
@@ -209,12 +216,14 @@ export function buildConstraintGroups(blocks: TimeBlock[]): ConstraintGroup[] {
       startTime,
       endTime,
     ].join("|");
-    const day = weekdayKey(block.startsAt);
+    const days = weekdaysForBlock(block);
     const existing = groups.get(key);
     if (existing) {
       existing.blocks.push(block);
       existing.lastDate = block.startsAt;
-      if (!existing.weekdays.includes(day)) existing.weekdays.push(day);
+      for (const day of days) {
+        if (!existing.weekdays.includes(day)) existing.weekdays.push(day);
+      }
       existing.weekdays.sort((a, b) => weekdayOrder.indexOf(a) - weekdayOrder.indexOf(b));
       continue;
     }
@@ -229,7 +238,7 @@ export function buildConstraintGroups(blocks: TimeBlock[]): ConstraintGroup[] {
       endTime,
       firstDate: block.startsAt,
       lastDate: block.startsAt,
-      weekdays: [day],
+      weekdays: days,
       blocks: [block],
     });
   }
@@ -251,7 +260,7 @@ export function buildConstraintTimelineRows(groups: ConstraintGroup[], day: Week
       courseName: group.courseName,
       startTime: group.startTime,
       endTime: group.endTime,
-      instanceCount: group.blocks.filter((block) => weekdayKey(block.startsAt) === day).length,
+      instanceCount: group.blocks.filter((block) => weekdaysForBlock(block).includes(day)).length,
     }))
     .sort((a, b) => a.startTime.localeCompare(b.startTime) || a.title.localeCompare(b.title));
 }

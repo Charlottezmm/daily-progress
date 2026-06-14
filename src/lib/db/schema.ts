@@ -184,6 +184,7 @@ export const timeBlocks = pgTable("time_blocks", {
   startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
   endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
   recurrenceRule: text("recurrence_rule"),
+  recurrenceWeekdayMask: integer("recurrence_weekday_mask"),
   courseId: uuid("course_id").references(() => courses.id, { onDelete: "set null" }),
   trackId: uuid("track_id").references(() => tracks.id, { onDelete: "set null" }),
   movable: boolean("movable").notNull().default(false),

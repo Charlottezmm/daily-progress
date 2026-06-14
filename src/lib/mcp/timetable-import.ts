@@ -8,6 +8,7 @@ import {
   type MaterializedTimetableBlock,
 } from "@/lib/imports/timetable-save";
 import { getActivePlanId } from "@/lib/planning/active-plan";
+import { expandRecurringBlocks } from "@/lib/planning/recurring-time-blocks";
 
 type PlanningDb = {
   select: (...args: any[]) => any;
@@ -105,9 +106,15 @@ export async function findTimetableImportConflicts(
       ),
     );
 
+  const incomingBlocks = expandRecurringBlocks(
+    input.blocks.map((block, index) => ({ id: `incoming-${index}`, ...block })),
+    start,
+    end,
+  );
+  const existingBlocks = expandRecurringBlocks(existingRows as Array<any>, start, end);
   const conflicts: string[] = [];
-  for (const block of input.blocks) {
-    for (const existing of existingRows as Array<Record<string, unknown>>) {
+  for (const block of incomingBlocks) {
+    for (const existing of existingBlocks as Array<Record<string, unknown>>) {
       if (!(existing.startsAt instanceof Date) || !(existing.endsAt instanceof Date)) continue;
       if (blockOverlaps(block, { startsAt: existing.startsAt, endsAt: existing.endsAt })) {
         conflicts.push(conflictLabel(block, existing));

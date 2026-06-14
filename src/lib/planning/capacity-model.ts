@@ -1,3 +1,5 @@
+import { expandRecurringBlocks } from "@/lib/planning/recurring-time-blocks";
+
 export type CapacitySegment = "morning" | "afternoon" | "evening";
 export type CapacityTaskStatus = "todo" | "done" | "skipped" | "backlog";
 export type ProtectedBlockKind = "course" | "meeting" | "unavailable" | "routine" | "recovery";
@@ -17,6 +19,7 @@ export type CapacityTimeBlockInput = {
   kind: ProtectedBlockKind;
   startsAt: Date;
   endsAt: Date;
+  recurrenceWeekdayMask?: number | null;
 };
 
 export type CapacityRoutineInput = {
@@ -237,7 +240,13 @@ export function buildCapacityModel(input: CapacityModelInput): CapacityModelResu
     });
   }
 
-  for (const block of input.timeBlocks) {
+  const rangeStart = input.dates.length > 0 ? startOfShanghaiCapacityDay(input.dates[0]) : new Date();
+  const rangeEnd = input.dates.length > 0
+    ? addDays(startOfShanghaiCapacityDay(input.dates[input.dates.length - 1]), 1)
+    : new Date();
+  const timeBlocks = expandRecurringBlocks(input.timeBlocks, rangeStart, rangeEnd);
+
+  for (const block of timeBlocks) {
     for (const day of days) {
       const date = startOfShanghaiCapacityDay(new Date(`${day.dateKey}T00:00:00.000+08:00`));
       const windows = segmentWindows(date);

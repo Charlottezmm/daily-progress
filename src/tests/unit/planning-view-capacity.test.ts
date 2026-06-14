@@ -130,4 +130,46 @@ describe("planning timeline data", () => {
       }),
     ]);
   });
+
+  it("expands recurring protected blocks before building a day timeline", () => {
+    const mondayItems = buildDayTimelineItems({
+      date: new Date("2026-06-15T00:00:00.000+08:00"),
+      taskRows: [],
+      blockRows: [
+        {
+          id: "study-rule",
+          title: "Study block",
+          kind: "routine",
+          startsAt: new Date("2026-06-15T05:00:00.000+08:00"),
+          endsAt: new Date("2026-06-30T07:00:00.000+08:00"),
+          recurrenceWeekdayMask: 1 << 1,
+        },
+      ],
+      routineRows: [],
+    });
+    const tuesdayItems = buildDayTimelineItems({
+      date: new Date("2026-06-16T00:00:00.000+08:00"),
+      taskRows: [],
+      blockRows: [
+        {
+          id: "study-rule",
+          title: "Study block",
+          kind: "routine",
+          startsAt: new Date("2026-06-15T05:00:00.000+08:00"),
+          endsAt: new Date("2026-06-30T07:00:00.000+08:00"),
+          recurrenceWeekdayMask: 1 << 1,
+        },
+      ],
+      routineRows: [],
+    });
+
+    expect(mondayItems).toEqual([
+      expect.objectContaining({
+        id: "study-rule__2026-06-15",
+        startsAt: "2026-06-14T21:00:00.000Z",
+        endsAt: "2026-06-14T23:00:00.000Z",
+      }),
+    ]);
+    expect(tuesdayItems).toEqual([]);
+  });
 });

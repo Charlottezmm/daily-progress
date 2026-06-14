@@ -71,6 +71,13 @@
       "when": 1781369638216,
       "tag": "0009_lonely_jigsaw",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1781440880797,
+      "tag": "0010_vengeful_silver_centurion",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { editableTimeBlockKinds, type EditableTimeBlockKind, type TimeBlockInput } from "@/lib/constraints/schema";
 import { changeLogs, courses, plans, timeBlocks } from "@/lib/db/schema";
+import { expandRecurringBlocks } from "@/lib/planning/recurring-time-blocks";
 
 const editableTimeBlockKindValues = [...editableTimeBlockKinds];
 
@@ -27,6 +28,7 @@ type TimeBlockRow = {
   startsAt: Date;
   endsAt: Date;
   recurrenceRule: string | null;
+  recurrenceWeekdayMask: number | null;
   courseId: string | null;
   movable: boolean;
 };
@@ -99,6 +101,13 @@ function buildConstraintConflicts(blocks: TimeBlockRow[]) {
   return conflicts;
 }
 
+function expandBlocksForConflictCheck(blocks: TimeBlockRow[]) {
+  if (blocks.length === 0) return [];
+  const rangeStart = new Date(Math.min(...blocks.map((block) => block.startsAt.getTime())));
+  const rangeEnd = new Date(Math.max(...blocks.map((block) => block.endsAt.getTime())));
+  return expandRecurringBlocks(blocks, rangeStart, rangeEnd);
+}
+
 async function getActivePlanId(tx: DbLike, workspaceId: string) {
   const [plan] = await tx
     .select({ id: plans.id })
@@ -155,7 +164,7 @@ export async function getConstraints(db: DbLike, workspaceId: string) {
   const sortedBlocks = (rawBlocks as TimeBlockRow[])
     .filter((block) => isEditableKind(block.kind))
     .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
-  const conflicts = buildConstraintConflicts(sortedBlocks);
+  const conflicts = buildConstraintConflicts(expandBlocksForConflictCheck(sortedBlocks));
 
   return {
     workspaceId,

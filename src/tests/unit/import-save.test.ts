@@ -220,7 +220,7 @@ describe("import save services", () => {
     ]);
   });
 
-  it("saves timetable CSV by materializing weekly time blocks and writing an import change log", async () => {
+  it("saves timetable CSV as one recurring weekly time block and writes an import change log", async () => {
     const db = createFakeDb();
 
     const result = await saveTimetableImport(db, {
@@ -233,7 +233,7 @@ Deep Learning Lecture,course,Monday,09:00,11:00,2026-09-01,2026-09-14,Deep Learn
 
     expect(db.wasInTransaction()).toBe(true);
     expect(result).toEqual({
-      blocksCreated: 2,
+      blocksCreated: 1,
       coursesCreated: 1,
       coursesReused: 0,
     });
@@ -252,17 +252,11 @@ Deep Learning Lecture,course,Monday,09:00,11:00,2026-09-01,2026-09-14,Deep Learn
             workspaceId: "workspace-1",
             title: "Deep Learning Lecture",
             kind: "course",
-            startsAt: new Date("2026-09-07T01:00:00.000Z"),
-            endsAt: new Date("2026-09-07T03:00:00.000Z"),
+            startsAt: new Date("2026-09-01T01:00:00.000Z"),
+            endsAt: new Date("2026-09-14T03:00:00.000Z"),
             courseId: "courses-1",
             recurrenceRule: "weekly",
-          }),
-        }),
-        expect.objectContaining({
-          table: "time_blocks",
-          values: expect.objectContaining({
-            startsAt: new Date("2026-09-14T01:00:00.000Z"),
-            endsAt: new Date("2026-09-14T03:00:00.000Z"),
+            recurrenceWeekdayMask: 2,
           }),
         }),
         expect.objectContaining({

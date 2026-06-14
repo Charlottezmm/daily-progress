@@ -325,7 +325,7 @@ describe("MCP planning tools", () => {
         status: "draft",
         previewOnly: true,
         rowsPreviewed: 1,
-        blocksPreviewed: 2,
+        blocksPreviewed: 1,
       }),
     );
     expect(db.inserts).toEqual([
@@ -348,7 +348,7 @@ describe("MCP planning tools", () => {
                     endTime: "10:30",
                   }),
                 ],
-                capacity_impact: ["将创建 2 个固定时间块", "不会自动写入，需用户在 Review 确认"],
+                capacity_impact: ["将创建 1 个固定时间块", "不会自动写入，需用户在 Review 确认"],
               }),
             ],
           },
@@ -357,6 +357,46 @@ describe("MCP planning tools", () => {
       }),
     ]);
     expect(db.inserts.filter((write) => write.table === "courses" || write.table === "time_blocks")).toEqual([]);
+  });
+
+  it("checks timetable import conflicts against expanded recurring occurrences", async () => {
+    const db = createFakeDb({
+      activePlanId: "plan-1",
+      selectRows: {
+        time_blocks: [
+          {
+            id: "existing-tuesday",
+            title: "Tuesday meeting",
+            startsAt: new Date("2026-06-16T09:30:00.000+08:00"),
+            endsAt: new Date("2026-06-16T10:00:00.000+08:00"),
+          },
+        ],
+      },
+    });
+
+    const result = await runPawPlanTool(db, "workspace-1", "propose_timetable_import", {
+      reason: "Prepare recurring study block.",
+      rows: [
+        {
+          title: "Monday study",
+          kind: "routine",
+          day_of_week: "mon",
+          start_time: "09:00",
+          end_time: "10:30",
+          starts_on: "2026-06-15",
+          ends_on: "2026-06-22",
+        },
+      ],
+    });
+
+    expect(result.conflicts).toEqual([]);
+    expect(db.inserts[0].values.patchJson).toEqual({
+      operations: [
+        expect.objectContaining({
+          protected_evidence: [],
+        }),
+      ],
+    });
   });
 
   it("rejects timetable import rows with multi-day or localized day_of_week values at the MCP schema boundary", async () => {
@@ -657,6 +697,48 @@ describe("MCP planning tools", () => {
     expect(db.inserts).toEqual([]);
     expect(db.updates).toEqual([]);
     expect(db.deletes).toEqual([]);
+  });
+
+  it("expands recurring constraints in MCP get_constraints", async () => {
+    const db = createFakeDb({
+      selectRows: {
+        courses: [],
+        routines: [],
+        time_blocks: [
+          {
+            id: "study-rule",
+            workspaceId: "workspace-1",
+            title: "Study block",
+            kind: "routine",
+            startsAt: new Date("2026-06-15T05:00:00.000+08:00"),
+            endsAt: new Date("2026-06-30T07:00:00.000+08:00"),
+            recurrenceRule: "weekly",
+            recurrenceWeekdayMask: 1 << 1,
+            courseId: null,
+            trackId: null,
+            movable: false,
+            estimatedMinutes: null,
+            energyLevel: null,
+          },
+        ],
+      },
+    });
+
+    const result = await runPawPlanTool(
+      db,
+      "workspace-1",
+      "get_constraints",
+      { date_from: "2026-06-15", date_to: "2026-06-17" },
+      "read_only",
+    );
+
+    expect(result.protectedBlocks).toEqual([
+      expect.objectContaining({
+        id: "study-rule__2026-06-15",
+        startsAt: "2026-06-14T21:00:00.000Z",
+        endsAt: "2026-06-14T23:00:00.000Z",
+      }),
+    ]);
   });
 
   it("reads shared capacity through a read-only MCP token without writes", async () => {

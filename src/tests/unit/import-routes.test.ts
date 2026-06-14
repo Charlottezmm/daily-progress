@@ -119,7 +119,7 @@ Deep Learning Lecture,course,Monday,09:00,11:00,2026-09-01,2026-09-14,Deep Learn
     expect(body.preview).toEqual(
       expect.objectContaining({
         timezone: "Asia/Shanghai",
-        blocksPreviewed: 2,
+        blocksPreviewed: 1,
         warnings: ["Existing timetable conflict check is unavailable."],
         conflicts: [],
       }),

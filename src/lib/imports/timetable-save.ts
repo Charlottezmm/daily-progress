@@ -117,6 +117,7 @@ export type MaterializedTimetableBlock = {
   row: TimetableImportPreviewRow;
   startsAt: Date;
   endsAt: Date;
+  recurrenceWeekdayMask: number | null;
 };
 
 export type TimetableImportPublicBetaPreview = {
@@ -134,6 +135,7 @@ export function materializeTimetableRows(rows: TimetableImportPreviewRow[]) {
     row: TimetableImportPreviewRow;
     startsAt: Date;
     endsAt: Date;
+    recurrenceWeekdayMask: number | null;
   }> = [];
 
   for (const row of rows) {
@@ -141,15 +143,27 @@ export function materializeTimetableRows(rows: TimetableImportPreviewRow[]) {
     const endMinutes = parseTimeMinutes(row.endTime);
     if (endMinutes <= startMinutes) throw new ImportSaveError("end_time must be after start_time", 400);
 
-    for (const date of datesForRow(row)) {
+    const dates = datesForRow(row);
+    const weekday = normalizeWeekday(row.dayOfWeek);
+    if (weekday === null) {
+      const [date] = dates;
       blocks.push({
         row,
         startsAt: shanghaiDateTime(date, row.startTime),
         endsAt: shanghaiDateTime(date, row.endTime),
+        recurrenceWeekdayMask: null,
       });
-      if (blocks.length > maxTimetableImportBlocks) {
-        throw new ImportSaveError("Timetable import has too many generated blocks", 400);
-      }
+    } else {
+      blocks.push({
+        row,
+        startsAt: shanghaiDateTime(row.startsOn, row.startTime),
+        endsAt: shanghaiDateTime(row.endsOn, row.endTime),
+        recurrenceWeekdayMask: 1 << weekday,
+      });
+    }
+
+    if (blocks.length > maxTimetableImportBlocks) {
+      throw new ImportSaveError("Timetable import has too many generated blocks", 400);
     }
   }
 
@@ -316,6 +330,7 @@ export async function saveTimetableRowsInTransaction(
       startsAt: block.startsAt,
       endsAt: block.endsAt,
       recurrenceRule: block.row.recurrence,
+      recurrenceWeekdayMask: block.recurrenceWeekdayMask,
       courseId: courseName ? courseIds.get(courseName) ?? null : null,
       movable: false,
     };

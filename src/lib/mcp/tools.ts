@@ -2,6 +2,7 @@ import { and, desc, eq, gte, lt, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { checkins, courses, dayCapacities, routines, tasks, timeBlocks } from "@/lib/db/schema";
 import { buildCapacityModel } from "@/lib/planning/capacity-model";
+import { expandRecurringBlocks } from "@/lib/planning/recurring-time-blocks";
 import {
   createDailyCheckin,
   createInboxItem,
@@ -389,7 +390,9 @@ async function readConstraints(
       .orderBy(timeBlocks.startsAt),
   ]);
 
-  const serializedBlocks: Record<string, unknown>[] = blockRows.map((block: Record<string, any>) => serializeDateFields(block));
+  const serializedBlocks: Record<string, unknown>[] = expandRecurringBlocks(blockRows, range.start, range.end).map(
+    (block: Record<string, any>) => serializeDateFields(block),
+  );
   return {
     workspaceId,
     filters: args,

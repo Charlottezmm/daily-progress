@@ -153,4 +153,43 @@ describe("shared capacity model", () => {
       },
     ]);
   });
+
+  it("counts recurring time block occurrences only on matching weekdays", () => {
+    const result = buildCapacityModel({
+      dates: [
+        new Date("2026-06-15T00:00:00.000+08:00"),
+        new Date("2026-06-16T00:00:00.000+08:00"),
+      ],
+      capacities: [
+        {
+          date: new Date("2026-06-15T00:00:00.000+08:00"),
+          morningMinutes: 180,
+          afternoonMinutes: 240,
+          eveningMinutes: 120,
+        },
+        {
+          date: new Date("2026-06-16T00:00:00.000+08:00"),
+          morningMinutes: 180,
+          afternoonMinutes: 240,
+          eveningMinutes: 120,
+        },
+      ],
+      tasks: [],
+      timeBlocks: [
+        {
+          id: "study-rule",
+          title: "Study block",
+          kind: "routine",
+          startsAt: new Date("2026-06-15T05:00:00.000+08:00"),
+          endsAt: new Date("2026-06-30T07:00:00.000+08:00"),
+          recurrenceWeekdayMask: 1 << 1,
+        },
+      ],
+      routines: [],
+    });
+
+    expect(result.days[0].segments.morning.protectedMinutes).toBe(120);
+    expect(result.days[0].segments.afternoon.protectedMinutes).toBe(0);
+    expect(result.days[1].segments.morning.protectedMinutes).toBe(0);
+  });
 });

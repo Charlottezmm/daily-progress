@@ -24,6 +24,7 @@ import {
 } from "@/lib/planning/capacity-model";
 import { materializeTimetableRows } from "@/lib/imports/timetable-save";
 import { calculateTrackBalance } from "@/lib/planning/track-balance";
+import { expandRecurringBlocks } from "@/lib/planning/recurring-time-blocks";
 import { buildWarnings } from "@/lib/planning/warnings";
 import type { AgentPatch } from "@/lib/patches/patch-schema";
 
@@ -478,7 +479,7 @@ export function buildDayTimelineItems(input: {
     );
   }
 
-  for (const block of input.blockRows) {
+  for (const block of expandRecurringBlocks(input.blockRows, dayStart, dayEnd)) {
     if (block.endsAt <= dayStart || block.startsAt >= dayEnd) continue;
     const startsAt = new Date(Math.max(block.startsAt.getTime(), dayStart.getTime()));
     const endsAt = new Date(Math.min(block.endsAt.getTime(), dayEnd.getTime()));

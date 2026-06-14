@@ -55,10 +55,10 @@ Deep Learning Lecture,course,Monday,09:00,11:00,2026-09-01,2026-09-14,Deep Learn
       expect.objectContaining({
         timezone: "Asia/Shanghai",
         rows: expect.any(Array),
-        blocksPreviewed: 4,
+        blocksPreviewed: 2,
         warnings: ["Duplicate timetable row: Deep Learning Lecture Monday 09:00-11:00"],
         conflicts: expect.arrayContaining([
-          "Duplicate imported time block: Deep Learning Lecture on 2026-09-07 09:00-11:00",
+          "Duplicate imported time block: Deep Learning Lecture on 2026-09-01 09:00-11:00",
         ]),
       }),
     );

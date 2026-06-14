@@ -8,6 +8,7 @@ function block(input: {
   kind?: "course" | "meeting" | "unavailable" | "routine" | "recovery";
   startsAt: string;
   endsAt: string;
+  recurrenceWeekdayMask?: number | null;
 }) {
   return {
     id: input.id,
@@ -16,6 +17,7 @@ function block(input: {
     startsAt: input.startsAt,
     endsAt: input.endsAt,
     recurrenceRule: null,
+    recurrenceWeekdayMask: input.recurrenceWeekdayMask ?? null,
     courseId: null,
     courseName: null,
     movable: false as const,
@@ -95,5 +97,26 @@ describe("constraints view helpers", () => {
       endTime: "07:00",
       instanceCount: 3,
     }));
+  });
+
+  it("uses recurrence weekday masks for one-rule weekly summaries", () => {
+    const groups = buildConstraintGroups([
+      block({
+        id: "study-rule",
+        title: "学习主线·硬核",
+        startsAt: "2026-06-15T05:00:00.000+08:00",
+        endsAt: "2026-06-30T07:00:00.000+08:00",
+        recurrenceWeekdayMask: (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4) | (1 << 5) | (1 << 6),
+      }),
+    ]);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0].weekdays).toEqual(["mon", "tue", "wed", "thu", "fri", "sat"]);
+    expect(buildConstraintTimelineRows(groups, "wed")).toEqual([
+      expect.objectContaining({
+        title: "学习主线·硬核",
+        instanceCount: 1,
+      }),
+    ]);
   });
 });
