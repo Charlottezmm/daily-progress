@@ -1053,13 +1053,25 @@ a {
 
 .paw-constraint-group {
   border-bottom: 1px solid var(--app-line);
-  padding: 16px 0;
+  border-left: 3px solid var(--app-line);
+  padding: 16px 0 16px 14px;
 }
 
 .paw-constraint-group:last-child {
   border-bottom: 0;
-  padding-bottom: 0;
+  padding-bottom: 16px;
 }
+
+/* 周循环摘要每组左侧色条，跟时间轴一套配色 */
+.paw-constraint-group.course { border-left-color: #356b9b; }
+.paw-constraint-group.meeting { border-left-color: #6551a3; }
+.paw-constraint-group.unavailable { border-left-color: #9a4949; }
+.paw-constraint-group.recovery { border-left-color: #4a9e4a; }
+.paw-constraint-group.routine { border-left-color: var(--app-ink-muted); }
+.paw-constraint-group.routine-study { border-left-color: #4a4fb0; }
+.paw-constraint-group.routine-work { border-left-color: #9c6b2c; }
+.paw-constraint-group.routine-chore { border-left-color: #566776; }
+.paw-constraint-group.routine-sport { border-left-color: #2c8a76; }
 
 .paw-constraint-instances {
   margin-top: 10px;

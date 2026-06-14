@@ -636,7 +636,7 @@ export function ConstraintsView() {
         ) : (
           <div className="paw-list mt-4">
             {constraintGroups.map((group) => (
-              <div key={group.key} className="paw-constraint-group">
+              <div key={group.key} className={`paw-constraint-group ${timeBarClass(group)}`}>
                 <div className="min-w-0">
                   <p className="paw-row-title">{redactPrivateTitle(group.title)}</p>
                   <p className="paw-row-meta">
