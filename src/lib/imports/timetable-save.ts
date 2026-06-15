@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { changeLogs, courses, plans, timeBlocks } from "@/lib/db/schema";
+import { weekdayMaskFromRecurrence } from "@/lib/constraints/recurrence";
 import { parseTimetableCsv, type TimetableImportPreviewRow } from "@/lib/imports/timetable-csv";
 import { ImportSaveError } from "@/lib/imports/plan-save";
 
@@ -56,19 +57,6 @@ function daysBetween(start: Date, end: Date) {
   return Math.floor((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
 }
 
-function dateKey(date: Date) {
-  const year = date.getUTCFullYear();
-  const month = `${date.getUTCMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getUTCDate()}`.padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function addUtcDays(date: Date, days: number) {
-  const next = new Date(date);
-  next.setUTCDate(next.getUTCDate() + days);
-  return next;
-}
-
 function parseTimeMinutes(value: string) {
   const match = value.match(/^(\d{2}):(\d{2})$/);
   if (!match) throw new ImportSaveError("Invalid timetable time", 400);
@@ -88,29 +76,6 @@ function normalizeWeekday(value: string | null) {
 
 function shanghaiDateTime(date: string, time: string) {
   return new Date(`${date}T${time}:00.000+08:00`);
-}
-
-function datesForRow(row: TimetableImportPreviewRow) {
-  const start = parseDateKey(row.startsOn);
-  const end = parseDateKey(row.endsOn);
-  if (end.getTime() < start.getTime()) throw new ImportSaveError("Invalid timetable date range", 400);
-  if (daysBetween(start, end) > maxTimetableImportRangeDays) {
-    throw new ImportSaveError("Timetable import date range is too long", 400);
-  }
-
-  const weekday = normalizeWeekday(row.dayOfWeek);
-  if (weekday === null) {
-    if (row.startsOn !== row.endsOn) {
-      throw new ImportSaveError("day_of_week is required for multi-day timetable ranges", 400);
-    }
-    return [row.startsOn];
-  }
-
-  const dates: string[] = [];
-  for (let cursor = start; cursor.getTime() <= end.getTime(); cursor = addUtcDays(cursor, 1)) {
-    if (cursor.getUTCDay() === weekday) dates.push(dateKey(cursor));
-  }
-  return dates;
 }
 
 export type MaterializedTimetableBlock = {
@@ -143,22 +108,46 @@ export function materializeTimetableRows(rows: TimetableImportPreviewRow[]) {
     const endMinutes = parseTimeMinutes(row.endTime);
     if (endMinutes <= startMinutes) throw new ImportSaveError("end_time must be after start_time", 400);
 
-    const dates = datesForRow(row);
+    const rangeStart = parseDateKey(row.startsOn);
+    const rangeEnd = parseDateKey(row.endsOn);
+    if (rangeEnd.getTime() < rangeStart.getTime()) {
+      throw new ImportSaveError("Invalid timetable date range", 400);
+    }
+    if (daysBetween(rangeStart, rangeEnd) > maxTimetableImportRangeDays) {
+      throw new ImportSaveError("Timetable import date range is too long", 400);
+    }
+
     const weekday = normalizeWeekday(row.dayOfWeek);
-    if (weekday === null) {
-      const [date] = dates;
-      blocks.push({
-        row,
-        startsAt: shanghaiDateTime(date, row.startTime),
-        endsAt: shanghaiDateTime(date, row.endTime),
-        recurrenceWeekdayMask: null,
-      });
-    } else {
+    // 没有显式 day_of_week 时，允许用 recurrence（每天 / 工作日 / 周一到周六 / weekly …）
+    // 一行就生成一个跨多星期的循环块（多位掩码）。
+    const ruleMask =
+      weekday === null
+        ? weekdayMaskFromRecurrence(row.recurrence, shanghaiDateTime(row.startsOn, row.startTime))
+        : null;
+
+    if (weekday !== null) {
       blocks.push({
         row,
         startsAt: shanghaiDateTime(row.startsOn, row.startTime),
         endsAt: shanghaiDateTime(row.endsOn, row.endTime),
         recurrenceWeekdayMask: 1 << weekday,
+      });
+    } else if (ruleMask !== null) {
+      blocks.push({
+        row,
+        startsAt: shanghaiDateTime(row.startsOn, row.startTime),
+        endsAt: shanghaiDateTime(row.endsOn, row.endTime),
+        recurrenceWeekdayMask: ruleMask,
+      });
+    } else {
+      if (row.startsOn !== row.endsOn) {
+        throw new ImportSaveError("day_of_week or recurrence is required for multi-day timetable ranges", 400);
+      }
+      blocks.push({
+        row,
+        startsAt: shanghaiDateTime(row.startsOn, row.startTime),
+        endsAt: shanghaiDateTime(row.startsOn, row.endTime),
+        recurrenceWeekdayMask: null,
       });
     }
 

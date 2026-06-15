@@ -512,6 +512,50 @@ describe("MCP planning tools", () => {
     expect(db.inserts.filter((write) => write.table === "courses" || write.table === "time_blocks")).toEqual([]);
   });
 
+  it("proposes multi-day recurring timetable rows as one recurring block", async () => {
+    const db = createFakeDb({ activePlanId: "plan-1" });
+
+    const result = await runPawPlanTool(db, "workspace-1", "propose_timetable_import", {
+      reason: "Replace fixed study structure with a recurring timetable row.",
+      source_label: "clean fixed structure",
+      created_by: "claude",
+      rows: [
+        {
+          title: "学习主线·硬核",
+          kind: "routine",
+          day_of_week: null,
+          recurrence: "周一到周六",
+          start_time: "05:00",
+          end_time: "07:00",
+          starts_on: "2026-06-15",
+          ends_on: "2026-08-31",
+        },
+      ],
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        rowsPreviewed: 1,
+        blocksPreviewed: 1,
+      }),
+    );
+    expect(db.inserts[0].values.patchJson).toEqual({
+      operations: [
+        expect.objectContaining({
+          type: "import_timetable",
+          rows: [
+            expect.objectContaining({
+              dayOfWeek: null,
+              recurrence: "周一到周六",
+            }),
+          ],
+          capacity_impact: ["将创建 1 个固定时间块", "不会自动写入，需用户在 Review 确认"],
+        }),
+      ],
+    });
+    expect(db.inserts.filter((write) => write.table === "courses" || write.table === "time_blocks")).toEqual([]);
+  });
+
   it("checks timetable import conflicts against expanded recurring occurrences", async () => {
     const db = createFakeDb({
       activePlanId: "plan-1",

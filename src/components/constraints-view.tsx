@@ -592,7 +592,7 @@ export function ConstraintsView() {
                 value={form.recurrenceRule}
                 onChange={(event) => setForm((current) => ({ ...current, recurrenceRule: event.target.value }))}
                 className="paw-input"
-                placeholder="weekly / weekdays"
+                placeholder="每天 / 工作日 / 周一到周六 / weekly"
               />
             </label>
           </div>

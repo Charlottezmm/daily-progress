@@ -1,5 +1,6 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { editableTimeBlockKinds, type EditableTimeBlockKind, type TimeBlockInput } from "@/lib/constraints/schema";
+import { weekdayMaskFromRecurrence } from "@/lib/constraints/recurrence";
 import { changeLogs, courses, plans, timeBlocks } from "@/lib/db/schema";
 import { expandRecurringBlocks } from "@/lib/planning/recurring-time-blocks";
 
@@ -188,13 +189,15 @@ export async function upsertTimeBlock(db: DbLike, workspaceId: string, input: Ti
       courseId && courseName
         ? ({ id: courseId, workspaceId, name: courseName, color: input.color ?? "#2563eb" } satisfies CourseRow)
         : null;
+    const recurrenceRule = normalizeNullable(input.recurrenceRule);
     const values = {
       workspaceId,
       title: input.title,
       kind: input.kind,
       startsAt: input.startsAt,
       endsAt: input.endsAt,
-      recurrenceRule: normalizeNullable(input.recurrenceRule),
+      recurrenceRule,
+      recurrenceWeekdayMask: weekdayMaskFromRecurrence(recurrenceRule, input.startsAt),
       courseId,
       movable: false,
     };

@@ -18,7 +18,7 @@ type PlanningDb = {
 const createdBySchema = z.enum(["codex", "claude", "user"]);
 const singleWeekdaySchema = z
   .enum(["sun", "mon", "tue", "wed", "thu", "fri", "sat"])
-  .describe("Single weekday only. Use sun, mon, tue, wed, thu, fri, or sat. For multiple days, send one row per weekday.");
+  .describe("Single weekday only. Use sun, mon, tue, wed, thu, fri, or sat. For multi-day recurrence, leave day_of_week null and set recurrence such as weekdays or mon-sat.");
 
 export const mcpTimetableRowSchema = z
   .object({
@@ -30,7 +30,13 @@ export const mcpTimetableRowSchema = z
     starts_on: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/),
     ends_on: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/),
     course: z.string().trim().max(120).optional().nullable(),
-    recurrence: z.string().trim().max(240).optional().nullable(),
+    recurrence: z
+      .string()
+      .trim()
+      .max(240)
+      .optional()
+      .nullable()
+      .describe("Optional recurrence rule. Supports weekly, daily, weekdays, weekends, mon-sat, and localized equivalents like 每天, 工作日, 周一到周六."),
     notes: z.string().trim().max(1000).optional().nullable(),
   })
   .strict();
