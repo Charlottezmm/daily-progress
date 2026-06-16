@@ -48,7 +48,10 @@ export type CapacityBlock = {
 };
 
 export type CapacitySegmentResult = {
+  baseAvailableMinutes: number;
   availableMinutes: number;
+  capacityWindowMinutes: number;
+  blockedMinutes: number;
   taskMinutes: number;
   protectedMinutes: number;
   totalUsedMinutes: number;
@@ -170,7 +173,10 @@ function routineAppliesOnDate(routine: CapacityRoutineInput, date: Date) {
 
 function emptySegment(availableMinutes: number): CapacitySegmentResult {
   return {
+    baseAvailableMinutes: availableMinutes,
     availableMinutes,
+    capacityWindowMinutes: 0,
+    blockedMinutes: 0,
     taskMinutes: 0,
     protectedMinutes: 0,
     totalUsedMinutes: 0,
@@ -184,18 +190,24 @@ function addBlock(
   day: CapacityDayResult,
   segment: CapacitySegment,
   block: CapacityBlock,
+  role: "task" | "capacity_window" | "blocked",
 ) {
   const target = day.segments[segment];
   target.blocks.push(block);
-  if (block.protected) {
+  if (role === "capacity_window") {
     target.protectedMinutes += block.minutes;
+    target.capacityWindowMinutes += block.minutes;
+  } else if (role === "blocked") {
+    target.protectedMinutes += block.minutes;
+    target.blockedMinutes += block.minutes;
   } else {
     target.taskMinutes += block.minutes;
   }
 }
 
 function finalizeSegment(segment: CapacitySegmentResult) {
-  segment.totalUsedMinutes = segment.taskMinutes + segment.protectedMinutes;
+  segment.availableMinutes = segment.capacityWindowMinutes > 0 ? segment.capacityWindowMinutes : segment.baseAvailableMinutes;
+  segment.totalUsedMinutes = segment.taskMinutes + segment.blockedMinutes;
   segment.remainingMinutes = Math.max(0, segment.availableMinutes - segment.totalUsedMinutes);
   if (segment.totalUsedMinutes > segment.availableMinutes) {
     segment.state = "over";
@@ -231,13 +243,18 @@ export function buildCapacityModel(input: CapacityModelInput): CapacityModelResu
     if ((task.status === "done" || task.status === "skipped") && taskDateKey > nowKey) continue;
     const day = dayByKey.get(taskDateKey);
     if (!day) continue;
-    addBlock(day, task.daySegment, {
-      id: task.id,
-      title: task.title,
-      kind: "task",
-      minutes: task.estimatedMinutes,
-      protected: false,
-    });
+    addBlock(
+      day,
+      task.daySegment,
+      {
+        id: task.id,
+        title: task.title,
+        kind: "task",
+        minutes: task.estimatedMinutes,
+        protected: false,
+      },
+      "task",
+    );
   }
 
   const rangeStart = input.dates.length > 0 ? startOfShanghaiCapacityDay(input.dates[0]) : new Date();
@@ -253,13 +270,18 @@ export function buildCapacityModel(input: CapacityModelInput): CapacityModelResu
       for (const segment of segments) {
         const minutes = minutesInSegment(block.startsAt, block.endsAt, windows[segment]);
         if (minutes <= 0) continue;
-        addBlock(day, segment, {
-          id: block.id,
-          title: block.title,
-          kind: block.kind,
-          minutes,
-          protected: true,
-        });
+        addBlock(
+          day,
+          segment,
+          {
+            id: block.id,
+            title: block.title,
+            kind: block.kind,
+            minutes,
+            protected: true,
+          },
+          block.kind === "routine" ? "capacity_window" : "blocked",
+        );
       }
     }
   }
@@ -273,21 +295,31 @@ export function buildCapacityModel(input: CapacityModelInput): CapacityModelResu
       if (routine.defaultTimeSegment === "specific_window" && routine.defaultStartTime && routine.defaultEndTime) {
         const segment = segmentForTime(date, routine.defaultStartTime);
         const minutes = minutesBetween(timeOnDay(date, routine.defaultStartTime), timeOnDay(date, routine.defaultEndTime));
-        addBlock(day, segment, {
-          id: routine.id,
-          title: routine.title,
-          kind: "routine",
-          minutes: minutes || routine.estimatedMinutes,
-          protected: true,
-        });
+        addBlock(
+          day,
+          segment,
+          {
+            id: routine.id,
+            title: routine.title,
+            kind: "routine",
+            minutes: minutes || routine.estimatedMinutes,
+            protected: true,
+          },
+          "blocked",
+        );
       } else if (routine.defaultTimeSegment !== "specific_window") {
-        addBlock(day, routine.defaultTimeSegment, {
-          id: routine.id,
-          title: routine.title,
-          kind: "routine",
-          minutes: routine.estimatedMinutes,
-          protected: true,
-        });
+        addBlock(
+          day,
+          routine.defaultTimeSegment,
+          {
+            id: routine.id,
+            title: routine.title,
+            kind: "routine",
+            minutes: routine.estimatedMinutes,
+            protected: true,
+          },
+          "blocked",
+        );
       }
     }
   }

@@ -154,6 +154,63 @@ describe("shared capacity model", () => {
     ]);
   });
 
+  it("uses fixed routine blocks as schedulable windows instead of adding them to task load", () => {
+    const result = buildCapacityModel({
+      dates: [new Date("2026-06-15T00:00:00.000+08:00")],
+      now: new Date("2026-06-14T10:00:00.000+08:00"),
+      capacities: [
+        {
+          date: new Date("2026-06-15T00:00:00.000+08:00"),
+          morningMinutes: 180,
+          afternoonMinutes: 240,
+          eveningMinutes: 120,
+        },
+      ],
+      tasks: [
+        {
+          id: "task-study",
+          title: "Karpathy video",
+          date: new Date("2026-06-15T00:00:00.000+08:00"),
+          daySegment: "morning",
+          estimatedMinutes: 120,
+          status: "todo",
+        },
+      ],
+      timeBlocks: [
+        {
+          id: "fixed-study-window",
+          title: "学习主线",
+          kind: "routine",
+          startsAt: new Date("2026-06-15T05:00:00.000+08:00"),
+          endsAt: new Date("2026-06-15T07:00:00.000+08:00"),
+        },
+        {
+          id: "fixed-study-window-2",
+          title: "学习主线",
+          kind: "routine",
+          startsAt: new Date("2026-06-15T09:00:00.000+08:00"),
+          endsAt: new Date("2026-06-15T12:00:00.000+08:00"),
+        },
+      ],
+      routines: [],
+    });
+
+    expect(result.days[0].segments.morning).toEqual(
+      expect.objectContaining({
+        baseAvailableMinutes: 180,
+        availableMinutes: 300,
+        capacityWindowMinutes: 300,
+        blockedMinutes: 0,
+        taskMinutes: 120,
+        protectedMinutes: 300,
+        totalUsedMinutes: 120,
+        remainingMinutes: 180,
+        state: "room",
+      }),
+    );
+    expect(result.warnings).toEqual([]);
+  });
+
   it("counts recurring time block occurrences only on matching weekdays", () => {
     const result = buildCapacityModel({
       dates: [
