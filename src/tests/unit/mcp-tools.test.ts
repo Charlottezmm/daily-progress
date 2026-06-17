@@ -9,25 +9,51 @@ type TableWrite = {
   inTransaction: boolean;
 };
 
+type TableSelect = {
+  table: string;
+  projection: unknown;
+  predicate: unknown;
+};
+
 type FakeDbOptions = {
   activePlanId?: string | null;
   protectedBlockIds?: string[];
   selectRows?: Partial<Record<string, Array<Record<string, unknown>>>>;
   taskUpdateResult?: Array<Record<string, unknown>>;
+  updateResult?: Partial<Record<string, Array<Record<string, unknown>>>>;
+  insertFailure?: Partial<Record<string, Error>>;
   latestVersionNumber?: number;
 };
+
+function containsDeepValue(value: unknown, expected: unknown, seen = new WeakSet<object>()): boolean {
+  if (Object.is(value, expected)) return true;
+  if (!value || typeof value !== "object") return false;
+  if (seen.has(value)) return false;
+  seen.add(value);
+
+  if (Array.isArray(value)) return value.some((entry) => containsDeepValue(entry, expected, seen));
+  return Object.values(value).some((entry) => containsDeepValue(entry, expected, seen));
+}
 
 function createFakeDb(options: FakeDbOptions = {}) {
   const inserts: TableWrite[] = [];
   const updates: TableWrite[] = [];
   const deletes: Array<{ table: string; inTransaction: boolean }> = [];
+  const selects: TableSelect[] = [];
+  const idCounters = new Map<string, number>();
   let inTransaction = false;
 
   function tableName(table: unknown) {
     return getTableName(table as Parameters<typeof getTableName>[0]);
   }
 
-  function rowsFor(table: unknown) {
+  function nextId(table: string) {
+    const next = (idCounters.get(table) ?? 0) + 1;
+    idCounters.set(table, next);
+    return `${table}-${next}`;
+  }
+
+  function rowsFor(table: unknown, predicate?: unknown) {
     const name = tableName(table);
     if (options.selectRows?.[name]) return options.selectRows[name];
     if (name === "plans") {
@@ -42,11 +68,11 @@ function createFakeDb(options: FakeDbOptions = {}) {
     return options.selectRows?.[name] ?? [];
   }
 
-  function selectableRows(table: unknown) {
-    const rows = rowsFor(table);
+  function selectableRows(table: unknown, predicate?: unknown) {
+    const rows = rowsFor(table, predicate);
     return {
       orderBy() {
-        return selectableRows(table);
+        return selectableRows(table, predicate);
       },
       limit(count: number) {
         return Promise.resolve(rows.slice(0, count));
@@ -59,12 +85,13 @@ function createFakeDb(options: FakeDbOptions = {}) {
 
   function createClient() {
     return {
-      select() {
+      select(projection?: unknown) {
         return {
           from(table: unknown) {
             return {
-              where() {
-                return selectableRows(table);
+              where(predicate?: unknown) {
+                selects.push({ table: tableName(table), projection, predicate });
+                return selectableRows(table, predicate);
               },
             };
           },
@@ -78,6 +105,11 @@ function createFakeDb(options: FakeDbOptions = {}) {
                 updates.push({ table: tableName(table), values, inTransaction });
                 return {
                   returning() {
+                    const namedResult = options.updateResult?.[tableName(table)];
+                    if (namedResult) return Promise.resolve(namedResult);
+                    if (tableName(table) === "agent_runs") {
+                      return Promise.resolve([{ id: "agent_runs-1", ...values }]);
+                    }
                     return Promise.resolve(options.taskUpdateResult ?? []);
                   },
                 };
@@ -90,22 +122,29 @@ function createFakeDb(options: FakeDbOptions = {}) {
         return {
           values(values: Record<string, unknown> | Array<Record<string, unknown>>) {
             const rows = Array.isArray(values) ? values : [values];
-            for (const row of rows) {
-              inserts.push({ table: tableName(table), values: row, inTransaction });
+            const name = tableName(table);
+            function recordRows() {
+              for (const row of rows) {
+                inserts.push({ table: name, values: row, inTransaction });
+              }
+              return rows.map((row) => ({
+                id: nextId(name),
+                ...row,
+              }));
             }
+
             return {
               returning() {
-                return Promise.resolve(
-                  rows.map((row, index) => ({
-                    id: `${tableName(table)}-${inserts.length - rows.length + index + 1}`,
-                    ...row,
-                  })),
-                );
+                const failure = options.insertFailure?.[name];
+                if (failure) return Promise.reject(failure);
+                return Promise.resolve(recordRows());
               },
               onConflictDoUpdate() {
+                recordRows();
                 return Promise.resolve();
               },
               then(resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) {
+                recordRows();
                 return Promise.resolve().then(resolve, reject);
               },
             };
@@ -129,6 +168,7 @@ function createFakeDb(options: FakeDbOptions = {}) {
     inserts,
     updates,
     deletes,
+    selects,
     transaction: async <T>(callback: (tx: ReturnType<typeof createClient>) => Promise<T>) => {
       inTransaction = true;
       return callback(client);
@@ -175,6 +215,30 @@ describe("MCP planning tools", () => {
     expect(allowedPawPlanToolNames("read_write")).toContain("save_conversation_summary");
     expect(allowedPawPlanToolNames("read_write")).toContain("record_decision");
     expect(allowedPawPlanToolNames("read_write")).toContain("propose_timetable_import");
+    expect(allowedPawPlanToolNames("read_write")).toContain("propose_daily_rebalance");
+    expect(allowedPawPlanToolNames("read_write")).toContain("propose_week_rebalance");
+    expect(allowedPawPlanToolNames("read_only")).not.toContain("propose_daily_rebalance");
+    expect(allowedPawPlanToolNames("read_only")).not.toContain("propose_week_rebalance");
+  });
+
+  it("publishes propose_daily_rebalance moves as a strict structured schema", () => {
+    const jsonSchema = zodToJsonSchema(pawPlanToolSchemas.propose_daily_rebalance, {
+      strictUnions: true,
+      pipeStrategy: "input",
+    }) as any;
+    const moveSchema = jsonSchema.properties.moves.items;
+
+    expect(moveSchema).toMatchObject({
+      type: "object",
+      properties: {
+        task_id: { type: "string" },
+        to_date: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+        to_day_segment: { type: "string", enum: ["morning", "afternoon", "evening"] },
+        reason: { type: "string", minLength: 1, maxLength: 1000 },
+      },
+      required: ["task_id", "to_date", "to_day_segment", "reason"],
+      additionalProperties: false,
+    });
   });
 
   it("reads tasks scoped to the requested workspace", async () => {
@@ -444,6 +508,310 @@ describe("MCP planning tools", () => {
         values: expect.objectContaining({
           patchJson: patch,
           createdBy: "claude",
+        }),
+      }),
+    ]);
+  });
+
+  it("proposes a daily rebalance as an agent run and review draft without updating tasks", async () => {
+    const db = createFakeDb({
+      activePlanId: "plan-1",
+      selectRows: {
+        tasks: [
+          {
+            id: "task-1",
+            workspaceId: "workspace-1",
+            date: new Date("2026-06-17T01:00:00.000Z"),
+            daySegment: "morning",
+            status: "todo",
+            movable: true,
+          },
+        ],
+      },
+    });
+
+    const result = await runPawPlanTool(db, "workspace-1", "propose_daily_rebalance", {
+      idempotency_key: "rebalance-valid-1",
+      reason: "Move overloaded morning work.",
+      moves: [
+        {
+          task_id: "task-1",
+          to_date: "2026-06-18",
+          to_day_segment: "evening",
+          reason: "Needs a deeper focus block.",
+        },
+      ],
+      created_by: "claude",
+    });
+
+    expect(result).toEqual({
+      runId: "agent_runs-1",
+      status: "draft_created",
+      patchId: "agent_patches-1",
+      reviewUrl: "/review",
+      operationCount: 1,
+      skipped: [],
+      warnings: [],
+      idempotencyKey: "rebalance-valid-1",
+    });
+    expect(db.inserts.map((write) => write.table)).toEqual(["agent_runs", "agent_patches"]);
+    expect(db.inserts[0]).toEqual(
+      expect.objectContaining({
+        table: "agent_runs",
+        values: expect.objectContaining({
+          workspaceId: "workspace-1",
+          planId: "plan-1",
+          kind: "morning_rebalance",
+          status: "started",
+          idempotencyKey: "rebalance-valid-1",
+          reason: "Move overloaded morning work.",
+          inputJson: {
+            tool: "propose_daily_rebalance",
+            mode: "today",
+            moveCount: 1,
+            moves: [
+              {
+                taskId: "task-1",
+                toDate: "2026-06-18",
+                toDaySegment: "evening",
+              },
+            ],
+          },
+          createdBy: "claude",
+        }),
+      }),
+    );
+    expect(db.inserts[1]).toEqual(
+      expect.objectContaining({
+        table: "agent_patches",
+        values: expect.objectContaining({
+          workspaceId: "workspace-1",
+          planId: "plan-1",
+          reason: "Move overloaded morning work.",
+          createdBy: "claude",
+          patchJson: {
+            operations: [
+              expect.objectContaining({
+                type: "move_task",
+                task_id: "task-1",
+                from_date: "2026-06-17",
+                from_day_segment: "morning",
+                to_date: "2026-06-18",
+                to_day_segment: "evening",
+              }),
+            ],
+          },
+        }),
+      }),
+    );
+    expect(db.updates).toEqual([
+      expect.objectContaining({
+        table: "agent_runs",
+        values: expect.objectContaining({
+          status: "draft_created",
+          patchId: "agent_patches-1",
+          resultJson: expect.objectContaining({
+            status: "draft_created",
+            patchId: "agent_patches-1",
+            operationCount: 1,
+          }),
+        }),
+      }),
+    ]);
+    expect(db.inserts[0].values.inputJson).not.toHaveProperty("reason");
+    expect(db.inserts[0].values.inputJson).not.toHaveProperty("created_by");
+    expect(JSON.stringify(db.inserts[0].values.inputJson)).not.toContain("Needs a deeper focus block.");
+    const taskSelect = db.selects.find((select) => select.table === "tasks");
+    expect(containsDeepValue(taskSelect?.predicate, "workspace-1")).toBe(true);
+    expect(containsDeepValue(taskSelect?.predicate, "task-1")).toBe(true);
+    expect(db.updates.filter((write) => write.table === "tasks")).toEqual([]);
+  });
+
+  it("rejects rebalance before starting an agent run when no active plan exists", async () => {
+    const db = createFakeDb({ activePlanId: null });
+
+    await expect(
+      runPawPlanTool(db, "workspace-1", "propose_daily_rebalance", {
+        idempotency_key: "rebalance-no-plan-1",
+        reason: "Cannot create a draft without an active plan.",
+        moves: [
+          {
+            task_id: "task-1",
+            to_date: "2026-06-18",
+            to_day_segment: "evening",
+            reason: "Move after overload.",
+          },
+        ],
+      }),
+    ).rejects.toThrow("No active plan");
+
+    expect(db.inserts.filter((write) => write.table === "agent_runs" || write.table === "agent_patches")).toEqual([]);
+    expect(db.updates.filter((write) => write.table === "agent_runs")).toEqual([]);
+  });
+
+  it("returns duplicate rebalance runs without inserting another patch", async () => {
+    const db = createFakeDb({
+      selectRows: {
+        agent_runs: [
+          {
+            id: "existing-run",
+            status: "draft_created",
+            patchId: "existing-patch",
+            resultJson: { operationCount: 1, skipped: [] },
+            warningsJson: [],
+            errorJson: null,
+            idempotencyKey: "rebalance-duplicate-1",
+          },
+        ],
+      },
+    });
+
+    const result = await runPawPlanTool(db, "workspace-1", "propose_daily_rebalance", {
+      idempotency_key: "rebalance-duplicate-1",
+      reason: "Same request retried.",
+      moves: [
+        {
+          task_id: "task-1",
+          to_date: "2026-06-18",
+          to_day_segment: "evening",
+          reason: "Retry same move.",
+        },
+      ],
+    });
+
+    expect(result).toEqual({
+      runId: "existing-run",
+      status: "duplicate",
+      patchId: "existing-patch",
+      reviewUrl: "/review",
+      operationCount: 1,
+      skipped: [],
+      warnings: [],
+      idempotencyKey: "rebalance-duplicate-1",
+    });
+    expect(db.inserts.filter((write) => write.table === "agent_patches")).toEqual([]);
+    expect(db.inserts.filter((write) => write.table === "agent_runs")).toEqual([]);
+    expect(db.updates).toEqual([]);
+    const duplicateSelect = db.selects.find((select) => select.table === "agent_runs");
+    expect(containsDeepValue(duplicateSelect?.predicate, "workspace-1")).toBe(true);
+    expect(containsDeepValue(duplicateSelect?.predicate, "rebalance-duplicate-1")).toBe(true);
+  });
+
+  it("completes no-change rebalance runs with skipped details and no patch", async () => {
+    const db = createFakeDb({
+      activePlanId: "plan-1",
+      selectRows: {
+        tasks: [
+          {
+            id: "task-1",
+            workspaceId: "workspace-1",
+            date: new Date("2026-06-17T01:00:00.000Z"),
+            daySegment: "morning",
+            status: "done",
+            movable: true,
+          },
+        ],
+      },
+    });
+
+    const result = await runPawPlanTool(db, "workspace-1", "propose_week_rebalance", {
+      idempotency_key: "rebalance-no-change-1",
+      reason: "Try moving a completed task.",
+      moves: [
+        {
+          task_id: "task-1",
+          to_date: "2026-06-18",
+          to_day_segment: "evening",
+          reason: "Completed work should not move.",
+        },
+      ],
+    });
+
+    expect(result).toEqual({
+      runId: "agent_runs-1",
+      status: "no_change",
+      reviewUrl: "/review",
+      operationCount: 0,
+      skipped: [expect.objectContaining({ taskId: "task-1", code: "task_not_movable_status" })],
+      warnings: [],
+      idempotencyKey: "rebalance-no-change-1",
+    });
+    expect(db.inserts.map((write) => write.table)).toEqual(["agent_runs"]);
+    expect(db.updates).toEqual([
+      expect.objectContaining({
+        table: "agent_runs",
+        values: expect.objectContaining({
+          status: "no_change",
+          patchId: null,
+          resultJson: expect.objectContaining({
+            status: "no_change",
+            operationCount: 0,
+            skipped: [expect.objectContaining({ taskId: "task-1", code: "task_not_movable_status" })],
+          }),
+        }),
+      }),
+    ]);
+  });
+
+  it("records and returns failed rebalance status when patch creation fails after run start", async () => {
+    const db = createFakeDb({
+      activePlanId: "plan-1",
+      updateResult: {
+        agent_runs: [{ id: "agent_runs-1", status: "failed" }],
+      },
+      insertFailure: {
+        agent_patches: new Error("agent patch insert failed"),
+      },
+      selectRows: {
+        tasks: [
+          {
+            id: "task-1",
+            workspaceId: "workspace-1",
+            date: new Date("2026-06-17T01:00:00.000Z"),
+            daySegment: "morning",
+            status: "todo",
+            movable: true,
+          },
+        ],
+      },
+    });
+
+    const result = await runPawPlanTool(db, "workspace-1", "propose_daily_rebalance", {
+      idempotency_key: "rebalance-failure-1",
+      reason: "Protected-block validation should fail.",
+      moves: [
+        {
+          task_id: "task-1",
+          to_date: "2026-06-18",
+          to_day_segment: "evening",
+          reason: "Patch insertion should fail.",
+        },
+      ],
+    });
+
+    expect(result).toEqual({
+      runId: "agent_runs-1",
+      status: "failed",
+      reviewUrl: "/review",
+      operationCount: 0,
+      skipped: [],
+      warnings: [],
+      idempotencyKey: "rebalance-failure-1",
+      error: expect.objectContaining({
+        code: "rebalance_failed",
+        message: "agent patch insert failed",
+      }),
+    });
+    expect(db.inserts.map((write) => write.table)).toEqual(["agent_runs"]);
+    expect(db.updates).toEqual([
+      expect.objectContaining({
+        table: "agent_runs",
+        values: expect.objectContaining({
+          status: "failed",
+          errorJson: expect.objectContaining({
+            code: "rebalance_failed",
+            message: "agent patch insert failed",
+          }),
         }),
       }),
     ]);

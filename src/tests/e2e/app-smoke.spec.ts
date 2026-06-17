@@ -50,6 +50,20 @@ test("renders real settings surfaces without fake recovery saves", async ({ cont
     },
   ]);
 
+  await page.route("**/api/settings", async (route) => {
+    await route.fulfill({
+      json: {
+        routines: [],
+        segmentEnergySettings: [
+          { segment: "morning", energyLevel: "high" },
+          { segment: "afternoon", energyLevel: "medium" },
+          { segment: "evening", energyLevel: "low" },
+        ],
+        agentRuns: [],
+        recoveryTarget: { minutes: 480, editable: false, source: "system_default" },
+      },
+    });
+  });
   await page.route("**/api/mcp-tokens", async (route) => {
     await route.fulfill({
       json: {

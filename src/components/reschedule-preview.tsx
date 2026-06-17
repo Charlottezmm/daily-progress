@@ -216,13 +216,18 @@ export function ReviewPreview({ data }: { data: RescheduleViewData }) {
               </div>
               <h2 className="paw-suggestion-what mt-3">{item.title}</h2>
               <p className="paw-suggestion-why">类型：{item.operationType}</p>
-              <p className="paw-suggestion-why">{item.reason}</p>
+              <p className="paw-suggestion-why paw-wrap-anywhere">{item.reason}</p>
               <p className="paw-suggestion-why">
                 来源：patch {item.provenance.patchId.slice(0, 8)} · op {item.provenance.operationIndex} · {item.provenance.createdBy} · {new Date(item.provenance.createdAt).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}
               </p>
-              {item.skippedReason ? <p className="paw-suggestion-why">未应用原因：{item.skippedReason}</p> : null}
+              {item.agentRun ? (
+                <p className="paw-suggestion-why">
+                  Agent run：{item.agentRunLabel} · {item.agentRun.status} · run {item.agentRun.id.slice(0, 8)}
+                </p>
+              ) : null}
+              {item.skippedReason ? <p className="paw-suggestion-why paw-wrap-anywhere">未应用原因：{item.skippedReason}</p> : null}
               {item.conflict ? (
-                <div className="paw-status-pill warn" role="status">
+                <div className="paw-status-pill warn paw-wrap-anywhere" role="status">
                   冲突：{item.conflict.reason}；期望 {formatConflictSide(item.conflict.expected)}；当前 {formatConflictSide(item.conflict.actual)}
                 </div>
               ) : null}

@@ -85,8 +85,9 @@ Codex:
 2. Create a read-write MCP token.
 3. Copy raw token once.
 4. Configure Codex with `PAWPLAN_MCP_TOKEN`.
-5. Revoke the token.
-6. Confirm revoked token cannot call MCP.
+5. Confirm read-write tools include `propose_daily_rebalance` and `propose_week_rebalance`.
+6. Revoke the token.
+7. Confirm revoked token cannot call MCP.
 
 Claude:
 
@@ -96,8 +97,9 @@ Claude:
 4. Add PawPlan MCP URL in Claude Custom Connector.
 5. Complete browser authorization.
 6. Confirm authorization appears in Settings.
-7. Revoke authorization.
-8. Confirm Claude access stops.
+7. Confirm Claude can see high-level rebalance tools but cannot auto-apply Review drafts.
+8. Revoke authorization.
+9. Confirm Claude access stops.
 
 ## Review
 
@@ -110,11 +112,24 @@ Claude:
 7. Confirm timetable apply rechecks conflicts before writing `time_blocks`.
 8. Confirm skipped/conflicted operations remain visible and audited.
 
+## Agent Runs
+
+1. Create a daily rebalance draft through `propose_daily_rebalance`.
+2. Confirm the returned status is `draft_created` before claiming a new Review draft exists.
+3. Repeat the same call with the same idempotency key.
+4. Confirm the returned status is `duplicate` and points to the existing draft.
+5. Try a no-op or skipped move.
+6. Confirm the returned status is `no_change` and no Review draft is claimed.
+7. Force or observe a failed run in a non-production test workspace.
+8. Confirm the returned status is `failed`, includes an error, and does not claim success.
+
 ## Safety Checks
 
 - MCP read-only tokens do not expose write tools.
 - MCP cannot directly edit constraints.
 - `propose_patch` and `propose_timetable_import` create Review drafts only.
+- `propose_daily_rebalance` and `propose_week_rebalance` create Review drafts only.
 - No automatic apply path exists.
+- Review remains required for every draft, including duplicate or retried agent runs.
 - Template export does not include passwords, invite codes, raw tokens, token hashes, or connector access token hashes.
 - Workspace delete requires exact typed confirmation.

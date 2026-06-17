@@ -11,10 +11,30 @@ const inboxSchema = z.object({
   title: z.string().trim().min(1).max(240),
 });
 
-const inboxActionSchema = z.object({
-  id: z.string().uuid(),
-  action: z.enum(["task", "routine", "delete"]),
-});
+const inboxActionSchema = z.discriminatedUnion("action", [
+  z.object({ id: z.string().uuid(), action: z.literal("delete") }),
+  z.object({
+    id: z.string().uuid(),
+    action: z.literal("task"),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    daySegment: z.enum(["morning", "afternoon", "evening"]),
+    estimatedMinutes: z.number().int().min(5).max(480),
+    priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
+  }),
+  z.object({
+    id: z.string().uuid(),
+    action: z.literal("quick_chore_task"),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    daySegment: z.enum(["morning", "afternoon", "evening"]).optional(),
+  }),
+  z.object({
+    id: z.string().uuid(),
+    action: z.literal("routine"),
+    weekdayPattern: z.string().trim().min(1).max(80),
+    defaultTimeSegment: z.enum(["morning", "afternoon", "evening", "specific_window"]),
+    estimatedMinutes: z.number().int().min(5).max(480),
+  }),
+]);
 
 export async function GET() {
   const workspaceId = await getWorkspaceIdFromSession();
@@ -55,10 +75,11 @@ export async function PATCH(request: Request) {
 
   const db = getDb();
   try {
+    const { id, ...actionInput } = parsed.data;
     const result = await processInboxItem(db, {
+      ...actionInput,
       workspaceId,
-      inboxItemId: parsed.data.id,
-      action: parsed.data.action,
+      inboxItemId: id,
     });
     return NextResponse.json(result);
   } catch (error) {

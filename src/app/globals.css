@@ -799,6 +799,7 @@ a {
 .paw-textarea,
 .paw-input {
   width: 100%;
+  min-width: 0;
   border: 1px solid var(--app-line);
   border-radius: var(--app-radius-sm);
   outline: none;
@@ -1310,6 +1311,10 @@ a {
 .paw-constraint-form {
   display: grid;
   gap: 12px;
+}
+
+.paw-constraint-form label {
+  min-width: 0;
 }
 
 .paw-constraint-form-grid {
@@ -2219,6 +2224,11 @@ a {
   font-weight: 500;
 }
 
+.paw-wrap-anywhere {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .paw-row-actions {
   display: flex;
   flex-wrap: wrap;
@@ -2564,6 +2574,7 @@ a {
   .paw-input,
   .quick-capture-input,
   .floating-cat-input {
+    max-width: 100%;
     font-size: 16px;
   }
 

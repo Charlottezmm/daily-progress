@@ -23,6 +23,18 @@ export const routineTimeSegment = pgEnum("routine_time_segment", ["morning", "af
 export const trackKind = pgEnum("track_kind", ["main", "work", "side", "recovery", "custom"]);
 export const timeBlockKind = pgEnum("time_block_kind", ["course", "meeting", "unavailable", "routine", "recovery"]);
 export const agentPatchStatus = pgEnum("agent_patch_status", ["draft", "applied", "rejected"]);
+export const agentRunKind = pgEnum("agent_run_kind", [
+  "morning_rebalance",
+  "evening_review",
+  "weekly_rebalance",
+]);
+export const agentRunStatus = pgEnum("agent_run_status", [
+  "started",
+  "draft_created",
+  "no_change",
+  "duplicate",
+  "failed",
+]);
 export const inboxSource = pgEnum("inbox_source", ["manual", "imported"]);
 export const checkinTaskStatus = pgEnum("checkin_task_status", ["done", "not_done", "partial", "skipped"]);
 export const changeLogSource = pgEnum("change_log_source", ["manual", "agent_patch", "import", "mcp"]);
@@ -299,6 +311,31 @@ export const agentPatchReviews = pgTable("agent_patch_reviews", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   workspacePatchIdx: index("agent_patch_reviews_workspace_patch_idx").on(table.workspaceId, table.patchId),
+}));
+
+export const agentRuns = pgTable("agent_runs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  planId: uuid("plan_id").references(() => plans.id, { onDelete: "set null" }),
+  patchId: uuid("patch_id").references(() => agentPatches.id, { onDelete: "set null" }),
+  kind: agentRunKind("kind").notNull(),
+  idempotencyKey: varchar("idempotency_key", { length: 200 }).notNull(),
+  status: agentRunStatus("status").notNull(),
+  reason: text("reason").notNull(),
+  inputJson: jsonb("input_json").notNull(),
+  resultJson: jsonb("result_json").notNull(),
+  warningsJson: jsonb("warnings_json").notNull().default([]),
+  errorJson: jsonb("error_json"),
+  createdBy: varchar("created_by", { length: 40 }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  uniqueWorkspaceIdempotency: uniqueIndex("agent_runs_workspace_idempotency_unique").on(
+    table.workspaceId,
+    table.idempotencyKey,
+  ),
+  workspaceCreatedIdx: index("agent_runs_workspace_created_idx").on(table.workspaceId, table.createdAt),
+  workspaceStatusIdx: index("agent_runs_workspace_status_idx").on(table.workspaceId, table.status),
 }));
 
 export const changeLogs = pgTable("change_logs", {

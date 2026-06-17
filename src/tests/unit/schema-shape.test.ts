@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import {
+  agentRuns,
   changeLogs,
   checkinTasks,
   checkins,
@@ -53,5 +54,20 @@ describe("schema shape", () => {
 
     expect(index?.config.unique).toBe(true);
     expect(index?.config.columns.map((column) => column.name)).toEqual(["workspace_id", "date"]);
+  });
+
+  it("tracks agent runs by workspace idempotency key", () => {
+    expect(agentRuns.kind).toBeDefined();
+    expect(agentRuns.status).toBeDefined();
+    expect(agentRuns.inputJson).toBeDefined();
+    expect(agentRuns.resultJson).toBeDefined();
+    expect(agentRuns.warningsJson).toBeDefined();
+    expect(agentRuns.errorJson).toBeDefined();
+
+    const config = getTableConfig(agentRuns);
+    const index = config.indexes.find((candidate) => candidate.config.name === "agent_runs_workspace_idempotency_unique");
+
+    expect(index?.config.unique).toBe(true);
+    expect(index?.config.columns.map((column) => column.name)).toEqual(["workspace_id", "idempotency_key"]);
   });
 });

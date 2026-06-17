@@ -96,6 +96,55 @@ describe("PawPlan MCP server builder", () => {
     }
   });
 
+  it("publishes propose_daily_rebalance schema for read-write MCP clients", async () => {
+    const { createPawPlanMcpServer } = await import("@/lib/mcp/server-builder");
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const server = createPawPlanMcpServer({ workspaceId: "workspace-1", permission: "read_write" });
+    const client = new Client({ name: "schema-check", version: "0.0.0" });
+
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    try {
+      const result = await client.listTools();
+      const tool = result.tools.find((candidate) => candidate.name === "propose_daily_rebalance");
+      const toolNames = result.tools.map((candidate) => candidate.name);
+      const moveSchema = (tool?.inputSchema.properties?.moves as any)?.items;
+
+      expect(tool).toBeDefined();
+      expect(toolNames).toContain("propose_week_rebalance");
+      expect(moveSchema).toMatchObject({
+        type: "object",
+        properties: {
+          task_id: { type: "string" },
+          to_date: { type: "string" },
+          to_day_segment: { type: "string", enum: ["morning", "afternoon", "evening"] },
+          reason: { type: "string" },
+        },
+        required: ["task_id", "to_date", "to_day_segment", "reason"],
+        additionalProperties: false,
+      });
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it("excludes rebalance write tools for read-only MCP clients", async () => {
+    const { createPawPlanMcpServer } = await import("@/lib/mcp/server-builder");
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const server = createPawPlanMcpServer({ workspaceId: "workspace-1", permission: "read_only" });
+    const client = new Client({ name: "schema-check", version: "0.0.0" });
+
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    try {
+      const result = await client.listTools();
+      expect(result.tools.map((tool) => tool.name)).not.toContain("propose_daily_rebalance");
+      expect(result.tools.map((tool) => tool.name)).not.toContain("propose_week_rebalance");
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
   it("accepts stringified propose_patch payloads from clients that serialize object fields", async () => {
     const { createPawPlanMcpServer } = await import("@/lib/mcp/server-builder");
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
