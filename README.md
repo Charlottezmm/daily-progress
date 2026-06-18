@@ -1,18 +1,37 @@
-# Daily Progress
+# PawPlan
 
-Open-source schedule-first MCP-native planning app.
+PawPlan is an invite-gated, schedule-first planning app for turning external agent work into safe, reviewable plans.
+
+It is built around one product boundary: agents can read context and draft changes, but PawPlan owns validation, persistence, Review, audit trails, and readback. A task move is not real until the user reviews and applies it in the app.
 
 The old static May dashboard prototype is preserved at `docs/legacy/index-static-dashboard.html`.
 
-## v1.0 Public Beta Direction
+## Current Stage
 
-- Web + PWA
-- Next.js + Postgres
-- Controlled public beta with invite-code workspace creation
-- Workspace password login for existing workspaces
-- MCP-native data boundary
-- Codex bearer-token MCP and Claude Custom Connector OAuth adapter
-- Agent-generated Review drafts, confirmed in the app before apply
+PawPlan v1 formal is a controlled beta, not public GA.
+
+Included:
+
+- Web + PWA planning surface.
+- Next.js + Postgres data layer.
+- Invite-code workspace creation.
+- Workspace password login for existing workspaces.
+- Hosted MCP for Codex bearer-token clients.
+- Claude Custom Connector OAuth adapter.
+- Inbox capture for life-admin items and later promotion into planned work.
+- Agent run status, idempotency, failure visibility, and draft readback.
+- Review-confirmed task changes, daily rebalance drafts, weekly rebalance drafts, and timetable imports.
+
+Not included:
+
+- App-owned LLM calls or embedded AI chat.
+- App-owned scheduler, server cron, browser timer, or PWA background rescheduler.
+- Automatic patch apply.
+- Billing.
+- Team collaboration.
+- Public open signup.
+- Google/Apple/Outlook Calendar sync.
+- Full drag-and-drop calendar editing.
 
 ## Development
 
@@ -21,20 +40,40 @@ npm install
 npm run dev
 ```
 
-## PawPlan MCP Server
+## Environment
 
-PawPlan exposes a local stdio MCP server for Codex / Cowork / Claude agents:
+Copy `.env.example` to `.env.local` and set:
+
+- `DATABASE_URL`
+- `APP_SECRET`
+- `NEXT_PUBLIC_APP_NAME`
+
+`NEXT_PUBLIC_APP_NAME` should be `PawPlan` for the current product.
+
+## MCP Server
+
+PawPlan exposes both a local stdio MCP server and a hosted MCP endpoint.
+
+Local stdio server:
 
 ```bash
 npm run mcp
 ```
 
-Required MCP environment:
+Required local MCP environment:
 
 - `DATABASE_URL`
 - `PAWPLAN_WORKSPACE_ID`
 
-Run the server from this repo root (`/Users/charlotte/daily-progress`). The MCP server currently exposes:
+Hosted MCP endpoint:
+
+```text
+https://pawplan.charlottezmm.info/api/mcp
+```
+
+The MCP surface is intentionally narrow. Agents read context, write audited low-risk records, or create Review drafts. They do not directly edit protected constraints, apply drafts, or own scheduled automation.
+
+Read tools:
 
 - `get_today`
 - `get_week`
@@ -45,26 +84,25 @@ Run the server from this repo root (`/Users/charlotte/daily-progress`). The MCP 
 - `get_conversations`
 - `get_checkins`
 - `get_tasks`
+
+Write and draft tools:
+
 - `create_inbox_item`
 - `create_checkin`
 - `update_task_status`
+- `update_task_schedule`
+- `update_task_notes`
 - `save_conversation_summary`
 - `record_decision`
 - `propose_patch`
+- `propose_daily_rebalance`
+- `propose_week_rebalance`
 - `propose_timetable_import`
 - `import_plan_bundle`
 
-`get_constraints` and `get_capacity` are read-only context tools. Agent rescheduling and timetable imports must be preview-first: scheduled automation reads data through MCP and writes proposed changes with `propose_patch` or `propose_timetable_import`. Users confirm changes in `/review` before apply. MCP must not directly edit constraints.
+Daily and weekly automation is configured outside PawPlan in Codex / Cowork / Claude. The external agent reads through MCP, proposes changes with Review-safe tools, and waits for the user to confirm in `/review`.
 
-Scheduled automation is configured outside PawPlan in Codex / Cowork. PawPlan does not implement an app-owned scheduler, server cron, browser timer, or PWA background rescheduler. See `docs/automation/pawplan-scheduled-automation.md`.
-
-## Environment
-
-Copy `.env.example` to `.env.local` and set values for:
-
-- `DATABASE_URL`
-- `APP_SECRET`
-- `NEXT_PUBLIC_APP_NAME`
+See `docs/automation/pawplan-scheduled-automation.md`.
 
 ## Verification
 
@@ -74,9 +112,9 @@ npm run build
 npm run test:e2e
 ```
 
-## Public Beta Smoke
+## Beta Smoke
 
-Before sharing an invite, run the local gate and manual smoke checklist:
+Before sharing an invite, run the smoke checklist:
 
 ```text
 docs/public-beta/2026-06-13-public-beta-smoke-checklist.md
@@ -88,31 +126,6 @@ Daily Claude/Codex agent loop prompts live at:
 docs/public-beta/2026-06-13-daily-agent-loop-prompts.md
 ```
 
-## Product Boundary
-
-This stage keeps PawPlan focused on the Next.js + Postgres planning surface, controlled public beta access, MCP access, and Review-confirmed agent patches.
-
-Included:
-
-- Invite-code workspace creation.
-- First-run onboarding.
-- Hosted MCP for Codex bearer tokens.
-- Claude Custom Connector OAuth adapter.
-- Plan and timetable import.
-- Lightweight Calendar & Constraints UI.
-- Review-confirmed task changes and timetable imports.
-
-Not included:
-
-- Billing.
-- Team collaboration.
-- Full drag-and-drop calendar editing.
-- Google/Apple/Outlook Calendar two-way sync.
-- App-owned LLM calls or embedded AI chat.
-- Automatic patch apply.
-
-The app may expose MCP tools and Review patch application, but it must not own scheduled automation. Codex / Cowork / Claude scheduled automation triggers the agent externally; the agent reads through MCP, calls `propose_patch` or `propose_timetable_import`, and waits for the user to confirm in `/review`.
-
 ## License
 
-代码 MIT，内容 CC-BY 4.0。
+Code is MIT. Content is CC-BY 4.0.

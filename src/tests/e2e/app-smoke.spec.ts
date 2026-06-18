@@ -126,7 +126,7 @@ test("keeps fixed schedule out of More because it is a top-level tab", async ({ 
   ]);
 
   await page.goto("/more");
-  await expect(page.getByText("PawPlan v1.0 public beta")).toBeVisible();
+  await expect(page.getByText("PawPlan v1 formal controlled beta")).toBeVisible();
   await expect(page.locator('a[href="/constraints"]').filter({ hasText: "固定安排" })).toHaveCount(0);
   await expect(page.locator('a[href="/settings#routines"]').filter({ hasText: "日常事项" })).toHaveCount(0);
   await expect(page.locator('a[href="/constraints"]').filter({ hasText: "日历与课程" })).toHaveCount(0);

@@ -1,7 +1,7 @@
 {
   "name": "PawPlan",
   "short_name": "PawPlan",
-  "description": "Schedule-first MCP-native planning app.",
+  "description": "Schedule-first planning with Review-safe agent drafts.",
   "start_url": "/today",
   "display": "standalone",
   "background_color": "#f3eee6",

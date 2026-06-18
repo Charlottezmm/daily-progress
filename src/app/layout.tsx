@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "PawPlan",
-  description: "MCP-native planning app with schedule-first planning.",
+  description: "Schedule-first planning with Review-safe agent drafts.",
   manifest: "/manifest.webmanifest",
   icons: {
     icon: "/icons/icon-192.png",
