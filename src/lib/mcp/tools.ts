@@ -4,13 +4,21 @@ import { checkins, courses, dayCapacities, routines, tasks, timeBlocks } from "@
 import { buildCapacityModel } from "@/lib/planning/capacity-model";
 import { expandRecurringBlocks } from "@/lib/planning/recurring-time-blocks";
 import {
+  completeAgentRun,
+  failAgentRun,
+  startAgentRun,
+} from "@/lib/agent-runs/service";
+import type { AgentRunKind } from "@/lib/agent-runs/types";
+import {
   createDailyCheckin,
   createInboxItem,
+  getActivePlanId,
   proposeAgentPatch,
   updateTaskSchedule,
   updateTaskNotes,
   updateTaskStatus,
 } from "@/lib/planning/service";
+import { proposeRebalancePatch } from "@/lib/planning/rebalance";
 import { saveMcpPlanImport } from "@/lib/mcp/plan-import";
 import {
   getConversationSummaries,
@@ -82,6 +90,22 @@ const proposePatchArgsSchema = z
     mode: z.enum(["today", "week"]),
     reason: z.string().min(1),
     patch: mcpAgentPatchInputSchema,
+    created_by: createdBySchema.optional(),
+  })
+  .strict();
+const rebalanceMoveSchema = z
+  .object({
+    task_id: z.string().min(1),
+    to_date: dateStringSchema,
+    to_day_segment: daySegmentSchema,
+    reason: z.string().trim().min(1).max(1000),
+  })
+  .strict();
+const proposeRebalanceArgsSchema = z
+  .object({
+    idempotency_key: z.string().trim().min(8).max(200),
+    reason: z.string().trim().min(1).max(4000),
+    moves: z.array(rebalanceMoveSchema).min(1).max(50),
     created_by: createdBySchema.optional(),
   })
   .strict();
@@ -189,6 +213,8 @@ export const pawPlanToolSchemas = {
     })
     .strict(),
   propose_patch: proposePatchArgsSchema,
+  propose_daily_rebalance: proposeRebalanceArgsSchema,
+  propose_week_rebalance: proposeRebalanceArgsSchema,
   propose_timetable_import: proposeTimetableImportArgsSchema,
   import_plan_bundle: z
     .object({
@@ -264,6 +290,10 @@ export const pawPlanToolDescriptions: Record<PawPlanToolName, string> = {
   save_conversation_summary: "Save a structured conversation summary without storing raw transcript, with MCP provenance.",
   record_decision: "Record a structured workspace decision with MCP provenance.",
   propose_patch: "Create a preview-only agent patch draft; this never applies the patch.",
+  propose_daily_rebalance:
+    "Create an idempotent Review draft from task move intent for daily planning. PawPlan fills current from_date/from_day_segment.",
+  propose_week_rebalance:
+    "Create an idempotent Review draft from task move intent for weekly planning. PawPlan fills current from_date/from_day_segment.",
   propose_timetable_import: "Create a preview-only timetable import draft for user review; this never writes constraints directly.",
   import_plan_bundle: "Import a trusted structured plan bundle into real PawPlan tasks with MCP provenance.",
 };
@@ -286,6 +316,8 @@ const pawPlanToolPermissions: Record<PawPlanToolName, "read" | "write"> = {
   save_conversation_summary: "write",
   record_decision: "write",
   propose_patch: "write",
+  propose_daily_rebalance: "write",
+  propose_week_rebalance: "write",
   propose_timetable_import: "write",
   import_plan_bundle: "write",
 };
@@ -577,6 +609,84 @@ async function readMonth(
   };
 }
 
+function compactRebalanceError(error: unknown) {
+  return {
+    code: typeof error === "object" && error && typeof (error as { code?: unknown }).code === "string"
+      ? (error as { code: string }).code
+      : "rebalance_failed",
+    message: error instanceof Error ? error.message : "Rebalance failed",
+  };
+}
+
+async function runRebalanceTool(
+  db: PlanningDb,
+  workspaceId: string,
+  tool: "propose_daily_rebalance" | "propose_week_rebalance",
+  mode: "today" | "week",
+  kind: AgentRunKind,
+  args: unknown,
+) {
+  const parsed = proposeRebalanceArgsSchema.parse(args);
+  const planId = await getActivePlanId(db, workspaceId);
+  if (!planId) throw new Error("No active plan");
+  const createdBy = parsed.created_by ?? "codex";
+  const idempotencyKey = parsed.idempotency_key;
+  const moves = parsed.moves.map((move) => ({
+    taskId: move.task_id,
+    toDate: move.to_date,
+    toDaySegment: move.to_day_segment,
+    reason: move.reason,
+  }));
+
+  const run = await startAgentRun(db, {
+    workspaceId,
+    planId,
+    kind,
+    idempotencyKey,
+    reason: parsed.reason,
+    inputJson: {
+      tool,
+      mode,
+      moveCount: moves.length,
+      moves: moves.map((move) => ({
+        taskId: move.taskId,
+        toDate: move.toDate,
+        toDaySegment: move.toDaySegment,
+      })),
+    },
+    createdBy,
+  });
+  if (run.duplicate) return run.result;
+
+  try {
+    const proposal = await proposeRebalancePatch(db, {
+      workspaceId,
+      mode,
+      reason: parsed.reason,
+      moves,
+      createdBy,
+    });
+
+    return completeAgentRun(db, {
+      workspaceId,
+      runId: run.runId,
+      idempotencyKey,
+      status: proposal.patchId && proposal.operationCount > 0 ? "draft_created" : "no_change",
+      patchId: proposal.patchId,
+      operationCount: proposal.operationCount,
+      skipped: proposal.skipped,
+      warnings: proposal.warnings,
+    });
+  } catch (error) {
+    return failAgentRun(db, {
+      workspaceId,
+      runId: run.runId,
+      idempotencyKey,
+      error: compactRebalanceError(error),
+    });
+  }
+}
+
 export async function runPawPlanTool(
   db: PlanningDb,
   workspaceId: string,
@@ -778,6 +888,14 @@ export async function runPawPlanTool(
   if (toolName === "propose_timetable_import") {
     const parsed = pawPlanToolSchemas.propose_timetable_import.parse(args);
     return proposeTimetableImport(db, workspaceId, parsed);
+  }
+
+  if (toolName === "propose_daily_rebalance") {
+    return runRebalanceTool(db, workspaceId, "propose_daily_rebalance", "today", "morning_rebalance", args);
+  }
+
+  if (toolName === "propose_week_rebalance") {
+    return runRebalanceTool(db, workspaceId, "propose_week_rebalance", "week", "weekly_rebalance", args);
   }
 
   const parsed = pawPlanToolSchemas.propose_patch.parse(args);

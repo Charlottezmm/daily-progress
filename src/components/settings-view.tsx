@@ -77,11 +77,23 @@ type TokenForm = {
 type SettingsResponse = {
   routines: Routine[];
   segmentEnergySettings: SegmentEnergySetting[];
+  agentRuns: AgentRunSummary[];
   recoveryTarget: {
     minutes: number;
     editable: false;
     source: "system_default";
   };
+};
+
+type AgentRunSummary = {
+  id: string;
+  kind: "morning_rebalance" | "evening_review" | "weekly_rebalance";
+  status: "started" | "draft_created" | "no_change" | "duplicate" | "failed";
+  patchId: string | null;
+  reason: string;
+  createdAt: string;
+  warningCount: number;
+  errorMessage: string | null;
 };
 
 type TemplateImportResult = {
@@ -104,6 +116,20 @@ const energyLabels: Record<EnergyLevel, string> = {
   low: "低",
   medium: "中",
   high: "高",
+};
+
+const agentRunKindLabels: Record<AgentRunSummary["kind"], string> = {
+  morning_rebalance: "Morning rebalance",
+  evening_review: "Evening review",
+  weekly_rebalance: "Weekly rebalance",
+};
+
+const agentRunStatusLabels: Record<AgentRunSummary["status"], string> = {
+  started: "started",
+  draft_created: "draft created",
+  no_change: "no change",
+  duplicate: "duplicate",
+  failed: "failed",
 };
 
 const defaultEnergySettings: SegmentEnergySetting[] = [
@@ -188,6 +214,7 @@ export function SettingsView() {
   const [workspaceDeleteConfirmation, setWorkspaceDeleteConfirmation] = useState("");
   const [workspaceDeleteMessage, setWorkspaceDeleteMessage] = useState<string | null>(null);
   const [templateMessage, setTemplateMessage] = useState<string | null>(null);
+  const [agentRuns, setAgentRuns] = useState<AgentRunSummary[]>([]);
 
   const isEditing = Boolean(routineForm.id);
   const activeRecoveryTarget = useMemo(() => recoveryTarget, []);
@@ -215,6 +242,7 @@ export function SettingsView() {
         if (!active) return;
         setRoutines(data.routines ?? []);
         setEnergySettings(data.segmentEnergySettings ?? defaultEnergySettings);
+        setAgentRuns(data.agentRuns ?? []);
         setDataUnavailable(false);
       } catch {
         if (!active) return;
@@ -547,6 +575,49 @@ export function SettingsView() {
           <span className="paw-status-pill">Recovery: 系统默认 {formatHours(activeRecoveryTarget.minutes)}</span>
           {dataUnavailable ? <span className="paw-status-pill warn">数据源未配置</span> : null}
           {message ? <span className="paw-status-pill link">{message}</span> : null}
+        </div>
+      </section>
+
+      <section className="paw-list-card mb-4">
+        <div className="paw-list-header">
+          <div>
+            <h2 className="paw-list-title">Agent runs</h2>
+            <p className="paw-list-subtitle">最近无人值守运行历史；不代表 Claude/Codex connector 在线状态。</p>
+          </div>
+          <span className="paw-status-pill">{agentRuns.length} latest</span>
+        </div>
+
+        <div className="paw-list mt-4">
+          {agentRuns.length === 0 ? (
+            <div className="paw-empty">
+              <h3>还没有 agent run</h3>
+              <p>Morning rebalance、evening review 或 weekly rebalance 运行后会显示在这里。</p>
+            </div>
+          ) : (
+            agentRuns.map((run) => (
+              <div key={run.id} className="paw-list-row">
+                <div className="min-w-0">
+                  <p className="paw-row-title">
+                    {agentRunStatusLabels[run.status]} · {agentRunKindLabels[run.kind]}
+                  </p>
+                  <p className="paw-row-meta paw-wrap-anywhere">
+                    {formatDateTime(run.createdAt)} · {run.reason} · warnings {run.warningCount}
+                  </p>
+                  {run.status === "failed" && run.errorMessage ? (
+                    <p className="paw-row-meta paw-wrap-anywhere text-[var(--app-danger)]">{run.errorMessage}</p>
+                  ) : null}
+                </div>
+                <div className="paw-row-actions">
+                  <span className={run.status === "failed" ? "paw-status-pill warn" : "paw-status-pill link"}>{run.status}</span>
+                  {run.patchId ? (
+                    <a href="/review" className="paw-secondary-btn !px-3 !py-2 !text-xs">
+                      Review
+                    </a>
+                  ) : null}
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </section>
 

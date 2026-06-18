@@ -12,3 +12,36 @@ describe("mobile floating cat positioning", () => {
     expect(floatingRule).toContain("bottom: auto;");
   });
 });
+
+describe("mobile form controls", () => {
+  it("prevents native date and time inputs from overflowing constraint forms", () => {
+    const css = readFileSync("src/app/globals.css", "utf8");
+    const controlRule = css.match(/\.paw-textarea,\n\.paw-input \{[\s\S]*?\}/)?.[0] ?? "";
+    const mobileBlock = css.match(/@media \(max-width: 760px\) \{[\s\S]*?\.paw-page-header/s)?.[0] ?? "";
+    const mobileControlRule = mobileBlock.match(/\.paw-textarea,\n  \.paw-input,[\s\S]*?\}/)?.[0] ?? "";
+
+    expect(controlRule).toContain("min-width: 0;");
+    expect(mobileControlRule).toContain("max-width: 100%;");
+  });
+});
+
+describe("agent run and review long text wrapping", () => {
+  it("provides an anywhere-wrapping utility for long unbroken agent text", () => {
+    const css = readFileSync("src/app/globals.css", "utf8");
+    const rule = css.match(/\.paw-wrap-anywhere \{[\s\S]*?\}/)?.[0] ?? "";
+
+    expect(rule).toContain("overflow-wrap: anywhere;");
+    expect(rule).toContain("word-break: break-word;");
+  });
+
+  it("applies long-text wrapping to Task 5 agent observability copy", () => {
+    const settingsView = readFileSync("src/components/settings-view.tsx", "utf8");
+    const reviewPreview = readFileSync("src/components/reschedule-preview.tsx", "utf8");
+
+    expect(settingsView).toContain('className="paw-row-meta paw-wrap-anywhere"');
+    expect(settingsView).toContain('className="paw-row-meta paw-wrap-anywhere text-[var(--app-danger)]"');
+    expect(reviewPreview).toContain('className="paw-suggestion-why paw-wrap-anywhere">{item.reason}</p>');
+    expect(reviewPreview).toContain('className="paw-suggestion-why paw-wrap-anywhere">未应用原因');
+    expect(reviewPreview).toContain('className="paw-status-pill warn paw-wrap-anywhere"');
+  });
+});

@@ -11,6 +11,22 @@ import type { TodayViewData } from "@/lib/planning/view-data";
 type Task = TodayViewData["tasks"][number];
 type PersistedStatus = Task["status"];
 type DisplayStatus = PersistedStatus | "blocked";
+const weekdayChars = "日一二三四五六";
+
+export function formatTodayGreeting(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "01";
+  const year = Number(value("year"));
+  const month = Number(value("month"));
+  const day = Number(value("day"));
+  const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+  return `${month}月${day}日 星期${weekdayChars[weekday]}`;
+}
 
 function minutesLabel(minutes: number) {
   if (minutes >= 60) {
@@ -144,9 +160,7 @@ export function TodayView({ data, beforeTasks }: { data: TodayViewData; beforeTa
   return (
     <div className="paw-page">
       <section className="paw-page-header">
-        <p className="paw-greeting">
-          {new Intl.DateTimeFormat("zh-CN", { month: "long", day: "numeric", weekday: "long" }).format(new Date())}
-        </p>
+        <p className="paw-greeting">{formatTodayGreeting()}</p>
         <h1 className="paw-page-date">今日执行</h1>
         <div className="paw-agent-row">
           <CatIcon size={40} mood={catMood} />

@@ -52,6 +52,14 @@ describe("review view data", () => {
           ],
         },
       ],
+      agentRuns: [
+        {
+          id: "run-123",
+          kind: "morning_rebalance",
+          status: "draft_created",
+          patchId: "patch-12345678",
+        },
+      ],
     });
 
     expect(items[0]).toEqual(
@@ -73,6 +81,12 @@ describe("review view data", () => {
           createdBy: "codex",
           createdAt: "2026-06-12T08:30:00.000Z",
         },
+        agentRun: {
+          id: "run-123",
+          kind: "morning_rebalance",
+          status: "draft_created",
+        },
+        agentRunLabel: "Created by daily rebalance",
       }),
     );
     expect(items[1]).toEqual(
@@ -140,5 +154,56 @@ describe("review view data", () => {
         protected: false,
       }),
     ]);
+  });
+
+  it("uses the first agent run when multiple runs reference the same patch", () => {
+    const items = buildReschedulePatchItems({
+      patches: [
+        {
+          id: "patch-same-run",
+          createdBy: "codex",
+          createdAt: new Date("2026-06-14T08:00:00.000Z"),
+          patchJson: {
+            operations: [
+              {
+                type: "move_task",
+                task_id: "task-1",
+                from_date: "2026-06-14",
+                from_day_segment: "morning",
+                to_date: "2026-06-14",
+                to_day_segment: "afternoon",
+                reason: "Prefer the newest run returned by the query.",
+              },
+            ],
+          },
+        },
+      ],
+      tasks: [{ id: "task-1", title: "Move task" }],
+      agentRuns: [
+        {
+          id: "run-newer",
+          kind: "weekly_rebalance",
+          status: "draft_created",
+          patchId: "patch-same-run",
+        },
+        {
+          id: "run-older",
+          kind: "morning_rebalance",
+          status: "failed",
+          patchId: "patch-same-run",
+        },
+      ],
+    });
+
+    expect(items[0]).toEqual(
+      expect.objectContaining({
+        agentRun: {
+          id: "run-newer",
+          kind: "weekly_rebalance",
+          status: "draft_created",
+        },
+        agentRunLabel: "Created by weekly rebalance",
+      }),
+    );
   });
 });

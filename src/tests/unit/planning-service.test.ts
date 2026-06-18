@@ -421,6 +421,10 @@ describe("planning service", () => {
       workspaceId: "workspace-1",
       inboxItemId: "inbox-1",
       action: "task",
+      date: "2026-06-20",
+      daySegment: "afternoon",
+      estimatedMinutes: 45,
+      priority: "high",
     });
 
     expect(result).toEqual({ ok: true, action: "task" });
@@ -433,11 +437,11 @@ describe("planning service", () => {
           workspaceId: "workspace-1",
           planId: "plan-1",
           title: "Draft launch checklist",
-          date: expect.any(Date),
-          daySegment: "morning",
-          estimatedMinutes: 30,
+          date: new Date("2026-06-19T16:00:00.000Z"),
+          daySegment: "afternoon",
+          estimatedMinutes: 45,
           energyLevel: "medium",
-          priority: "normal",
+          priority: "high",
           status: "todo",
         }),
       }),
@@ -460,6 +464,9 @@ describe("planning service", () => {
       workspaceId: "workspace-1",
       inboxItemId: "inbox-1",
       action: "routine",
+      weekdayPattern: "mon,wed,fri",
+      defaultTimeSegment: "morning",
+      estimatedMinutes: 10,
     });
 
     expect(result).toEqual({ ok: true, action: "routine" });
@@ -470,9 +477,9 @@ describe("planning service", () => {
         values: expect.objectContaining({
           workspaceId: "workspace-1",
           title: "Read before bed",
-          defaultTimeSegment: "evening",
-          weekdayPattern: "daily",
-          estimatedMinutes: 30,
+          defaultTimeSegment: "morning",
+          weekdayPattern: "mon,wed,fri",
+          estimatedMinutes: 10,
           energyLevel: "low",
         }),
       }),

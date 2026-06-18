@@ -1,6 +1,8 @@
-import { and, desc, eq, gt, gte, isNull, lt } from "drizzle-orm";
+import { and, desc, eq, gt, gte, inArray, isNull, lt } from "drizzle-orm";
+import type { AgentRunKind, AgentRunStatus } from "@/lib/agent-runs/types";
 import { getDb } from "@/lib/db/client";
 import {
+  agentRuns,
   agentPatches,
   agentPatchReviews,
   checkins,
@@ -245,6 +247,12 @@ export type ReschedulePatchItemView = {
     createdBy: string;
     createdAt: string;
   };
+  agentRun?: {
+    id: string;
+    kind: AgentRunKind;
+    status: AgentRunStatus;
+  };
+  agentRunLabel?: string;
   skipped?: boolean;
   skippedReason?: string;
   conflict?: {
@@ -1291,6 +1299,13 @@ type ReviewAuditRow = {
   conflictJson: unknown;
 };
 
+type ReviewAgentRunRow = {
+  id: string;
+  kind: AgentRunKind;
+  status: AgentRunStatus;
+  patchId: string | null;
+};
+
 function evidenceList(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && Boolean(item.trim())) : [];
 }
@@ -1305,18 +1320,42 @@ function reviewEventsByIndex(value: unknown) {
   return map;
 }
 
+function agentRunLabel(kind: AgentRunKind) {
+  if (kind === "weekly_rebalance") return "Created by weekly rebalance";
+  if (kind === "evening_review") return "Created by evening review";
+  return "Created by daily rebalance";
+}
+
+function agentRunsByPatchId(
+  value?: ReviewAgentRunRow[] | Map<string, ReviewAgentRunRow> | Record<string, ReviewAgentRunRow>,
+) {
+  if (value instanceof Map) return value;
+  if (!value) return new Map<string, ReviewAgentRunRow>();
+  if (Array.isArray(value)) {
+    const map = new Map<string, ReviewAgentRunRow>();
+    for (const run of value) {
+      if (run.patchId && !map.has(run.patchId)) map.set(run.patchId, run);
+    }
+    return map;
+  }
+  return new Map(Object.entries(value));
+}
+
 export function buildReschedulePatchItems(input: {
   patches: ReviewPatchRow[];
   tasks: ReviewTaskRow[];
   reviews?: ReviewAuditRow[];
+  agentRuns?: ReviewAgentRunRow[] | Map<string, ReviewAgentRunRow> | Record<string, ReviewAgentRunRow>;
 }): ReschedulePatchItemView[] {
   const tasksById = new Map(input.tasks.map((task) => [task.id, task.title]));
   const reviewsByPatchId = new Map(input.reviews?.map((review) => [review.patchId, review]) ?? []);
+  const runsByPatchId = agentRunsByPatchId(input.agentRuns);
 
   const patchItems: ReschedulePatchItemView[] = [];
   for (const patch of input.patches) {
     const parsed = patch.patchJson as AgentPatch;
     const review = reviewsByPatchId.get(patch.id);
+    const run = runsByPatchId.get(patch.id);
     const skippedByIndex = reviewEventsByIndex(review?.skippedJson);
     const conflictByIndex = reviewEventsByIndex(review?.conflictJson);
 
@@ -1342,6 +1381,8 @@ export function buildReschedulePatchItems(input: {
           createdBy: patch.createdBy,
           createdAt: patch.createdAt.toISOString(),
         },
+        agentRun: run ? { id: run.id, kind: run.kind, status: run.status } : undefined,
+        agentRunLabel: run ? agentRunLabel(run.kind) : undefined,
         skipped: Boolean(skipped),
         skippedReason: typeof skipped?.reason === "string" ? skipped.reason : undefined,
         conflict: conflict
@@ -1437,6 +1478,20 @@ export async function getReschedulePageData(workspaceId: string): Promise<Resche
         .orderBy(desc(agentPatches.createdAt)),
       db.select({ id: tasks.id, title: tasks.title }).from(tasks).where(eq(tasks.workspaceId, workspaceId)),
     ]);
+    const patchIds = patchRows.map((patch) => patch.id);
+    const agentRunRows =
+      patchIds.length > 0
+        ? await db
+            .select({
+              id: agentRuns.id,
+              kind: agentRuns.kind,
+              status: agentRuns.status,
+              patchId: agentRuns.patchId,
+            })
+            .from(agentRuns)
+            .where(and(eq(agentRuns.workspaceId, workspaceId), inArray(agentRuns.patchId, patchIds)))
+            .orderBy(desc(agentRuns.createdAt))
+        : [];
     const reviewRows = await db
       .select({
         patchId: agentPatchReviews.patchId,
@@ -1450,7 +1505,12 @@ export async function getReschedulePageData(workspaceId: string): Promise<Resche
         if (isMissingReviewAuditTable(error)) return [];
         throw error;
       });
-    const patchItems = buildReschedulePatchItems({ patches: patchRows, tasks: taskRows, reviews: reviewRows });
+    const patchItems = buildReschedulePatchItems({
+      patches: patchRows,
+      tasks: taskRows,
+      reviews: reviewRows,
+      agentRuns: agentRunRows,
+    });
 
     return { dataUnavailable: false, patchItems };
   } catch (error) {

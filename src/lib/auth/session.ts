@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 export const workspaceSessionCookieName = "daily_progress_workspace";
+export const workspaceSessionMaxAgeSeconds = 60 * 60 * 24 * 30;
 
 function appSecret() {
   const secret = process.env.APP_SECRET;
@@ -35,6 +36,7 @@ export async function setWorkspaceSession(workspaceId: string) {
   const store = cookies();
   store.set(workspaceSessionCookieName, createWorkspaceSessionValue(workspaceId), {
     httpOnly: true,
+    maxAge: workspaceSessionMaxAgeSeconds,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",

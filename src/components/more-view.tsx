@@ -108,7 +108,7 @@ export function MoreView() {
           </div>
         </section>
       </div>
-      <p className="paw-version">PawPlan v1.0 public beta</p>
+      <p className="paw-version">PawPlan v1 formal controlled beta</p>
     </div>
   );
 }

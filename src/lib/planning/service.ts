@@ -15,11 +15,43 @@ type PlanningDb = {
 type ChangeSource = "manual" | "mcp";
 type TaskStatus = "todo" | "done" | "skipped" | "backlog";
 type DaySegment = "morning" | "afternoon" | "evening";
-type InboxAction = "task" | "routine" | "delete";
+type TaskPriority = "low" | "normal" | "high" | "urgent";
+type RoutineTimeSegment = "morning" | "afternoon" | "evening" | "specific_window";
 type InboxSource = "manual" | "imported";
 type PatchMode = "today" | "week";
 type PatchCreatedBy = "claude" | "codex" | "user";
 const shanghaiTimeZone = "Asia/Shanghai";
+
+type ProcessInboxInput =
+  | {
+      workspaceId: string;
+      inboxItemId: string;
+      action: "delete";
+    }
+  | {
+      workspaceId: string;
+      inboxItemId: string;
+      action: "task";
+      date: string;
+      daySegment: DaySegment;
+      estimatedMinutes: number;
+      priority?: TaskPriority;
+    }
+  | {
+      workspaceId: string;
+      inboxItemId: string;
+      action: "quick_chore_task";
+      date?: string;
+      daySegment?: DaySegment;
+    }
+  | {
+      workspaceId: string;
+      inboxItemId: string;
+      action: "routine";
+      weekdayPattern: string;
+      defaultTimeSegment: RoutineTimeSegment;
+      estimatedMinutes: number;
+    };
 
 export { applyReviewPatch, PatchApplyError };
 export { getActivePlanId } from "@/lib/planning/active-plan";
@@ -352,11 +384,7 @@ export async function createInboxItem(
 
 export async function processInboxItem(
   db: PlanningDb,
-  input: {
-    workspaceId: string;
-    inboxItemId: string;
-    action: InboxAction;
-  },
+  input: ProcessInboxInput,
 ) {
   return db.transaction(async (tx) => {
     const [item] = await tx
@@ -382,13 +410,32 @@ export async function processInboxItem(
 
     if (input.action === "task") {
       const planId = await requireActivePlanId(tx, input.workspaceId);
+      const date = dateFromDateKey(input.date);
+      if (!date) throw new PlanningServiceError("Invalid task date", 400);
       await tx.insert(tasks).values({
         workspaceId: input.workspaceId,
         planId,
         title: item.title,
-        date: startOfShanghaiDay(new Date()),
-        daySegment: "morning",
-        estimatedMinutes: 30,
+        date,
+        daySegment: input.daySegment,
+        estimatedMinutes: input.estimatedMinutes,
+        energyLevel: "medium",
+        priority: input.priority ?? "normal",
+        status: "todo",
+      });
+    }
+
+    if (input.action === "quick_chore_task") {
+      const planId = await requireActivePlanId(tx, input.workspaceId);
+      const date = input.date ? dateFromDateKey(input.date) : startOfShanghaiDay(new Date());
+      if (!date) throw new PlanningServiceError("Invalid task date", 400);
+      await tx.insert(tasks).values({
+        workspaceId: input.workspaceId,
+        planId,
+        title: item.title,
+        date,
+        daySegment: input.daySegment ?? "morning",
+        estimatedMinutes: 15,
         energyLevel: "medium",
         priority: "normal",
         status: "todo",
@@ -399,9 +446,9 @@ export async function processInboxItem(
       await tx.insert(routines).values({
         workspaceId: input.workspaceId,
         title: item.title,
-        defaultTimeSegment: "evening",
-        weekdayPattern: "daily",
-        estimatedMinutes: 30,
+        defaultTimeSegment: input.defaultTimeSegment,
+        weekdayPattern: input.weekdayPattern,
+        estimatedMinutes: input.estimatedMinutes,
         energyLevel: "low",
       });
     }
