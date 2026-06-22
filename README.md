@@ -88,7 +88,8 @@ npm run test:e2e
 
 - Web + PWA planning surface (Next.js App Router frontend and API routes).
 - Postgres data layer with Drizzle migrations.
-- Invite-code workspace creation + password login for existing workspaces.
+- Invite-link workspace creation + password login for existing workspaces.
+- Owner-only invite admin for creating links and viewing workspace signups.
 - Hosted MCP endpoint for Codex bearer-token clients, plus a Claude Custom Connector OAuth adapter.
 - Today, Week, Month, Inbox, Fixed Schedule, Review, Import, and Settings surfaces.
 - Inbox capture for life-admin items and promotion into planned work.
@@ -189,7 +190,8 @@ Connector guides: `connect-codex.md` · `connect-claude.md` · `review-safety.md
 
 - Web + PWA 计划界面（Next.js App Router 前端 + API routes）。
 - Postgres + Drizzle 数据层和 migrations。
-- 邀请码创建 workspace，已有 workspace 密码登录。
+- 邀请链接创建 workspace，已有 workspace 密码登录。
+- Owner-only 邀请后台，用来创建链接和查看 workspace 注册情况。
 - 给 Codex bearer-token client 的 hosted MCP endpoint，以及 Claude Custom Connector OAuth adapter。
 - Today / Week / Month / Inbox / Fixed Schedule / Review / Import / Settings 主要界面。
 - Inbox life-admin capture 和 promotion。

@@ -5,8 +5,17 @@ import {
   changeLogs,
   checkinTasks,
   checkins,
+  claudeConnectorAuthorizations,
   dayCapacities,
   inboxItems,
+  mcpPlanImports,
+  mcpTokens,
+  mcpUsageEvents,
+  oauthAuthorizationCodes,
+  planVersions,
+  plans,
+  projects,
+  routineCompletions,
   routines,
   segmentEnergySettings,
   tags,
@@ -69,5 +78,36 @@ describe("schema shape", () => {
 
     expect(index?.config.unique).toBe(true);
     expect(index?.config.columns.map((column) => column.name)).toEqual(["workspace_id", "idempotency_key"]);
+  });
+
+  it("keeps tenant-owned data tables scoped by workspace_id", () => {
+    const tenantTables = [
+      plans,
+      planVersions,
+      projects,
+      tracks,
+      tags,
+      taskTags,
+      tasks,
+      timeBlocks,
+      routines,
+      routineCompletions,
+      dayCapacities,
+      segmentEnergySettings,
+      checkins,
+      checkinTasks,
+      inboxItems,
+      agentRuns,
+      changeLogs,
+      mcpTokens,
+      mcpUsageEvents,
+      mcpPlanImports,
+      oauthAuthorizationCodes,
+      claudeConnectorAuthorizations,
+    ];
+
+    expect(tenantTables.map((table) => getTableConfig(table).columns.some((column) => column.name === "workspace_id"))).toEqual(
+      tenantTables.map(() => true),
+    );
   });
 });

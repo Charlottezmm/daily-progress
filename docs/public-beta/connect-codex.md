@@ -1,6 +1,6 @@
 # Connect Codex To PawPlan
 
-PawPlan public beta is invite-gated. These steps assume the user already has an invited workspace; they are not open signup instructions.
+PawPlan v1 formal is invite-gated. These steps assume the user already has an invited workspace; they are not open signup instructions.
 
 ## Hosted MCP URL
 

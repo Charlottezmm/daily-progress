@@ -21,23 +21,23 @@ async function routeEmptyOnboarding(page: Page) {
   });
 }
 
-test("shows public beta login and create modes without open workspace creation copy", async ({ page }) => {
+test("shows invite-gated login and create modes without open workspace creation copy", async ({ page }) => {
   await page.goto("/login");
 
   const loginMode = page.getByRole("button", { name: "登录已有 workspace" });
-  const createMode = page.getByRole("button", { name: "使用 invite code 创建" });
+  const createMode = page.getByRole("button", { name: "使用邀请创建" });
 
   await expect(loginMode).toBeVisible();
   await expect(loginMode).toHaveAttribute("aria-pressed", "true");
   await expect(createMode).toHaveAttribute("aria-pressed", "false");
   await expect(page.getByText("新名字会自动创建")).toHaveCount(0);
-  await expect(page.getByPlaceholder("Invite code")).toHaveCount(0);
+  await expect(page.getByPlaceholder("Invite token")).toHaveCount(0);
 
   await createMode.click();
 
   await expect(loginMode).toHaveAttribute("aria-pressed", "false");
   await expect(createMode).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByPlaceholder("Invite code")).toBeVisible();
+  await expect(page.getByPlaceholder("Invite token")).toBeVisible();
 });
 
 test("creates a beta workspace through the mocked invite route and redirects to Today", async ({ page }) => {
@@ -53,13 +53,43 @@ test("creates a beta workspace through the mocked invite route and redirects to 
   });
 
   await page.goto("/login");
-  await page.getByRole("button", { name: "使用 invite code 创建" }).click();
+  await page.getByRole("button", { name: "使用邀请创建" }).click();
   await page.getByPlaceholder("Workspace 名称").fill("Focus Lab");
   await page.getByPlaceholder("密码").fill("correct horse");
-  await page.getByPlaceholder("Invite code").fill("BETA-123");
+  await page.getByPlaceholder("Invite token").fill("BETA-123");
   await page.getByRole("button", { name: "创建并进入" }).click();
 
   await expect(page).toHaveURL(/\/today$/);
+});
+
+test("creates a workspace from a one-time invite link without exposing the invite code", async ({ page }) => {
+  await routeEmptyOnboarding(page);
+  let submittedBody: unknown = null;
+  await page.route("**/api/beta/workspaces", async (route) => {
+    submittedBody = route.request().postDataJSON();
+    await route.fulfill({
+      status: 201,
+      headers: {
+        "Set-Cookie": `daily_progress_workspace=${signedWorkspaceSession("00000000-0000-0000-0000-000000000001")}; Path=/; SameSite=Lax; HttpOnly`,
+      },
+      json: { workspaceId: "00000000-0000-0000-0000-000000000001", planId: "plan-1", created: true },
+    });
+  });
+
+  await page.goto("/join/PAW-LINK-123");
+
+  await expect(page.getByText("你被邀请使用 PawPlan v1 formal。")).toBeVisible();
+  await expect(page.getByPlaceholder("Invite token")).toHaveCount(0);
+  await page.getByPlaceholder("Workspace 名称").fill("Invite Lab");
+  await page.getByPlaceholder("密码").fill("correct horse");
+  await page.getByRole("button", { name: "创建并进入" }).click();
+
+  await expect(page).toHaveURL(/\/today$/);
+  expect(submittedBody).toMatchObject({
+    workspaceName: "Invite Lab",
+    password: "correct horse",
+    inviteCode: "PAW-LINK-123",
+  });
 });
 
 test("shows the login error from the existing workspace login route", async ({ page }) => {
@@ -187,7 +217,7 @@ test("renders first-run checklist and skip action updates state", async ({ conte
 
   await page.goto("/today");
 
-  await expect(page.getByRole("heading", { name: "Public beta checklist" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "v1 formal checklist" })).toBeVisible();
   await expect(page.getByRole("link", { name: /导入固定日程/ })).toHaveAttribute("href", "/constraints");
   await expect(page.getByText("下一步", { exact: true })).toBeVisible();
 
@@ -218,6 +248,6 @@ test("shows a visible onboarding error when state fetch fails", async ({ context
 
   await page.goto("/today");
 
-  await expect(page.getByRole("heading", { name: "Public beta checklist" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "v1 formal checklist" })).toBeVisible();
   await expect(page.getByRole("status").filter({ hasText: "无法读取 onboarding 状态" })).toBeVisible();
 });

@@ -1,8 +1,8 @@
-# PawPlan v1.0 Public Beta Smoke Checklist
+# PawPlan v1 Formal Invite Smoke Checklist
 
 Date: 2026-06-13
 
-Run this before sharing a beta invite.
+Run this before sharing a v1 formal invite link.
 
 ## Local Gate
 
@@ -32,13 +32,18 @@ Expected:
 - Confirm existing workspaces can still log in.
 - Confirm new workspace creation creates active starter plan state.
 
-## Public Beta Access
+## Invite Access
 
-1. Open `/login`.
-2. Confirm existing workspace login is separate from public beta creation.
-3. Create a workspace with a valid invite code.
-4. Confirm an invalid, expired, or reused invite code fails before password hashing.
-5. Confirm successful creation redirects to `/today`.
+1. Confirm production has `PAWPLAN_ADMIN_WORKSPACE_IDS` set to the owner workspace id.
+2. Open `More -> 邀请管理` as the owner workspace.
+3. Create a one-person invite link.
+4. Open `/login`.
+5. Confirm existing workspace login is separate from invite-link creation.
+6. Open `/join/<invite-token>`.
+7. Confirm the user can create a workspace without manually entering the invite token.
+8. Confirm an invalid, expired, or reused invite token fails before password hashing.
+9. Confirm successful creation redirects to `/today`.
+10. Confirm a non-owner workspace cannot open `/admin/invites` or call `/api/admin/invites`.
 
 ## First-Run Onboarding
 

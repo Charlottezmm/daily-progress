@@ -1,10 +1,12 @@
-# PawPlan Small Beta Sharing Guide
+# PawPlan v1 Formal Invite Sharing Guide
 
-PawPlan v1.0 remains invite-gated. Do not switch to open signup until PawPlan has email verification, password recovery, quotas, and basic abuse controls.
+PawPlan v1 formal remains an invite-only controlled beta. Do not switch to open signup until PawPlan has email verification, password recovery, quotas, and basic abuse controls.
 
-## Create Invite Codes
+## Create Invite Links
 
-Use one code per person by default:
+If you are an owner workspace, open PawPlan `More -> 邀请管理` to create and monitor invite links from the app.
+
+Use one link per person by default:
 
 ```bash
 npm run beta:invite -- --label="Friend name" --max-redemptions=1 --expires-in-days=30
@@ -28,16 +30,29 @@ npm run beta:invite -- --label="Friend name" --max-redemptions=1 --expires-in-da
 rm -f "$tmp_env"
 ```
 
-The command prints the raw invite code once. The database stores only `code_hash`.
+The command prints an `inviteUrl` once. The URL contains a raw invite token; the database stores only `code_hash`.
+
+## View Invited Workspaces
+
+In the app, the owner-only invite admin shows the same workspace table. For terminal readback, use this read-only command with the production environment loaded:
+
+```bash
+npm run beta:workspaces
+```
+
+It lists workspace id, workspace name, creation time, invite label, redemption count, expiration, and disabled state. It does not print raw invite tokens or passwords.
+
+## Owner Admin Access
+
+Set `PAWPLAN_ADMIN_WORKSPACE_IDS` in production to a comma-separated list of owner workspace ids. Only those workspaces can open `/admin/invites` or call `/api/admin/invites`.
+
+Do not expose invite creation in regular Settings. Invited users should not automatically be allowed to invite more users.
 
 ## Message To Send
 
 ```text
-PawPlan beta:
-https://pawplan.charlottezmm.info
-
-Create a new workspace with this invite code:
-<invite-code>
+PawPlan v1 formal invite:
+<invite-url>
 
 After signup, go to Settings and connect Claude with:
 https://pawplan.charlottezmm.info/api/mcp
@@ -48,7 +63,7 @@ pawplan_claude_custom_connector
 
 ## What To Ask Beta Users To Verify
 
-1. Create a workspace with the invite code.
+1. Open the invite link and create a workspace.
 2. Import a plan.
 3. Import a timetable or fixed schedule.
 4. Connect Claude/Cowork.
@@ -57,7 +72,8 @@ pawplan_claude_custom_connector
 
 ## Boundaries To Tell Users
 
-- PawPlan is invite-only beta.
+- PawPlan v1 formal is invite-only controlled beta.
+- Each one-person invite link can create only one workspace.
 - There is no password reset yet.
 - AI suggestions do not apply automatically.
 - Calendar sync, billing, and team collaboration are not included.

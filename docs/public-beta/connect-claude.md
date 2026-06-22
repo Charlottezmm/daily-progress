@@ -1,6 +1,6 @@
 # Connect Claude To PawPlan
 
-PawPlan public beta is invite-gated. Do not use these steps as open signup instructions; each beta user still needs a valid invite code to create a workspace.
+PawPlan v1 formal is invite-gated. Do not use these steps as open signup instructions; each invited user still needs a valid invite link to create a workspace.
 
 ## Hosted MCP URL
 

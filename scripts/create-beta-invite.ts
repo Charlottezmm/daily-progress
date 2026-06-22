@@ -1,7 +1,7 @@
-import { randomBytes } from "node:crypto";
 import { getDb } from "@/lib/db/client";
 import { betaInviteCodes } from "@/lib/db/schema";
 import { buildInviteCodeInsert } from "@/lib/beta/invites";
+import { inviteUrlForCode, randomInviteCode } from "@/lib/beta/invite-links";
 
 type Options = {
   code?: string;
@@ -10,13 +10,9 @@ type Options = {
   expiresInDays: number | null;
 };
 
-function randomInviteCode() {
-  return `PAW-${randomBytes(8).toString("base64url").toUpperCase()}`;
-}
-
 function readOptions(argv: string[]): Options {
   const options: Options = {
-    label: "Public beta invite",
+    label: "v1 formal invite",
     maxRedemptions: 1,
     expiresInDays: 30,
   };
@@ -67,11 +63,14 @@ async function main() {
     }))
     .returning();
 
-  console.log("Created PawPlan beta invite. Raw code is shown once; store it before closing this terminal.");
+  const inviteUrl = inviteUrlForCode(code);
+
+  console.log("Created PawPlan v1 formal invite link. Raw token is shown once; store it before closing this terminal.");
   console.log(JSON.stringify({
     id: invite.id,
     label: invite.label,
     code,
+    inviteUrl,
     maxRedemptions: invite.maxRedemptions,
     expiresAt: invite.expiresAt ? invite.expiresAt.toISOString() : null,
   }, null, 2));

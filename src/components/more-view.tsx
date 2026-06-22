@@ -1,4 +1,4 @@
-import { Archive, ChevronRight, Download, KeyRound, Settings } from "lucide-react";
+import { Archive, ChevronRight, Download, KeyRound, Settings, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { CatIcon } from "./cat-icon";
 import { LogoutButton } from "./logout-button";
@@ -53,7 +53,24 @@ const sections: Array<{ title: string; tools: Tool[] }> = [
   },
 ];
 
-export function MoreView() {
+export function MoreView({ showAdminInvites = false }: { showAdminInvites?: boolean }) {
+  const visibleSections = sections.map((section) => {
+    if (section.title !== "连接" || !showAdminInvites) return section;
+    return {
+      ...section,
+      tools: [
+        ...section.tools,
+        {
+          href: "/admin/invites",
+          title: "邀请管理",
+          text: "Owner-only：创建邀请链接并查看 workspace。",
+          icon: ShieldCheck,
+          active: true,
+        },
+      ],
+    };
+  });
+
   return (
     <div className="paw-page">
       <section className="paw-page-header">
@@ -65,7 +82,7 @@ export function MoreView() {
       </section>
 
       <div className="paw-more-sections">
-        {sections.map((section) => (
+        {visibleSections.map((section) => (
           <section key={section.title}>
             <h2 className="paw-more-section-title">{section.title}</h2>
             <div className="paw-more-grid">

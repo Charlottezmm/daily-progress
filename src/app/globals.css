@@ -2236,6 +2236,61 @@ a {
   gap: 8px;
 }
 
+.paw-admin-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px auto;
+  gap: 12px;
+  padding-top: 16px;
+}
+
+.paw-admin-created {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  margin-top: 14px;
+  border: 1px solid var(--app-line);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-surface-muted);
+  padding: 12px;
+  color: var(--app-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.paw-admin-table-wrap {
+  overflow-x: auto;
+  padding-top: 10px;
+}
+
+.paw-admin-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  color: var(--app-ink);
+  font-size: 13px;
+}
+
+.paw-admin-table th,
+.paw-admin-table td {
+  border-bottom: 1px solid var(--app-line);
+  padding: 11px 10px;
+  text-align: left;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.paw-admin-table th {
+  color: var(--app-ink-soft);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.paw-mono-cell {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+}
+
 .paw-version {
   margin-top: 40px;
   color: var(--app-ink-muted);

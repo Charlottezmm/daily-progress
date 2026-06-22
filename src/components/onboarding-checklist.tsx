@@ -83,7 +83,7 @@ export function OnboardingChecklist() {
         <div className="paw-onboarding-head">
           <div>
             <p className="paw-section-label">First run</p>
-            <h2>Public beta checklist</h2>
+            <h2>v1 formal checklist</h2>
           </div>
         </div>
         <div className="paw-status-pill" role="status">
@@ -100,7 +100,7 @@ export function OnboardingChecklist() {
         <div className="paw-onboarding-head">
           <div>
             <p className="paw-section-label">First run</p>
-            <h2>Public beta checklist</h2>
+            <h2>v1 formal checklist</h2>
           </div>
         </div>
         <div className="paw-status-pill warn" role="status">
@@ -117,7 +117,7 @@ export function OnboardingChecklist() {
       <div className="paw-onboarding-head">
         <div>
           <p className="paw-section-label">First run</p>
-          <h2>Public beta checklist</h2>
+          <h2>v1 formal checklist</h2>
         </div>
         <span className="paw-status-pill" role="status" aria-label={`Onboarding progress ${state.completedCount} of ${state.totalCount}`}>
           {state.completedCount}/{state.totalCount}

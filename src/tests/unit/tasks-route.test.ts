@@ -37,6 +37,18 @@ function getRequest(path = "/api/tasks") {
   return new Request(`http://localhost${path}`);
 }
 
+function sqlParamValues(value: unknown): unknown[] {
+  if (!value || typeof value !== "object") return [];
+  const chunks = (value as { queryChunks?: unknown[] }).queryChunks;
+  if (!Array.isArray(chunks)) return [];
+  return chunks.flatMap((chunk) => {
+    if (chunk && typeof chunk === "object" && "value" in chunk && "encoder" in chunk) {
+      return [(chunk as { value: unknown }).value];
+    }
+    return sqlParamValues(chunk);
+  });
+}
+
 describe("tasks route", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -67,6 +79,41 @@ describe("tasks route", () => {
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: "Invalid task id" });
     expect(vi.mocked(getDb)).not.toHaveBeenCalled();
+  });
+
+  it("filters single-task reads by the session workspace before task id", async () => {
+    const { getWorkspaceIdFromSession } = await import("@/lib/auth/session");
+    const { getDb } = await import("@/lib/db/client");
+    const limit = vi.fn().mockResolvedValue([]);
+    const where = vi.fn(() => ({ limit }));
+    const from = vi.fn(() => ({ where }));
+    const select = vi.fn(() => ({ from }));
+    vi.mocked(getWorkspaceIdFromSession).mockResolvedValue("workspace-a");
+    vi.mocked(getDb).mockReturnValue({ select } as never);
+    const { GET } = await import("@/app/api/tasks/route");
+
+    const response = await GET(getRequest(`/api/tasks?id=${taskId}`));
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "Task not found" });
+    expect(sqlParamValues(where.mock.calls[0][0])).toEqual(["workspace-a", taskId]);
+  });
+
+  it("filters task list reads by the session workspace", async () => {
+    const { getWorkspaceIdFromSession } = await import("@/lib/auth/session");
+    const { getDb } = await import("@/lib/db/client");
+    const where = vi.fn().mockResolvedValue([]);
+    const from = vi.fn(() => ({ where }));
+    const select = vi.fn(() => ({ from }));
+    vi.mocked(getWorkspaceIdFromSession).mockResolvedValue("workspace-b");
+    vi.mocked(getDb).mockReturnValue({ select } as never);
+    const { GET } = await import("@/app/api/tasks/route");
+
+    const response = await GET(getRequest("/api/tasks"));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ tasks: [] });
+    expect(sqlParamValues(where.mock.calls[0][0])).toEqual(["workspace-b"]);
   });
 
   it("rejects PATCH without a status or schedule field before opening the database", async () => {
