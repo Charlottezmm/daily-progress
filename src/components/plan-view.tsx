@@ -348,7 +348,7 @@ export function PlanView({ today, week, month }: { today: TodayViewData; week: W
   const [tab, setTab] = useState<Tab>("day");
   const [overdueTasks, setOverdueTasks] = useState<PlanTaskView[]>(today.overdueTasks);
   const [todayTasks, setTodayTasks] = useState<PlanTaskView[]>(today.todayTasks);
-  const [selectedTask, setSelectedTask] = useState<PlanTaskView | null>(today.overdueTasks[0] ?? today.todayTasks[0] ?? null);
+  const [selectedTask, setSelectedTask] = useState<PlanTaskView | null>(null);
   const [selectedMonthDay, setSelectedMonthDay] = useState<MonthDayView | null>(
     month.days.find((day) => day.state === "today") ?? month.days.find((day) => day.taskCount > 0) ?? null,
   );
