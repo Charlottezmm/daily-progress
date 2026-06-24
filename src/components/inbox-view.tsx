@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUpRight, RefreshCcw, Trash2, TriangleAlert } from "lucide-react";
+import { ArrowUpRight, ChevronDown, RefreshCcw, Trash2, TriangleAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 import { BackLink } from "./back-link";
 import { CatIcon } from "./cat-icon";
@@ -17,7 +17,6 @@ type PromotionForm = {
   taskSegment: DaySegment;
   taskEstimate: string;
   taskPriority: TaskPriority;
-  quickSegment: DaySegment;
   routinePattern: string;
   routineSegment: RoutineTimeSegment;
   routineEstimate: string;
@@ -81,7 +80,6 @@ function defaultPromotionForm(todayKey: string): PromotionForm {
     taskSegment: "morning",
     taskEstimate: "30",
     taskPriority: "normal",
-    quickSegment: "morning",
     routinePattern: "daily",
     routineSegment: "evening",
     routineEstimate: "30",
@@ -107,6 +105,7 @@ export function InboxView({
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [todayKey] = useState(() => localDateKey(new Date()));
   const [forms, setForms] = useState<Record<string, PromotionForm>>({});
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const overLimit = items.length > 10;
 
   function formFor(id: string) {
@@ -177,14 +176,6 @@ export function InboxView({
     });
   }
 
-  function promoteQuickChore(id: string) {
-    const form = formFor(id);
-    void act(id, {
-      action: "quick_chore_task",
-      daySegment: form.quickSegment,
-    });
-  }
-
   function promoteRoutine(id: string) {
     const form = formFor(id);
     const estimatedMinutes = minutesFromInput(form.routineEstimate);
@@ -252,13 +243,45 @@ export function InboxView({
             {items.map((item) => {
               const form = formFor(item.id);
               return (
-              <div key={item.id} className="paw-list-row !items-start">
-                <div className="min-w-0">
-                  <p className="paw-row-title">{item.title}</p>
-                  <p className="paw-row-meta">{item.age} 前捕获 · 未安排，提升前不占容量</p>
+              <div key={item.id} className="paw-inbox-item">
+                <div className="paw-inbox-head">
+                  <div className="min-w-0">
+                    <p className="paw-row-title">{item.title}</p>
+                    <p className="paw-row-meta">{item.age} 前捕获 · 未安排，不占今日容量</p>
+                  </div>
+                  <div className="paw-inbox-head-actions">
+                    <button
+                      type="button"
+                      disabled={pendingId === item.id}
+                      onClick={() => void act(item.id, { action: "quick_chore_task" })}
+                      className="paw-secondary-btn !px-3 !py-2 !text-xs"
+                    >
+                      <ArrowUpRight size={13} />
+                      今日杂事
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}
+                      className="paw-secondary-btn !px-3 !py-2 !text-xs"
+                      aria-expanded={expandedId === item.id}
+                    >
+                      提升…
+                      <ChevronDown size={13} className={`paw-inbox-chevron ${expandedId === item.id ? "open" : ""}`} />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={pendingId === item.id}
+                      onClick={() => void act(item.id, { action: "delete" })}
+                      className="paw-secondary-btn !px-2 !py-2 !text-xs text-[var(--app-danger)]"
+                      aria-label="删除"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
                 </div>
-                <div className="paw-row-actions w-full max-w-[680px]">
-                  <div className="grid w-full min-w-0 gap-3">
+
+                {expandedId === item.id ? (
+                  <div className="paw-inbox-detail">
                     <div className="grid w-full min-w-0 gap-2 rounded-[var(--app-radius-sm)] border border-[var(--app-line)] bg-[var(--app-bg)] p-3 sm:grid-cols-[minmax(9rem,1fr)_minmax(7rem,0.8fr)_minmax(5rem,0.55fr)_minmax(6rem,0.65fr)_auto] sm:items-end">
                       <label className="min-w-0">
                         <span className="paw-field-label">任务日期</span>
@@ -324,31 +347,6 @@ export function InboxView({
                       </button>
                     </div>
 
-                    <div className="flex min-w-0 flex-wrap items-center gap-2">
-                      <select
-                        value={form.quickSegment}
-                        onChange={(event) => updateForm(item.id, { quickSegment: event.target.value as DaySegment })}
-                        disabled={pendingId === item.id}
-                        className="paw-input !w-auto !min-w-[7rem] !bg-[var(--app-surface)] !px-3 !py-2 !text-xs"
-                        aria-label="小杂事时段"
-                      >
-                        {Object.entries(segmentLabels).map(([value, label]) => (
-                          <option key={value} value={value}>
-                            {label}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        disabled={pendingId === item.id}
-                        onClick={() => promoteQuickChore(item.id)}
-                        className="paw-secondary-btn !px-3 !py-2 !text-xs"
-                      >
-                        <ArrowUpRight size={13} />
-                        今日{segmentLabels[form.quickSegment]}小杂事 · 15 分钟
-                      </button>
-                    </div>
-
                     <div className="grid w-full min-w-0 gap-2 rounded-[var(--app-radius-sm)] border border-[var(--app-line)] bg-[var(--app-bg)] p-3 sm:grid-cols-[minmax(9rem,1fr)_minmax(7rem,0.8fr)_minmax(5rem,0.55fr)_auto] sm:items-end">
                       <label className="min-w-0">
                         <span className="paw-field-label">重复规则</span>
@@ -399,17 +397,8 @@ export function InboxView({
                       </button>
                     </div>
 
-                    <button
-                      type="button"
-                      disabled={pendingId === item.id}
-                      onClick={() => void act(item.id, { action: "delete" })}
-                      className="paw-secondary-btn !w-fit !px-3 !py-2 !text-xs text-[var(--app-danger)]"
-                    >
-                      <Trash2 size={13} />
-                      删除
-                    </button>
                   </div>
-                </div>
+                ) : null}
               </div>
               );
             })}

@@ -598,21 +598,23 @@ export function ConstraintsView() {
           </div>
 
           <div className="paw-constraint-form-grid last">
-            <label>
-              <span className="paw-field-label">课程名</span>
-              <input
-                value={form.courseName}
-                onChange={(event) => setForm((current) => ({ ...current, courseName: event.target.value }))}
-                className="paw-input"
-                list="constraint-courses"
-                placeholder={form.kind === "course" ? "课程名" : "非课程可留空"}
-              />
-              <datalist id="constraint-courses">
-                {courses.map((course) => (
-                  <option key={course.id} value={course.name} />
-                ))}
-              </datalist>
-            </label>
+            {form.kind === "course" ? (
+              <label>
+                <span className="paw-field-label">课程名</span>
+                <input
+                  value={form.courseName}
+                  onChange={(event) => setForm((current) => ({ ...current, courseName: event.target.value }))}
+                  className="paw-input"
+                  list="constraint-courses"
+                  placeholder="课程名"
+                />
+                <datalist id="constraint-courses">
+                  {courses.map((course) => (
+                    <option key={course.id} value={course.name} />
+                  ))}
+                </datalist>
+              </label>
+            ) : null}
             <div className="paw-save-row !mt-6">
               <button type="submit" disabled={pending === "save"} className="paw-primary-btn !px-4 !py-2 !text-sm">
                 {pending === "save" ? <Save size={15} /> : <Plus size={15} />}

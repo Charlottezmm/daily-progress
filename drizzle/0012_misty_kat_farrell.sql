@@ -1,0 +1,1 @@
+ALTER TABLE "tasks" ADD COLUMN "is_chore" boolean DEFAULT false NOT NULL;

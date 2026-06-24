@@ -171,6 +171,7 @@ export const tasks = pgTable("tasks", {
   priority: priority("priority").notNull().default("normal"),
   estimatedMinutes: integer("estimated_minutes").notNull().default(30),
   energyLevel: energyLevel("energy_level").notNull().default("medium"),
+  isChore: boolean("is_chore").notNull().default(false),
   movable: boolean("movable").notNull().default(true),
   projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
   courseId: uuid("course_id").references(() => courses.id, { onDelete: "set null" }),

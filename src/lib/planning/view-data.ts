@@ -58,6 +58,7 @@ export type TodayTaskView = {
   status: TaskStatus;
   blocked: boolean;
   done: boolean;
+  isChore: boolean;
 };
 
 export type TaskDetailSectionView = {
@@ -804,6 +805,7 @@ type TaskRowForView = CapacityTaskInput & {
   blocked?: boolean;
   priority?: Priority;
   energyLevel?: Energy;
+  isChore?: boolean;
   projectId?: string | null;
   courseId?: string | null;
   trackId?: string | null;
@@ -845,6 +847,7 @@ function buildTodayTaskSummary(task: TaskRowForView, refs: ReferenceMaps): Today
     status: view.status,
     blocked: view.blocked,
     done: view.done,
+    isChore: task.isChore ?? false,
   };
 }
 

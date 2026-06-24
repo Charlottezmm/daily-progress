@@ -4,8 +4,10 @@ import { z } from "zod";
 import { getWorkspaceIdFromSession } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import { tasks } from "@/lib/db/schema";
-import { PlanningServiceError, updateTaskNotes, updateTaskSchedule, updateTaskStatus } from "@/lib/planning/service";
+import { createChoreTask, PlanningServiceError, updateTaskNotes, updateTaskSchedule, updateTaskStatus } from "@/lib/planning/service";
 import { readJsonBody } from "@/lib/validation/common";
+
+const choreSchema = z.object({ title: z.string().trim().min(1).max(240) });
 
 const taskUpdateSchema = z
   .object({
@@ -40,6 +42,25 @@ export async function GET(request: Request) {
   const db = getDb();
   const items = await db.select().from(tasks).where(eq(tasks.workspaceId, workspaceId));
   return NextResponse.json({ tasks: items });
+}
+
+export async function POST(request: Request) {
+  const workspaceId = await getWorkspaceIdFromSession();
+  if (!workspaceId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const parsed = choreSchema.safeParse(await readJsonBody(request));
+  if (!parsed.success) return NextResponse.json({ error: "Invalid chore" }, { status: 400 });
+
+  const db = getDb();
+  try {
+    const task = await createChoreTask(db, { workspaceId, title: parsed.data.title });
+    return NextResponse.json({ task });
+  } catch (error) {
+    if (error instanceof PlanningServiceError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    throw error;
+  }
 }
 
 export async function PATCH(request: Request) {

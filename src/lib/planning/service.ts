@@ -108,6 +108,19 @@ function dateFromDateKey(dateKey: string) {
   return date;
 }
 
+function currentShanghaiSegment(date = new Date()): DaySegment {
+  const hour = Number(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: shanghaiTimeZone,
+      hour: "2-digit",
+      hour12: false,
+    }).format(date),
+  );
+  if (hour < 12) return "morning";
+  if (hour < 18) return "afternoon";
+  return "evening";
+}
+
 function normalizeCheckinDate(date?: Date | string) {
   if (!date) return startOfShanghaiDay(new Date());
   if (date instanceof Date) return date;
@@ -439,6 +452,7 @@ export async function processInboxItem(
         energyLevel: "medium",
         priority: "normal",
         status: "todo",
+        isChore: true,
       });
     }
 
@@ -460,6 +474,29 @@ export async function processInboxItem(
 
     return { ok: true, action: input.action };
   });
+}
+
+export async function createChoreTask(
+  db: PlanningDb,
+  input: { workspaceId: string; title: string },
+) {
+  const planId = await requireActivePlanId(db, input.workspaceId);
+  const [task] = await db
+    .insert(tasks)
+    .values({
+      workspaceId: input.workspaceId,
+      planId,
+      title: input.title,
+      date: startOfShanghaiDay(new Date()),
+      daySegment: currentShanghaiSegment(),
+      estimatedMinutes: 15,
+      energyLevel: "medium",
+      priority: "normal",
+      status: "todo",
+      isChore: true,
+    })
+    .returning();
+  return task;
 }
 
 export async function proposeAgentPatch(
