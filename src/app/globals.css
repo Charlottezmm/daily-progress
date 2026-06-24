@@ -2630,6 +2630,19 @@ input.paw-input[type="time"] {
   margin-top: 14px;
 }
 
+.paw-inbox-quickdates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.paw-inbox-quickdates-hint {
+  color: var(--app-ink-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
 .paw-admin-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 140px auto;

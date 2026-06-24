@@ -74,6 +74,12 @@ function localDateKey(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+function dateKeyOffset(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return localDateKey(date);
+}
+
 function defaultPromotionForm(todayKey: string): PromotionForm {
   return {
     taskDate: todayKey,
@@ -170,6 +176,18 @@ export function InboxView({
     void act(id, {
       action: "task",
       date: form.taskDate,
+      daySegment: form.taskSegment,
+      estimatedMinutes,
+      priority: form.taskPriority,
+    });
+  }
+
+  function quickPromoteTask(id: string, dayOffset: number) {
+    const form = formFor(id);
+    const estimatedMinutes = minutesFromInput(form.taskEstimate) ?? 30;
+    void act(id, {
+      action: "task",
+      date: dateKeyOffset(dayOffset),
       daySegment: form.taskSegment,
       estimatedMinutes,
       priority: form.taskPriority,
@@ -282,6 +300,16 @@ export function InboxView({
 
                 {expandedId === item.id ? (
                   <div className="paw-inbox-detail">
+                    <div className="paw-inbox-quickdates">
+                      <span className="paw-field-label">一键丢到</span>
+                      <button type="button" disabled={pendingId === item.id} onClick={() => quickPromoteTask(item.id, 0)} className="paw-secondary-btn !px-3 !py-1.5 !text-xs">
+                        今天
+                      </button>
+                      <button type="button" disabled={pendingId === item.id} onClick={() => quickPromoteTask(item.id, 1)} className="paw-secondary-btn !px-3 !py-1.5 !text-xs">
+                        明天
+                      </button>
+                      <span className="paw-inbox-quickdates-hint">需要精确日期/时段就用下面</span>
+                    </div>
                     <div className="grid w-full min-w-0 gap-2 rounded-[var(--app-radius-sm)] border border-[var(--app-line)] bg-[var(--app-bg)] p-3 sm:grid-cols-[minmax(9rem,1fr)_minmax(7rem,0.8fr)_minmax(5rem,0.55fr)_minmax(6rem,0.65fr)_auto] sm:items-end">
                       <label className="min-w-0">
                         <span className="paw-field-label">任务日期</span>
