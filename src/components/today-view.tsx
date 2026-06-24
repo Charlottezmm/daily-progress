@@ -133,23 +133,20 @@ export function TodayView({ data, beforeTasks }: { data: TodayViewData; beforeTa
   const allDone = tasks.length > 0 && doneCount === tasks.length;
   const blockedCount = tasks.filter((task) => task.displayStatus === "blocked").length;
   let catMood: "happy" | "think" | "sleep" | "celebrate" | "worried" | "cheer" = "think";
-  let catMsg = `今天排了 ${tasks.length} 件事。完成就勾掉，做不完的我来重排。`;
-  if (allDone) {
-    catMood = "celebrate";
-    catMsg = "全部搞定！剩下的时间都是你的。";
-  } else if (hour !== null && (hour >= 22 || hour < 4)) {
-    catMood = "sleep";
-    catMsg = "很晚了，记个收工反馈就去休息吧。";
-  } else if (blockedCount > 0) {
-    catMood = "worried";
-    catMsg = `有 ${blockedCount} 件卡住了，先做别的，重排的事交给我。`;
-  } else if (tasks.length === 0) {
-    catMood = "sleep";
-    catMsg = "今天还没有安排任务，要记什么找右下角的小猫。";
-  } else if (doneCount > 0) {
-    catMood = "cheer";
-    catMsg = `已完成 ${doneCount}/${tasks.length}，节奏不错，继续。`;
-  }
+  if (allDone) catMood = "celebrate";
+  else if (hour !== null && (hour >= 22 || hour < 4)) catMood = "sleep";
+  else if (blockedCount > 0) catMood = "worried";
+  else if (tasks.length === 0) catMood = "sleep";
+  else if (doneCount > 0) catMood = "cheer";
+
+  // 问候语随时段；挂载后才取（避免 SSR 时区差异），未挂载时用中性问候
+  const greeting = hour === null ? "你好" : hour < 5 ? "夜深了" : hour < 11 ? "早上好" : hour < 14 ? "中午好" : hour < 18 ? "下午好" : "晚上好";
+  const remaining = unresolvedTasks.length;
+  const headline = tasks.length === 0 ? "今天还没排任务" : allDone ? "今天全部搞定" : `今天还剩 ${remaining} 件`;
+
+  // 进度环：挂载后再把描边补到目标值，做一次绘入动画
+  const ringCircumference = 138;
+  const ringOffset = hour === null || tasks.length === 0 ? ringCircumference : ringCircumference * (1 - doneCount / tasks.length);
 
   async function patchTask(id: string, body: { status?: PersistedStatus; blocked?: boolean }) {
     await fetch("/api/tasks", {
@@ -195,27 +192,59 @@ export function TodayView({ data, beforeTasks }: { data: TodayViewData; beforeTa
 
   return (
     <div className="paw-page">
-      <section className="paw-page-header">
-        <p className="paw-greeting">{formatTodayGreeting()}</p>
-        <h1 className="paw-page-date">今日执行</h1>
-        <div className="paw-agent-row">
-          <CatIcon size={40} mood={catMood} />
-          <p className="paw-agent-msg">{catMsg}</p>
+      <section className="paw-today-header">
+        <div className="paw-today-hero">
+          <div className="paw-today-hero-text">
+            <p className="paw-greeting">{formatTodayGreeting()}</p>
+            <h1 className="paw-today-headline">{greeting}，<br />{headline}</h1>
+          </div>
+          <span className="paw-today-cat">
+            <CatIcon size={40} mood={catMood} />
+          </span>
         </div>
-        <div className="paw-status-pills">
-          {fixedMinutes > 0 ? <span className="paw-status-pill">固定安排 {minutesLabel(fixedMinutes)}</span> : null}
-          <span className="paw-status-pill">剩余 {minutesLabel(unresolvedMinutes)}</span>
-          {data.patchCount > 0 ? (
-            <a href="/review" className="paw-status-pill link">
-              {data.patchCount} 条建议待确认
-            </a>
-          ) : null}
-          {data.warnings.slice(0, 1).map((warning) => (
-            <span key={warning.id} className="paw-status-pill warn">
-              {warning.title}
+
+        {tasks.length > 0 ? (
+          <div className="paw-today-progress">
+            <span className="paw-ring" aria-hidden="true">
+              <svg width="52" height="52" viewBox="0 0 52 52">
+                <circle cx="26" cy="26" r="22" fill="none" stroke="var(--app-muted-soft)" strokeWidth="5" />
+                <circle
+                  cx="26"
+                  cy="26"
+                  r="22"
+                  fill="none"
+                  stroke="var(--app-positive)"
+                  strokeWidth="5"
+                  strokeLinecap="round"
+                  strokeDasharray={ringCircumference}
+                  strokeDashoffset={ringOffset}
+                  transform="rotate(-90 26 26)"
+                  style={{ transition: "stroke-dashoffset 800ms cubic-bezier(0.22, 1, 0.36, 1)" }}
+                />
+              </svg>
+              <span className="paw-ring-label">{doneCount}/{tasks.length}</span>
             </span>
-          ))}
-        </div>
+            <div className="paw-today-progress-text">
+              <p className="paw-today-progress-main">完成 {doneCount} / {tasks.length} 件</p>
+              <p className="paw-today-progress-sub">
+                {fixedMinutes > 0 ? `固定 ${minutesLabel(fixedMinutes)} · ` : ""}
+                剩余 {minutesLabel(unresolvedMinutes)}
+                {data.patchCount > 0 ? (
+                  <>
+                    {" · "}
+                    <a href="/review" className="paw-today-progress-link">{data.patchCount} 条建议待确认</a>
+                  </>
+                ) : null}
+              </p>
+            </div>
+          </div>
+        ) : null}
+
+        {data.warnings.slice(0, 1).map((warning) => (
+          <p key={warning.id} className="paw-today-warn">
+            <AlertTriangle size={13} /> {warning.title}
+          </p>
+        ))}
       </section>
 
       {data.dataUnavailable ? (
@@ -227,7 +256,10 @@ export function TodayView({ data, beforeTasks }: { data: TodayViewData; beforeTa
       {beforeTasks}
 
       <section>
-        <div className="paw-section-label">今日任务 · 完成 {doneCount}/{tasks.length}</div>
+        <div className="paw-today-tasks-head">
+          <h2 className="paw-today-tasks-title">今日任务</h2>
+          {tasks.length > 0 ? <span className="paw-today-tasks-hint">向下越做越轻</span> : null}
+        </div>
 
         <form className="paw-chore-add" onSubmit={addChore}>
           <input
@@ -333,17 +365,13 @@ export function TodayView({ data, beforeTasks }: { data: TodayViewData; beforeTa
         </div>
       </section>
 
-      <section className="mt-6">
-        <div className="paw-card p-5">
-          <h2 className="text-base font-bold text-[var(--app-ink)]">没做完的不用管</h2>
-          <p className="mt-1 text-sm font-medium text-[var(--app-ink-soft)]">
-            没完成、卡住、延后的任务，Agent 会重新安排，你不用手动改日期。
-          </p>
-          <a href="/review" className="mt-3 inline-flex items-center gap-1 text-sm font-bold text-[var(--app-accent-dark)]">
-            去看建议 <RotateCcw size={14} />
-          </a>
-        </div>
-      </section>
+      {tasks.length > 0 ? (
+        <a href="/review" className="paw-today-rebalance">
+          <RotateCcw size={15} />
+          没做完的交给我重排
+          <span className="paw-today-rebalance-arrow">→</span>
+        </a>
+      ) : null}
 
       <DailyCheckin
         initialCompletedText={data.checkin?.completedText}
