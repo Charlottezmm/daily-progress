@@ -2597,9 +2597,16 @@ input.paw-input[type="time"] {
 
 .paw-inbox-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
+}
+
+/* Inbox 是捕获缓冲区，标题要看全，不截断（覆盖 .paw-row-title 的省略号） */
+.paw-inbox-item .paw-row-title {
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
 }
 
 .paw-inbox-head-actions {

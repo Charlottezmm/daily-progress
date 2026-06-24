@@ -127,7 +127,6 @@ function TaskCard({
       <span className="paw-plan-task-meta">
         {segmentLabel[task.segment]} · {minutesLabel(task.minutes)} · {task.context} · {task.track}
       </span>
-      {task.detail.summary ? <span className="paw-plan-task-note">{task.detail.summary}</span> : null}
     </button>
   );
 }
