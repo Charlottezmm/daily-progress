@@ -45,3 +45,20 @@ describe("agent run and review long text wrapping", () => {
     expect(reviewPreview).toContain('className="paw-status-pill warn paw-wrap-anywhere"');
   });
 });
+
+describe("mobile Plan layout", () => {
+  it("keeps Plan task detail and month detail in normal document flow", () => {
+    const css = readFileSync("src/app/globals.css", "utf8");
+    const mobileStart = css.indexOf("@media (max-width: 760px)");
+    const mobileEnd = css.indexOf("@media (max-width: 640px)", mobileStart);
+    const mobileBlock = css.slice(mobileStart, mobileEnd);
+    const planDetailRule = mobileBlock.match(/\.paw-plan-detail \{[\s\S]*?\}/)?.[0] ?? "";
+    const monthSelectedRule = mobileBlock.match(/\.paw-month-selected \{[\s\S]*?\}/)?.[0] ?? "";
+    const monthBackdropRule = mobileBlock.match(/\.paw-month-sheet-backdrop \{[\s\S]*?\}/)?.[0] ?? "";
+
+    expect(planDetailRule).toContain("position: relative;");
+    expect(planDetailRule).not.toContain("position: fixed;");
+    expect(monthSelectedRule).not.toContain("position: fixed;");
+    expect(monthBackdropRule).not.toContain("display: block;");
+  });
+});

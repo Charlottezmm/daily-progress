@@ -1,7 +1,7 @@
 "use client";
 
 import { X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CatIcon } from "./cat-icon";
 import { RescheduleList } from "./reschedule-list";
 import type { MonthDayView, MonthViewData, PlanTaskView, TimelineItemView, TodayViewData, WeekDayView, WeekViewData } from "@/lib/planning/view-data";
@@ -228,7 +228,7 @@ function TaskDetail({
   return (
     <>
     <div className={`paw-plan-sheet-backdrop ${sheetOpen ? "open" : ""}`} onClick={onClose} aria-hidden="true" />
-    <aside className={`paw-plan-detail ${sheetOpen ? "open" : ""}`}>
+    <aside id="paw-plan-detail" className={`paw-plan-detail ${sheetOpen ? "open" : ""}`}>
       <button type="button" className="paw-plan-sheet-close" onClick={onClose} aria-label="关闭详情">
         <X size={18} />
       </button>
@@ -349,9 +349,7 @@ export function PlanView({ today, week, month }: { today: TodayViewData; week: W
   const [overdueTasks, setOverdueTasks] = useState<PlanTaskView[]>(today.overdueTasks);
   const [todayTasks, setTodayTasks] = useState<PlanTaskView[]>(today.todayTasks);
   const [selectedTask, setSelectedTask] = useState<PlanTaskView | null>(null);
-  const [selectedMonthDay, setSelectedMonthDay] = useState<MonthDayView | null>(
-    month.days.find((day) => day.state === "today") ?? month.days.find((day) => day.taskCount > 0) ?? null,
-  );
+  const [selectedMonthDay, setSelectedMonthDay] = useState<MonthDayView | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   // 手机端把详情做成底部 sheet：点任务才打开，避免加载时自动弹出
@@ -361,6 +359,15 @@ export function PlanView({ today, week, month }: { today: TodayViewData; week: W
     setDetailOpen(true);
   };
   const closeDetail = () => setDetailOpen(false);
+
+  // 手机上详情就地展开在列表下方，自动滚动过去，省得手动找
+  useEffect(() => {
+    if (!detailOpen || !selectedTask) return;
+    if (typeof window === "undefined" || !window.matchMedia("(max-width: 760px)").matches) return;
+    requestAnimationFrame(() => {
+      document.getElementById("paw-plan-detail")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [detailOpen, selectedTask]);
   const currentDateKey = todayKey();
 
   function nextSelectedTask(taskId: string, nextOverdue: PlanTaskView[], nextToday: PlanTaskView[]) {
@@ -465,7 +472,10 @@ export function PlanView({ today, week, month }: { today: TodayViewData; week: W
             <button
               key={value}
               type="button"
-              onClick={() => setTab(value as Tab)}
+              onClick={() => {
+                setTab(value as Tab);
+                setDetailOpen(false);
+              }}
               className={`paw-sub-tab ${tab === value ? "active" : ""}`}
             >
               {label}
