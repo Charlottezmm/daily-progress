@@ -1,5 +1,6 @@
 "use client";
 
+import { X } from "lucide-react";
 import { useState } from "react";
 import { CatIcon } from "./cat-icon";
 import { RescheduleList } from "./reschedule-list";
@@ -196,6 +197,8 @@ function TaskDetail({
   actions,
   savingId,
   message,
+  sheetOpen = false,
+  onClose,
 }: {
   task: PlanTaskView | null;
   actions?: {
@@ -206,6 +209,8 @@ function TaskDetail({
   };
   savingId?: string | null;
   message?: string | null;
+  sheetOpen?: boolean;
+  onClose?: () => void;
 }) {
   if (!task) {
     return (
@@ -221,7 +226,12 @@ function TaskDetail({
   const isSaving = savingId === task.id;
 
   return (
-    <aside className="paw-plan-detail">
+    <>
+    <div className={`paw-plan-sheet-backdrop ${sheetOpen ? "open" : ""}`} onClick={onClose} aria-hidden="true" />
+    <aside className={`paw-plan-detail ${sheetOpen ? "open" : ""}`}>
+      <button type="button" className="paw-plan-sheet-close" onClick={onClose} aria-label="关闭详情">
+        <X size={18} />
+      </button>
       <p className="paw-section-label">任务详情</p>
       <h2 className="paw-goal-title">{redactPrivateTitle(task.title)}</h2>
       <div className="paw-plan-detail-meta">
@@ -267,6 +277,7 @@ function TaskDetail({
         </div>
       ) : null}
     </aside>
+    </>
   );
 }
 
@@ -343,6 +354,13 @@ export function PlanView({ today, week, month }: { today: TodayViewData; week: W
   );
   const [savingId, setSavingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  // 手机端把详情做成底部 sheet：点任务才打开，避免加载时自动弹出
+  const [detailOpen, setDetailOpen] = useState(false);
+  const openTask = (task: PlanTaskView) => {
+    setSelectedTask(task);
+    setDetailOpen(true);
+  };
+  const closeDetail = () => setDetailOpen(false);
   const currentDateKey = todayKey();
 
   function nextSelectedTask(taskId: string, nextOverdue: PlanTaskView[], nextToday: PlanTaskView[]) {
@@ -478,7 +496,7 @@ export function PlanView({ today, week, month }: { today: TodayViewData; week: W
                 label={`未完成遗留 · ${overdueTasks.length}`}
                 tasks={overdueTasks}
                 empty="今天以前没有遗留待办。"
-                onOpen={setSelectedTask}
+                onOpen={openTask}
                 tone="warn"
                 variant="overdue"
                 selectedId={selectedTask?.id ?? null}
@@ -488,12 +506,12 @@ export function PlanView({ today, week, month }: { today: TodayViewData; week: W
               label={`今日任务 · ${todayTasks.filter((task) => task.done).length}/${todayTasks.length}`}
               tasks={todayTasks}
               empty="今天还没有安排任务。"
-              onOpen={setSelectedTask}
+              onOpen={openTask}
               selectedId={selectedTask?.id ?? null}
             />
             <FixedItems items={today.fixedItems} />
           </div>
-          <TaskDetail task={selectedTask} actions={taskActions} savingId={savingId} message={message} />
+          <TaskDetail task={selectedTask} actions={taskActions} savingId={savingId} message={message} sheetOpen={detailOpen} onClose={closeDetail} />
         </section>
       ) : null}
 
@@ -502,7 +520,7 @@ export function PlanView({ today, week, month }: { today: TodayViewData; week: W
           <div className="paw-plan-main">
           <div className="paw-week-grid">
             {week.days.map((day) => (
-              <WeekDayCard key={day.date} day={day} onOpenTask={setSelectedTask} />
+              <WeekDayCard key={day.date} day={day} onOpenTask={openTask} />
             ))}
           </div>
 
@@ -530,7 +548,7 @@ export function PlanView({ today, week, month }: { today: TodayViewData; week: W
             </div>
           </div>
           </div>
-          <TaskDetail task={selectedTask} />
+          <TaskDetail task={selectedTask} sheetOpen={detailOpen} onClose={closeDetail} />
         </section>
       ) : null}
 
@@ -606,7 +624,7 @@ export function PlanView({ today, week, month }: { today: TodayViewData; week: W
                             <TaskCard
                               key={task.id}
                               task={task}
-                              onOpen={setSelectedTask}
+                              onOpen={openTask}
                               compact
                               active={selectedTask?.id === task.id}
                             />
@@ -677,7 +695,7 @@ export function PlanView({ today, week, month }: { today: TodayViewData; week: W
             </>
           )}
           </div>
-          <TaskDetail task={selectedTask} />
+          <TaskDetail task={selectedTask} sheetOpen={detailOpen} onClose={closeDetail} />
         </section>
       ) : null}
 
