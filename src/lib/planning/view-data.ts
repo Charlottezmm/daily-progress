@@ -55,6 +55,9 @@ export type TodayTaskView = {
   track: string;
   minutes: number;
   energy: "低" | "中" | "高";
+  priority: Priority;
+  notes: string | null;
+  detail: TaskDetailView;
   status: TaskStatus;
   blocked: boolean;
   done: boolean;
@@ -844,6 +847,9 @@ function buildTodayTaskSummary(task: TaskRowForView, refs: ReferenceMaps): Today
     track: view.track,
     minutes: view.minutes,
     energy: view.energy,
+    priority: view.priority,
+    notes: view.notes,
+    detail: view.detail,
     status: view.status,
     blocked: view.blocked,
     done: view.done,

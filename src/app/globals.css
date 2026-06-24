@@ -871,6 +871,48 @@ a {
   margin-top: 12px;
 }
 
+.paw-task-notes {
+  margin-top: 10px;
+  color: var(--app-ink-soft);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.paw-task-notes.muted {
+  color: var(--app-ink-muted);
+  font-style: italic;
+}
+
+.paw-task-sections {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.paw-task-sections h4 {
+  color: var(--app-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.paw-task-sections ul {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  display: grid;
+  gap: 3px;
+}
+
+.paw-task-sections li {
+  color: var(--app-ink-soft);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
 .paw-chore-add {
   display: flex;
   gap: 8px;
@@ -1120,6 +1162,23 @@ a {
 }
 
 .paw-textarea:focus,
+/* iOS 原生 date/time 输入框有自带最小宽度和居中的 value 盒子，会顶破容器右边框；
+   关掉原生外观、把内部 value 左对齐去掉外边距，让 width:100% 真正生效 */
+input.paw-input[type="date"],
+input.paw-input[type="time"] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.paw-input::-webkit-date-and-time-value {
+  text-align: left;
+  margin: 0;
+}
+
+.paw-input::-webkit-calendar-picker-indicator {
+  margin-left: auto;
+}
+
 .paw-input:focus {
   border-color: var(--app-accent);
 }

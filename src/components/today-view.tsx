@@ -12,6 +12,12 @@ type Task = TodayViewData["tasks"][number];
 type PersistedStatus = Task["status"];
 type DisplayStatus = PersistedStatus | "blocked";
 const weekdayChars = "日一二三四五六";
+const priorityLabel: Record<"low" | "normal" | "high" | "urgent", string> = {
+  low: "低",
+  normal: "普通",
+  high: "高",
+  urgent: "紧急",
+};
 
 export function formatTodayGreeting(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -78,6 +84,9 @@ export function TodayView({ data, beforeTasks }: { data: TodayViewData; beforeTa
         track: "未分类",
         minutes: 15,
         energy: "中",
+        priority: "normal",
+        notes: null,
+        detail: { summary: null, sections: [] },
         status: "todo",
         blocked: false,
         done: false,
@@ -327,7 +336,29 @@ export function TodayView({ data, beforeTasks }: { data: TodayViewData; beforeTa
                     <span className="paw-task-tag">{task.context}</span>
                     <span>{task.track}</span>
                     <span>能量 {task.energy}</span>
+                    <span>优先级 {priorityLabel[task.priority]}</span>
                   </div>
+                  {task.notes ? (
+                    <p className="paw-task-notes">{task.notes}</p>
+                  ) : task.detail.sections.length === 0 ? (
+                    <p className="paw-task-notes muted">这条任务还没有详细描述。</p>
+                  ) : null}
+                  {task.detail.sections.length > 0 ? (
+                    <div className="paw-task-sections">
+                      {task.detail.sections.map((section) => (
+                        <section key={section.label}>
+                          <h4>{section.label}</h4>
+                          {section.lines.length > 0 ? (
+                            <ul>
+                              {section.lines.map((line, index) => (
+                                <li key={`${section.label}-${index}`}>{line}</li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </section>
+                      ))}
+                    </div>
+                  ) : null}
                   <div className="paw-task-actions">
                     <button
                       type="button"
