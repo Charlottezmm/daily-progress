@@ -326,7 +326,7 @@ a {
 .paw-today-hero {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 14px;
 }
 
@@ -371,8 +371,8 @@ a {
 .paw-ring {
   position: relative;
   flex: none;
-  width: 52px;
-  height: 52px;
+  width: 48px;
+  height: 48px;
 }
 
 .paw-ring-label {
@@ -387,21 +387,12 @@ a {
   font-variant-numeric: tabular-nums;
 }
 
-.paw-today-progress-text {
+.paw-today-progress-line {
   min-width: 0;
-}
-
-.paw-today-progress-main {
-  color: var(--app-ink);
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.paw-today-progress-sub {
-  margin-top: 2px;
   color: var(--app-ink-soft);
   font-size: 13px;
   font-weight: 500;
+  line-height: 1.5;
 }
 
 .paw-today-progress-link {
@@ -470,13 +461,8 @@ a {
 .paw-agent-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-top: 16px;
-  border: 1px solid var(--app-line);
-  border-radius: var(--app-radius-sm);
-  background: var(--app-surface);
-  box-shadow: var(--app-shadow-card);
-  padding: 12px 16px;
+  gap: 10px;
+  margin-top: 12px;
 }
 
 .paw-agent-row img {
@@ -3055,10 +3041,6 @@ input.paw-input[type="time"] {
 
   .paw-page-date {
     font-size: 28px;
-  }
-
-  .paw-agent-row {
-    padding: 12px 14px;
   }
 
   .paw-agent-msg {

@@ -150,8 +150,6 @@ export function TodayView({ data, beforeTasks }: { data: TodayViewData; beforeTa
 
   // 问候语随时段；挂载后才取（避免 SSR 时区差异），未挂载时用中性问候
   const greeting = hour === null ? "你好" : hour < 5 ? "夜深了" : hour < 11 ? "早上好" : hour < 14 ? "中午好" : hour < 18 ? "下午好" : "晚上好";
-  const remaining = unresolvedTasks.length;
-  const headline = tasks.length === 0 ? "今天还没排任务" : allDone ? "今天全部搞定" : `今天还剩 ${remaining} 件`;
 
   // 进度环：挂载后再把描边补到目标值，做一次绘入动画
   const ringCircumference = 138;
@@ -205,7 +203,7 @@ export function TodayView({ data, beforeTasks }: { data: TodayViewData; beforeTa
         <div className="paw-today-hero">
           <div className="paw-today-hero-text">
             <p className="paw-greeting">{formatTodayGreeting()}</p>
-            <h1 className="paw-today-headline">{greeting}，<br />{headline}</h1>
+            <h1 className="paw-today-headline">{greeting}</h1>
           </div>
           <span className="paw-today-cat">
             <CatIcon size={40} mood={catMood} />
@@ -215,7 +213,7 @@ export function TodayView({ data, beforeTasks }: { data: TodayViewData; beforeTa
         {tasks.length > 0 ? (
           <div className="paw-today-progress">
             <span className="paw-ring" aria-hidden="true">
-              <svg width="52" height="52" viewBox="0 0 52 52">
+              <svg width="48" height="48" viewBox="0 0 52 52">
                 <circle cx="26" cy="26" r="22" fill="none" stroke="var(--app-muted-soft)" strokeWidth="5" />
                 <circle
                   cx="26"
@@ -233,19 +231,17 @@ export function TodayView({ data, beforeTasks }: { data: TodayViewData; beforeTa
               </svg>
               <span className="paw-ring-label">{doneCount}/{tasks.length}</span>
             </span>
-            <div className="paw-today-progress-text">
-              <p className="paw-today-progress-main">完成 {doneCount} / {tasks.length} 件</p>
-              <p className="paw-today-progress-sub">
-                {fixedMinutes > 0 ? `固定 ${minutesLabel(fixedMinutes)} · ` : ""}
-                剩余 {minutesLabel(unresolvedMinutes)}
-                {data.patchCount > 0 ? (
-                  <>
-                    {" · "}
-                    <a href="/review" className="paw-today-progress-link">{data.patchCount} 条建议待确认</a>
-                  </>
-                ) : null}
-              </p>
-            </div>
+            <p className="paw-today-progress-line">
+              今天 {tasks.length} 件
+              {fixedMinutes > 0 ? ` · 固定 ${minutesLabel(fixedMinutes)}` : ""}
+              {` · 剩余 ${minutesLabel(unresolvedMinutes)}`}
+              {data.patchCount > 0 ? (
+                <>
+                  {" · "}
+                  <a href="/review" className="paw-today-progress-link">{data.patchCount} 条建议待确认</a>
+                </>
+              ) : null}
+            </p>
           </div>
         ) : null}
 
