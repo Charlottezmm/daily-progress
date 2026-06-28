@@ -8,6 +8,10 @@ vi.mock("@/lib/db/client", () => ({
   getDb: vi.fn(),
 }));
 
+vi.mock("@/lib/planning/active-plan", () => ({
+  getActivePlanId: vi.fn(),
+}));
+
 vi.mock("@/lib/planning/service", () => {
   class PlanningServiceError extends Error {
     constructor(message: string, public status = 400) {
@@ -81,14 +85,16 @@ describe("tasks route", () => {
     expect(vi.mocked(getDb)).not.toHaveBeenCalled();
   });
 
-  it("filters single-task reads by the session workspace before task id", async () => {
+  it("filters single-task reads by the session workspace and active plan before task id", async () => {
     const { getWorkspaceIdFromSession } = await import("@/lib/auth/session");
     const { getDb } = await import("@/lib/db/client");
+    const { getActivePlanId } = await import("@/lib/planning/active-plan");
     const limit = vi.fn().mockResolvedValue([]);
     const where = vi.fn(() => ({ limit }));
     const from = vi.fn(() => ({ where }));
     const select = vi.fn(() => ({ from }));
     vi.mocked(getWorkspaceIdFromSession).mockResolvedValue("workspace-a");
+    vi.mocked(getActivePlanId).mockResolvedValue("plan-active");
     vi.mocked(getDb).mockReturnValue({ select } as never);
     const { GET } = await import("@/app/api/tasks/route");
 
@@ -96,16 +102,19 @@ describe("tasks route", () => {
 
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ error: "Task not found" });
-    expect(sqlParamValues(where.mock.calls[0][0])).toEqual(["workspace-a", taskId]);
+    expect(getActivePlanId).toHaveBeenCalledWith({ select }, "workspace-a");
+    expect(sqlParamValues(where.mock.calls[0][0])).toEqual(["workspace-a", "plan-active", taskId]);
   });
 
-  it("filters task list reads by the session workspace", async () => {
+  it("filters task list reads by the session workspace and active plan", async () => {
     const { getWorkspaceIdFromSession } = await import("@/lib/auth/session");
     const { getDb } = await import("@/lib/db/client");
+    const { getActivePlanId } = await import("@/lib/planning/active-plan");
     const where = vi.fn().mockResolvedValue([]);
     const from = vi.fn(() => ({ where }));
     const select = vi.fn(() => ({ from }));
     vi.mocked(getWorkspaceIdFromSession).mockResolvedValue("workspace-b");
+    vi.mocked(getActivePlanId).mockResolvedValue("plan-active");
     vi.mocked(getDb).mockReturnValue({ select } as never);
     const { GET } = await import("@/app/api/tasks/route");
 
@@ -113,7 +122,8 @@ describe("tasks route", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ tasks: [] });
-    expect(sqlParamValues(where.mock.calls[0][0])).toEqual(["workspace-b"]);
+    expect(getActivePlanId).toHaveBeenCalledWith({ select }, "workspace-b");
+    expect(sqlParamValues(where.mock.calls[0][0])).toEqual(["workspace-b", "plan-active"]);
   });
 
   it("rejects PATCH without a status or schedule field before opening the database", async () => {

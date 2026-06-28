@@ -25,6 +25,7 @@ import {
   type CapacityTimeBlockInput,
 } from "@/lib/planning/capacity-model";
 import { materializeTimetableRows } from "@/lib/imports/timetable-save";
+import { getActivePlanId } from "@/lib/planning/active-plan";
 import { calculateTrackBalance } from "@/lib/planning/track-balance";
 import { expandRecurringBlocks } from "@/lib/planning/recurring-time-blocks";
 import { buildWarnings } from "@/lib/planning/warnings";
@@ -901,6 +902,8 @@ export async function getTodayPageData(workspaceId: string): Promise<TodayViewDa
     const { start: weekStart, end: weekEnd } = dateRangeForWeek();
     const yesterday = addDays(start, -1);
     const refs = await loadReferenceMaps(workspaceId);
+    const planId = await getActivePlanId(db, workspaceId);
+    if (!planId) return emptyTodayData();
 
     const [
       taskRows,
@@ -919,7 +922,7 @@ export async function getTodayPageData(workspaceId: string): Promise<TodayViewDa
         db
           .select()
           .from(tasks)
-          .where(and(eq(tasks.workspaceId, workspaceId), gte(tasks.date, start), lt(tasks.date, end)))
+          .where(and(eq(tasks.workspaceId, workspaceId), eq(tasks.planId, planId), gte(tasks.date, start), lt(tasks.date, end)))
           .orderBy(tasks.daySegment, tasks.createdAt),
         db.select().from(routines).where(eq(routines.workspaceId, workspaceId)),
         db
@@ -929,7 +932,7 @@ export async function getTodayPageData(workspaceId: string): Promise<TodayViewDa
         db
           .select()
           .from(tasks)
-          .where(and(eq(tasks.workspaceId, workspaceId), eq(tasks.status, "todo"), lt(tasks.date, start)))
+          .where(and(eq(tasks.workspaceId, workspaceId), eq(tasks.planId, planId), eq(tasks.status, "todo"), lt(tasks.date, start)))
           .orderBy(desc(tasks.date), tasks.createdAt),
         db
           .select()
@@ -960,7 +963,7 @@ export async function getTodayPageData(workspaceId: string): Promise<TodayViewDa
         db
           .select({ id: agentPatches.id })
           .from(agentPatches)
-          .where(and(eq(agentPatches.workspaceId, workspaceId), eq(agentPatches.status, "draft"))),
+          .where(and(eq(agentPatches.workspaceId, workspaceId), eq(agentPatches.planId, planId), eq(agentPatches.status, "draft"))),
       ]);
 
     const completedRoutineIds = new Set(completionRows.filter((row) => row.completed).map((row) => row.routineId));
@@ -1038,12 +1041,14 @@ export async function getWeekPageData(workspaceId: string): Promise<WeekViewData
     const { start, end } = dateRangeForWeek(now);
     const weekDates = buildWeekDates(now);
     const refs = await loadReferenceMaps(workspaceId);
+    const planId = await getActivePlanId(db, workspaceId);
+    if (!planId) return emptyWeekData();
 
     const [taskRows, blockRows, routineRows, capacityRows, checkinRows] = await Promise.all([
       db
         .select()
         .from(tasks)
-        .where(and(eq(tasks.workspaceId, workspaceId), gte(tasks.date, start), lt(tasks.date, end))),
+        .where(and(eq(tasks.workspaceId, workspaceId), eq(tasks.planId, planId), gte(tasks.date, start), lt(tasks.date, end))),
       db
         .select()
         .from(timeBlocks)
@@ -1218,10 +1223,12 @@ export async function getMonthPlanData(workspaceId: string): Promise<MonthViewDa
       .from(plans)
       .where(and(eq(plans.workspaceId, workspaceId), eq(plans.status, "active")))
       .limit(1);
+    const planId = await getActivePlanId(db, workspaceId);
+    if (!planId) return emptyMonthData();
     const taskRows = await db
       .select()
       .from(tasks)
-      .where(and(eq(tasks.workspaceId, workspaceId), gte(tasks.date, start), lt(tasks.date, end)))
+      .where(and(eq(tasks.workspaceId, workspaceId), eq(tasks.planId, planId), gte(tasks.date, start), lt(tasks.date, end)))
       .orderBy(tasks.date, tasks.createdAt);
 
     const totalMinutes = taskRows.reduce((sum, task) => sum + task.estimatedMinutes, 0);
@@ -1479,13 +1486,15 @@ export function buildReschedulePatchItems(input: {
 export async function getReschedulePageData(workspaceId: string): Promise<RescheduleViewData> {
   try {
     const db = getDb();
+    const planId = await getActivePlanId(db, workspaceId);
+    if (!planId) return emptyRescheduleData();
     const [patchRows, taskRows] = await Promise.all([
       db
         .select()
         .from(agentPatches)
-        .where(and(eq(agentPatches.workspaceId, workspaceId), eq(agentPatches.status, "draft")))
+        .where(and(eq(agentPatches.workspaceId, workspaceId), eq(agentPatches.planId, planId), eq(agentPatches.status, "draft")))
         .orderBy(desc(agentPatches.createdAt)),
-      db.select({ id: tasks.id, title: tasks.title }).from(tasks).where(eq(tasks.workspaceId, workspaceId)),
+      db.select({ id: tasks.id, title: tasks.title }).from(tasks).where(and(eq(tasks.workspaceId, workspaceId), eq(tasks.planId, planId))),
     ]);
     const patchIds = patchRows.map((patch) => patch.id);
     const agentRunRows =
