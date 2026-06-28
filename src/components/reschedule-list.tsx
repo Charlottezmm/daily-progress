@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 
 type Segment = "morning" | "afternoon" | "evening";
 
-type Task = {
+export type Task = {
   id: string;
   title: string;
   date: string | null;
@@ -52,6 +52,22 @@ function weekdayLabel(key: string) {
   return `周${weekdayChars[dt.getUTCDay()]}`;
 }
 
+export function buildRescheduleGroups(tasks: Task[], today: string) {
+  const upcoming = tasks
+    .filter((t) => t.date && t.status === "todo")
+    .map((t) => ({ ...t, key: shanghaiDateKey(t.date as string) }))
+    .filter((t) => t.key >= today)
+    .sort((a, b) => (a.key === b.key ? a.daySegment.localeCompare(b.daySegment) : a.key.localeCompare(b.key)));
+
+  const byDate = new Map<string, Array<Task & { key: string }>>();
+  for (const t of upcoming) {
+    const arr = byDate.get(t.key) ?? [];
+    arr.push(t);
+    byDate.set(t.key, arr);
+  }
+  return [...byDate.entries()];
+}
+
 export function RescheduleList() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,19 +98,7 @@ export function RescheduleList() {
 
   // 只列今天及以后、还没做的任务，按日期分组
   const groups = useMemo(() => {
-    const upcoming = tasks
-      .filter((t) => t.date && (t.status === "todo" || t.status === "backlog"))
-      .map((t) => ({ ...t, key: shanghaiDateKey(t.date as string) }))
-      .filter((t) => t.key >= today)
-      .sort((a, b) => (a.key === b.key ? a.daySegment.localeCompare(b.daySegment) : a.key.localeCompare(b.key)));
-
-    const byDate = new Map<string, Array<Task & { key: string }>>();
-    for (const t of upcoming) {
-      const arr = byDate.get(t.key) ?? [];
-      arr.push(t);
-      byDate.set(t.key, arr);
-    }
-    return [...byDate.entries()];
+    return buildRescheduleGroups(tasks, today);
   }, [tasks, today]);
 
   async function patchTask(id: string, body: { date?: string; daySegment?: Segment }) {
