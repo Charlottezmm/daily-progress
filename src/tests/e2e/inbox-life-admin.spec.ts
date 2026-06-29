@@ -55,7 +55,8 @@ test("captures a chore in Inbox and promotes it with visible scheduling metadata
   await page.getByRole("button", { name: "添加" }).click();
   await expect(page.getByText("倒垃圾", { exact: true })).toBeVisible();
 
-  const row = page.locator(".paw-list-row", { hasText: "倒垃圾" });
+  const row = page.locator(".paw-inbox-item", { hasText: "倒垃圾" });
+  await row.getByRole("button", { name: /提升/ }).click();
   await row.getByLabel("任务日期").fill("2026-06-20");
   await row.getByRole("combobox", { name: /^时段$/ }).selectOption("evening");
   await row.getByLabel("分钟").first().fill("15");
@@ -107,15 +108,13 @@ test("quick chore promotion sends no hidden browser-local date", async ({ contex
   await page.getByPlaceholder("记一条想法…").fill("买纸巾");
   await page.getByRole("button", { name: "添加" }).click();
 
-  const row = page.locator(".paw-list-row", { hasText: "买纸巾" });
-  await row.getByLabel("小杂事时段").selectOption("afternoon");
-  await row.getByRole("button", { name: /今日下午小杂事 · 15 分钟/ }).click();
+  const row = page.locator(".paw-inbox-item", { hasText: "买纸巾" });
+  await row.getByRole("button", { name: "今日杂事" }).click();
 
   expect(inboxPatchBodies).toEqual([
     {
       id: "22222222-2222-4222-8222-222222222222",
       action: "quick_chore_task",
-      daySegment: "afternoon",
     },
   ]);
 });

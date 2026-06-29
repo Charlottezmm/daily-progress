@@ -922,7 +922,15 @@ export async function getTodayPageData(workspaceId: string): Promise<TodayViewDa
         db
           .select()
           .from(tasks)
-          .where(and(eq(tasks.workspaceId, workspaceId), eq(tasks.planId, planId), gte(tasks.date, start), lt(tasks.date, end)))
+          .where(
+            and(
+              eq(tasks.workspaceId, workspaceId),
+              eq(tasks.planId, planId),
+              inArray(tasks.status, ["todo", "done", "skipped"]),
+              gte(tasks.date, start),
+              lt(tasks.date, end),
+            ),
+          )
           .orderBy(tasks.daySegment, tasks.createdAt),
         db.select().from(routines).where(eq(routines.workspaceId, workspaceId)),
         db

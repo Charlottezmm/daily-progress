@@ -25,7 +25,7 @@ test("renders Today on desktop and mobile with a workspace session", async ({ co
   ]);
 
   await page.goto("/today");
-  await expect(page.getByRole("heading", { name: "今日执行" })).toBeVisible();
+  await expect(page.getByText(/月\d+日 星期/)).toBeVisible();
   await expect(page.getByText("今天还没有安排任务。", { exact: true })).toBeVisible();
   await expect(page.getByText("今日任务")).toBeVisible();
   await expect(page.getByRole("heading", { name: "收工反馈" })).toBeVisible();
